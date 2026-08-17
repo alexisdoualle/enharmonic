@@ -1,0 +1,102 @@
+{
+  "bach_wtc1_prelude1_c": {
+    "rt": {
+      "correct": 533,
+      "flipped": 2,
+      "wrong": 0,
+      "total": 535
+    },
+    "la": {
+      "correct": 535,
+      "flipped": 0,
+      "wrong": 0,
+      "total": 535
+    },
+    "tp": {
+      "correct": 535,
+      "flipped": 0,
+      "wrong": 0,
+      "total": 535
+    }
+  },
+  "mozart_k545": {
+    "rt": {
+      "correct": 1273,
+      "flipped": 7,
+      "wrong": 2,
+      "total": 1282
+    },
+    "la": {
+      "correct": 1274,
+      "flipped": 7,
+      "wrong": 1,
+      "total": 1282
+    },
+    "tp": {
+      "correct": 1275,
+      "flipped": 7,
+      "wrong": 0,
+      "total": 1282
+    }
+  },
+  "chopin_prelude_op28_no4": {
+    "rt": {
+      "correct": 586,
+      "flipped": 17,
+      "wrong": 1,
+      "total": 604
+    },
+    "la": {
+      "correct": 586,
+      "flipped": 17,
+      "wrong": 1,
+      "total": 604
+    },
+    "tp": {
+      "correct": 588,
+      "flipped": 14,
+      "wrong": 2,
+      "total": 604
+    }
+  },
+  "grieg_death_of_ase": {
+    "rt": {
+      "correct": 587,
+      "flipped": 15,
+      "wrong": 4,
+      "total": 606
+    },
+    "la": {
+      "correct": 594,
+      "flipped": 12,
+      "wrong": 0,
+      "total": 606
+    },
+    "tp": {
+      "correct": 591,
+      "flipped": 14,
+      "wrong": 1,
+      "total": 606
+    }
+  },
+  "bach_jesu_meine_freude": {
+    "rt": {
+      "correct": 7367,
+      "flipped": 0,
+      "wrong": 7,
+      "total": 7374
+    },
+    "la": {
+      "correct": 7373,
+      "flipped": 0,
+      "wrong": 1,
+      "total": 7374
+    },
+    "tp": {
+      "correct": 7373,
+      "flipped": 0,
+      "wrong": 1,
+      "total": 7374
+    }
+  }
+}

@@ -20,7 +20,9 @@
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",
-    "test": "tsx test/run.ts"
+    "test": "tsx test/run.ts && tsx test/eval/run.ts",
+    "bench": "tsx test/eval/run.ts",
+    "bench:update": "tsx test/eval/run.ts --update"
   },
   "keywords": [
     "music",
