@@ -1,0 +1,7694 @@
+[
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 1,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 1,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 1,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 1,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 1,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 1,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 1,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 1,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 1,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 1,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 1,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 2,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 2,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 2,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 2,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 2,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 2,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 2,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 2,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 2,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 2,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 2,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 2,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 3,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 3,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 3,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 3,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 3,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 3,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 3,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 3,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 3,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 3,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 3,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 4,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 4,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 4,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 4,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 4,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 4,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 4,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 4,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 4,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 4,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 4,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 4,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 4,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 5,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 5,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 5,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 5,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 5,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 5,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 5,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 5,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 5,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 5,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 5,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 5,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 5,
+  "beat": 4.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 6,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 6,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 6,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 6,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 6,
+  "beat": 1.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 6,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 6,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 6,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 6,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 6,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 6,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 6,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 6,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 6,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 7,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 7,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 7,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 7,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 7,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 7,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 7,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 7,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 7,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 7,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 7,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 7,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 7,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 7,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 8,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 8,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 8,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 8,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 8,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 8,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 8,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 8,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 8,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 8,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 8,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 8,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 8,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 8,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 9,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 9,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 9,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 9,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 9,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 9,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 9,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 9,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 9,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 9,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 9,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 9,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 9,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 9,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 9,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 9,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 9,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 10,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 10,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 10,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 10,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 10,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 10,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 10,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 10,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 10,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 10,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 10,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 10,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 10,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 10,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 10,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 10,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 10,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 10,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 10,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 10,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 11,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 12,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 12,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 12,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 12,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 12,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 12,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 12,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 12,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 13,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 13,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 1.75
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 13,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 13,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 13,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 13,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 13,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 13,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 13,
+  "beat": 4.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 14,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 2.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 14,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 15,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 15,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 15,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 15,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 15,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 15,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 15,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 15,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 15,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 15,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 4.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 15,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 15,
+  "beat": 4.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 16,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 2.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 16,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 17,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 17,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 17,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 17,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 17,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 17,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 17,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 17,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 17,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 17,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 4.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 17,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 17,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 18,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 18,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 18,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 18,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 18,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 18,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 18,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 18,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 18,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 18,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 18,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 18,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 18,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 18,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 18,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 18,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 19,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 19,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 19,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 19,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 19,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 19,
+  "beat": 2.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 19,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 19,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 19,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 19,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 19,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 19,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 19,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 19,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 19,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 19,
+  "beat": 4.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 20,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 20,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 20,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 20,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 20,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 20,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 20,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 20,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 20,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 20,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 20,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 20,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 20,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 20,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 20,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 20,
+  "beat": 4.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 21,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 21,
+  "beat": 1.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 21,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 21,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 21,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 21,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 21,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 21,
+  "beat": 2.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 21,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 21,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 21,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 21,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 21,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 21,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 21,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 21,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 22,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 1,
+  "measure": 22,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 22,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 22,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 23,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 23,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.625
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 23,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 23,
+  "beat": 2.875
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 23,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 23,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 24,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 24,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 24,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 24,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 25,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 25,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 1.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 25,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 25,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 25,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 25,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 25,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 25,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 25,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 25,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 25,
+  "beat": 4.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 25,
+  "beat": 4.875
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 26,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 26,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 26,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 26,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 26,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 26,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 26,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 26,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 26,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 26,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 26,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 26,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 26,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 27,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 27,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 27,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 27,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 27,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 27,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 27,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 27,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 27,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 27,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 27,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 27,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 27,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 28,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 28,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 28,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 28,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 28,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 29,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 29,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 29,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 29,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 29,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 29,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 29,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 29,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 30,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 30,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 30,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 30,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 30,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 30,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 30,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 30,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 30,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 30,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 30,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 30,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 30,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 31,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 31,
+  "beat": 1.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 31,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 31,
+  "beat": 1.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 31,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 31,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 31,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 31,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 31,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 31,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 31,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 31,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 31,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 31,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 31,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 31,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 32,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 32,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 32,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 32,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 32,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 32,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 32,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 32,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 32,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 32,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 32,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 32,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 32,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 32,
+  "beat": 4.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 32,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 32,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 33,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 33,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 33,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 33,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 33,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 33,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 33,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 33,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 33,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 33,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 33,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 33,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 33,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 34,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 34,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 34,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 34,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 34,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 34,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 34,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 34,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 34,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 34,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 34,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 34,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 34,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 35,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 35,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 35,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 35,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 35,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 35,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 35,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 35,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 35,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 35,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 35,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 35,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 35,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 35,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 35,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 35,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 35,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 36,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 36,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 36,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 36,
+  "beat": 1.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 36,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 36,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 36,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 36,
+  "beat": 2.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 36,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 36,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 36,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 36,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 36,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 36,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 36,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 36,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 37,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 37,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 37,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 37,
+  "beat": 1.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 37,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 37,
+  "beat": 2.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 37,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 37,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 37,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 37,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 37,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 37,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 37,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 37,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 37,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 37,
+  "beat": 4.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 38,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 38,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 38,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 38,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 38,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 38,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 38,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 38,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 38,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 38,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 38,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 38,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 38,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 38,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 38,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 38,
+  "beat": 4.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 39,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 39,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 39,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 39,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 39,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 39,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 39,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 39,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 39,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 39,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 39,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 39,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 39,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 39,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 39,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 39,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 40,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 40,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 40,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 40,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 40,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 40,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 40,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 40,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 40,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 40,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 40,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 40,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 40,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 40,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 40,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 40,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 41,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 41,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 41,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 41,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 41,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 41,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 41,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 41,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 41,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 41,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 41,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 41,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 41,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 41,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 42,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 42,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 42,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 42,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 42,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 42,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 42,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 42,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 42,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 42,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 42,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 43,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 43,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 43,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 43,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 43,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 43,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 43,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 43,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 43,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 43,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 43,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 43,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 44,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 44,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 44,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 44,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 44,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 44,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 44,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 44,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 44,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 44,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 44,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 45,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 45,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 45,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 45,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 45,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 45,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 45,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 45,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 45,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 45,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 45,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 45,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 45,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 46,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 46,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 46,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 46,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 46,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 46,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 46,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 46,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 46,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 46,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 46,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 46,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 46,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 46,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 46,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 46,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 46,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 46,
+  "beat": 4.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 47,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 47,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 47,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 47,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 47,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 47,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 47,
+  "beat": 2.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 47,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 47,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 47,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 47,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 47,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 47,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 47,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 48,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 48,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 48,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 48,
+  "beat": 1.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 48,
+  "beat": 1.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 48,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 48,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 48,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 48,
+  "beat": 2.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 48,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 48,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 48,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 48,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 48,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 48,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 48,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 48,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 48,
+  "beat": 4.5
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 48,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 49,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 49,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 49,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 49,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 49,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 49,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 49,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 49,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 49,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 49,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 49,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 49,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 49,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 49,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 49,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 49,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 49,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 50,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 50,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 50,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 50,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 50,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 50,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 50,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 50,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 50,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 50,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 50,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 50,
+  "beat": 3.75
+ },
+ {
+  "step": "B",
+  "alter": -1,
+  "measure": 50,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 50,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 50,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 50,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 50,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 50,
+  "beat": 4.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 51,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 51,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 51,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 51,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 51,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 51,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 51,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 51,
+  "beat": 2.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 51,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 51,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 51,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 51,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 51,
+  "beat": 3.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 51,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 52,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 52,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 52,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 52,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 52,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 52,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 52,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 52,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 52,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 52,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 52,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 52,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 52,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 52,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 53,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 53,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 53,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 53,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 53,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 53,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 53,
+  "beat": 2.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 53,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 53,
+  "beat": 2.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 53,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 53,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 53,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 53,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 53,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 54,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 54,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 54,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 54,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 54,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 54,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 54,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 54,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 54,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 54,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 54,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 54,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 54,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 55,
+  "beat": 1.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 55,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 55,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 55,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 55,
+  "beat": 1.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 55,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 55,
+  "beat": 2.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 55,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 55,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 55,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 55,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 55,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 55,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 55,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 55,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 55,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 55,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 55,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 55,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 55,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 56,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 57,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 57,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 57,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 57,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 57,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 57,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 57,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 57,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 58,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 1.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 58,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 1.75
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 58,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 2.25
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 58,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 58,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 58,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 58,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 4.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 58,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 58,
+  "beat": 4.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 1.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 59,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 59,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 60,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 60,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 60,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 60,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 60,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 60,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 60,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 60,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 60,
+  "beat": 4.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 1.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 61,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 61,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 62,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 62,
+  "beat": 2.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 62,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 62,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 62,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 62,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 62,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 4.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 62,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 62,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 63,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 63,
+  "beat": 1.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 63,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 63,
+  "beat": 1.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 63,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 63,
+  "beat": 2.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 63,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 63,
+  "beat": 2.75
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 63,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 63,
+  "beat": 3.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 63,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 63,
+  "beat": 3.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 63,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 63,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 63,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 63,
+  "beat": 4.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 64,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 64,
+  "beat": 1.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 64,
+  "beat": 1.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 64,
+  "beat": 1.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 64,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 64,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 64,
+  "beat": 2.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 64,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 64,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 64,
+  "beat": 3.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 64,
+  "beat": 3.5
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 64,
+  "beat": 3.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 64,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 64,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 64,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 64,
+  "beat": 4.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 65,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 65,
+  "beat": 1.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 65,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 65,
+  "beat": 1.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 65,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 65,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 65,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 65,
+  "beat": 2.75
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 65,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 65,
+  "beat": 3.25
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 65,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 65,
+  "beat": 3.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 65,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 65,
+  "beat": 4.25
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 65,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 65,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 66,
+  "beat": 1.0
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 66,
+  "beat": 1.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 66,
+  "beat": 1.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 66,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 66,
+  "beat": 2.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 66,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 66,
+  "beat": 2.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 66,
+  "beat": 2.75
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 66,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 66,
+  "beat": 3.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 66,
+  "beat": 3.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 66,
+  "beat": 3.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 66,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 66,
+  "beat": 4.25
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 66,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 66,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 67,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 2.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 2.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 67,
+  "beat": 3.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 67,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 1,
+  "measure": 67,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 67,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 67,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 67,
+  "beat": 4.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 68,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 1.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 2.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 3.0
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 68,
+  "beat": 3.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 68,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 3.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 4.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 4.0
+ },
+ {
+  "step": "G",
+  "alter": 1,
+  "measure": 68,
+  "beat": 4.0
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 68,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 1,
+  "measure": 68,
+  "beat": 4.5
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 68,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": -1,
+  "measure": 68,
+  "beat": 4.5
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.75
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 69,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.25
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 69,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.5
+ },
+ {
+  "step": "A",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.25
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 69,
+  "beat": 4.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 70,
+  "beat": 1.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 70,
+  "beat": 1.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 1.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 70,
+  "beat": 1.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 1.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 70,
+  "beat": 2.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 2.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 70,
+  "beat": 2.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 70,
+  "beat": 3.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 3.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 70,
+  "beat": 3.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.5
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.75
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 70,
+  "beat": 4.875
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 71,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 71,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 71,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 71,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 71,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 71,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 71,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 71,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 71,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 71,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 71,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 71,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 72,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 72,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 72,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 72,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 72,
+  "beat": 2.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 72,
+  "beat": 2.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 72,
+  "beat": 2.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 72,
+  "beat": 3.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 72,
+  "beat": 3.25
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 72,
+  "beat": 3.5
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 72,
+  "beat": 3.75
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.0
+ },
+ {
+  "step": "F",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.0
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.25
+ },
+ {
+  "step": "B",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.5
+ },
+ {
+  "step": "D",
+  "alter": 0,
+  "measure": 72,
+  "beat": 4.75
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 1.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 73,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 1.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 2.0
+ },
+ {
+  "step": "E",
+  "alter": 0,
+  "measure": 73,
+  "beat": 2.0
+ },
+ {
+  "step": "G",
+  "alter": 0,
+  "measure": 73,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 2.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 3.0
+ },
+ {
+  "step": "C",
+  "alter": 0,
+  "measure": 73,
+  "beat": 3.0
+ }
+]
