@@ -71,3 +71,5 @@ npm run meredith -- --check      # assert exact% >= published thresholds
 ## License
 
 Apache-2.0
+
+See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for third-party attributions.

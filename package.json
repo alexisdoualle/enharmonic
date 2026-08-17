@@ -3,6 +3,14 @@
   "version": "0.0.1",
   "description": "Real-time enharmonic pitch-spelling for MIDI input",
   "license": "Apache-2.0",
+  "homepage": "https://tonalmap.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexisdoualle/enharmonic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexisdoualle/enharmonic/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

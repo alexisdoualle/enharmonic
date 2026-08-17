@@ -1,10 +1,11 @@
 /**
  * Diatonic intervals — plain immutable objects.
  *
- * Zero runtime dependencies. The chroma-based quality formula in
- * `qualityFromChroma` is adopted from prior work by Brian Bowman (MIT); we
- * apply it directly to chroma computed from (letter, alter), which sidesteps
- * the (whole-step, half-step) vector representation we don't otherwise need.
+ * Zero runtime dependencies. The chroma-based interval-quality formula in
+ * `qualityFromChroma` is adapted from Brian Bowman's meantonal project
+ * (https://github.com/meantonal/meantonal-js, MIT License), applied directly
+ * to chroma computed from (letter, alter) — which sidesteps the (whole-step,
+ * half-step) vector representation meantonal uses and we don't otherwise need.
  */
 
 import type { Letter, PitchClass } from './pitch.js';

@@ -68,7 +68,7 @@ function majorScaleForTonic(relMajorPc: number): Map<Letter, PitchClass> {
     return majorScaleForSharps(KEYSIG_SHARPS[relMajorPc]!);
 }
 
-// --- SPIRAL frame orientation (Alexis's line-of-fifths model) --------------------------------------
+// --- SPIRAL frame orientation (the line-of-fifths model) --------------------------------------
 // The frame's KEY is a SIGNED position on the line of fifths, not a mod-12 pc, so D♭(−5) and C♯(+7)
 // are DISTINCT positions. A collection is rendered at the LoF tonic reached by CONTINUITY (the nearest
 // enharmonic of the held tonic) — so an adjacent-key move keeps one side (F♯→C♯, not F♯→D♭), digging
@@ -217,7 +217,7 @@ export interface BoxWindowSubstrateOptions {
      *  {@link spiralRange} caps the digging depth (default 6, hugging the 12-key minimal-accidental
      *  convention — fewest flips); raise it toward 8 for more coherence headroom at the cost of more flips.
      *
-     *  This is Alexis's line-of-fifths model promoted from the viz research fork (`AccidentalTraced`) into
+     *  This is the line-of-fifths model promoted from the viz research fork (`AccidentalTraced`) into
      *  the core: the KEY is a signed LoF position (D♭=−5 vs C♯=+7 are DISTINCT), a piece cold-starts on a
      *  writable key and DIGS deeper by continuity (an adjacent-key move keeps one side), folding back only
      *  past the SPIRAL_RANGE cap (F♭ at −8 is kept — the deep-flat Chopin case — the fold happens beyond it).
@@ -902,7 +902,7 @@ export class BoxWindowSubstrate implements Substrate {
         // then hands control back to continuity (see reset), so suppliedKey stays null under the spiral.
         if (this.suppliedFrame !== null && relMajorPc === this.suppliedKey) return this.suppliedFrame;
         // SPIRAL frame: render the chosen collection from a signed LoF tonic by continuity + writable
-        // cold start (Alexis's line-of-fifths model). The finder above is untouched; only the side changes.
+        // cold start (the line-of-fifths model). The finder above is untouched; only the side changes.
         if (this.spiral && (this.suppliedKey === null || this.suppliedHard)) return this.spiralScale(relMajorPc);
         return majorScaleForTonic(relMajorPc);
     }
