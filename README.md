@@ -54,7 +54,19 @@ companion lab repo. Headline figures (shared-50 fixtures, no-keys, three-tier sc
 | + look-ahead | 1.44 | 2.05 |
 | + two-pass | 1.19 | 0.73 |
 
-Held-out Meredith (216 movements): look-ahead **99.51%** / two-pass **99.72%** exact (clean).
+Held-out Meredith (216 movements, 195,972 notes): look-ahead **99.54%** / two-pass
+**99.72%** exact (clean) — the literature-standard benchmark ps13 / Temperley / Chew report on.
+
+## Reproducing the Meredith benchmark
+
+```bash
+scripts/fetch-meredith.sh        # download the corpus (gitignored; ~2 MB from titanmusic.com)
+npm run meredith                 # score the clean corpus
+npm run meredith -- --noisy      # the noisy (human-MIDI-like) variant
+npm run meredith -- --check      # assert exact% >= published thresholds
+```
+
+`exact` = strict composer-spelling match (ps13's metric); `tonal` = exact + coherent enharmonic flip.
 
 ## License
 

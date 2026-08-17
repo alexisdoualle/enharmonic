@@ -22,7 +22,9 @@
     "check": "tsc --noEmit",
     "test": "tsx test/run.ts && tsx test/eval/run.ts",
     "bench": "tsx test/eval/run.ts",
-    "bench:update": "tsx test/eval/run.ts --update"
+    "bench:update": "tsx test/eval/run.ts --update",
+    "meredith:fetch": "bash scripts/fetch-meredith.sh",
+    "meredith": "tsx test/eval/meredith.ts"
   },
   "keywords": [
     "music",
