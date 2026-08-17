@@ -408,27 +408,11 @@ export class BoxWindowSubstrate implements Substrate {
     private noteHistory: { midi: number; step: Letter; alter: number; t: number }[] = [];
     /** SPIRAL mode: signed LoF tonic that renders the frame (null = cold, awaiting the first collection). */
     private frameLofTonic: number | null = null;
-    /** The AUTO spiral position (line-of-fifths) BEFORE any forced comma shift — the continuity anchor
-     *  spiralOrient reads/writes each onset. Kept separate from {@link frameLofTonic} (which carries the
-     *  shifted, displayed/rendered value) so a `forcedSide` shift never feeds back into continuity and
-     *  compounds +12/onset (the runaway triple-sharp over-rotation bug). */
+    /** The AUTO spiral position (line-of-fifths) — the continuity anchor spiralOrient reads/writes each
+     *  onset. {@link frameLofTonic} mirrors it as the displayed/rendered value. */
     private frameLofAnchor: number | null = null;
     /** SPIRAL mode: still deciding the cold-start orientation (fewer than 3 distinct pcs since reset). */
     private superposed = true;
-    // Per-section MANUAL COMMA SHIFT (opt-in, default 0 = inert → byte-identical to the shipped path).
-    // A RELATIVE shift of the rendered collection by N commas (12 fifths each) from the AUTO choice:
-    // +1 = one comma sharper (D♭→C♯), −1 = one comma flatter (F♯♯→G — so a note already on the sharp
-    // side is nudged to natural, which an absolute sharp/flat snap cannot do). Composable. Coherence stays
-    // the speller's job — the SIDE is the user's HINT. Set via setForcedSide (the debugger viz's overrides).
-    private forcedSide = 0;
-
-    // Instrumentation read-outs — recorded by frameScale/commit, surfaced via lastTrace()/snapshot()
-    // for the debugger viz. Read-only side channel: nothing here feeds a spelling decision.
-    private traceLookAheadBonus: number[] = [];
-    private traceOutside = 0;
-    private traceHeldOutside = 0;
-    private traceRivalOutside = Number.POSITIVE_INFINITY;
-    private traceRivalPc = -1;
 
     constructor(opts: BoxWindowSubstrateOptions = {}) {
         this.clock = opts.clock ?? (() => Date.now());
@@ -524,7 +508,6 @@ export class BoxWindowSubstrate implements Substrate {
         // where the note resolves. NOT sorted — matches the standalone's loop.
         let best: PitchClass | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        this.traceLookAheadBonus = [];
         // The LA-SUPPRESSED argmax (score + neighbour-step, WITHOUT the look-ahead bonus), tracked in
         // parallel so the vertical gate below can compare the look-ahead's pick against it.
         let bestNoLa: PitchClass | null = null;
@@ -548,7 +531,6 @@ export class BoxWindowSubstrate implements Substrate {
             }
             const s = score + laDelta + nsDelta;
             const sNoLa = score + nsDelta;
-            this.traceLookAheadBonus.push(s - score);
             if (s > bestScore) { bestScore = s; best = c; }
             if (sNoLa > bestNoLaScore) { bestNoLaScore = sNoLa; bestNoLa = c; }
         }
@@ -805,7 +787,6 @@ export class BoxWindowSubstrate implements Substrate {
         this.frameLofTonic = null;
         this.frameLofAnchor = null;
         this.superposed = true;
-        this.forcedSide = 0;
         this.pinReleaseCount = 0;
         this.noteHistory = [];
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
@@ -851,42 +832,13 @@ export class BoxWindowSubstrate implements Substrate {
         if (!this.activeSpelling.has(midi)) this.active.delete(midi);
     }
 
-    /** Shift this section's rendered spelling by `comma` commas from the auto choice (+1 = one sharper,
-     *  −1 = one flatter, 0 = auto). RELATIVE, so it reaches any side including natural/center; composable.
-     *  Coherence within the section is unaffected. Opt-in, default 0. */
-    setForcedSide(comma: number): void { this.forcedSide = comma; }
-
-    /** The box frame internals shared by both instrumentation views (read-only). */
-    private frameInternals(): SubstrateTrace {
-        return {
-            inferredFrame: this.lastFrame ? LETTERS.map(L => ({ ...this.lastFrame!.get(L)! })) : undefined,
-            frameRelMajorPc: this.frameBoxCur ?? undefined,
-            frameLofTonic: this.spiral && this.frameLofTonic != null ? this.frameLofTonic : undefined,
-            recentPcs: this.framePcs.map(e => e.pc),
-            outsideCount: this.traceOutside,
-            stickySlots: LETTERS.filter(L => this.sticky.has(L)).map(L => ({ ...this.sticky.get(L)! })),
-            heldOutside: this.traceHeldOutside,
-            rivalOutside: this.traceRivalOutside === Number.POSITIVE_INFINITY ? undefined : this.traceRivalOutside,
-            rivalPc: this.traceRivalPc >= 0 ? this.traceRivalPc : undefined,
-        };
-    }
-
-    /** Instrumentation: internals from the most recent commit (frame + sticky + per-candidate LA bonus). */
-    lastTrace(): SubstrateTrace {
-        return { ...this.frameInternals(), lookAheadBonus: [...this.traceLookAheadBonus] };
-    }
-
-    /** Instrumentation: current surface + frame internals, sampled between notes (read-only). */
+    /** Instrumentation: current surface + (spiral) frame LoF-tonic, sampled between notes (read-only).
+     *  `resolvedScale` backs {@link SpellerKernel} → `Speller.getResolvedScale`; `frameLofTonic` backs the
+     *  two-pass section-flip. Nothing here feeds a spelling decision. */
     snapshot(): SubstrateTrace {
-        const sounding = [...this.active.keys()].map(midi => {
-            const sp = this.readBack(midi) ?? this.frameLookup(midi);
-            return sp ? { midi, spelling: { ...sp } } : null;
-        }).filter((x): x is { midi: number; spelling: PitchClass } => x !== null);
         return {
-            ...this.frameInternals(),
             resolvedScale: LETTERS.map(L => ({ ...this.resolved.get(L)! })),
-            activeMidis: [...this.active.keys()],
-            sounding,
+            frameLofTonic: this.spiral && this.frameLofTonic != null ? this.frameLofTonic : undefined,
         };
     }
 
@@ -945,13 +897,6 @@ export class BoxWindowSubstrate implements Substrate {
             }
         }
         this.frameBoxCur = relMajorPc;
-        // Read-out only (instrumentation): the best-fit outside-count, how firmly the HELD collection
-        // beats its nearest rival. Mirrors the diagnostic the debugger viz shows; drives nothing.
-        this.traceOutside = bestOut;
-        this.traceHeldOutside = outside(relMajorPc);
-        let rOut = Number.POSITIVE_INFINITY, rPc = -1;
-        for (let c = 0; c < 12; c++) { if (c === relMajorPc) continue; const o = outside(c); if (o < rOut) { rOut = o; rPc = c; } }
-        this.traceRivalOutside = rOut; this.traceRivalPc = rPc;
         // A SOFT key-sig hint (non-spiral pin) renders the pinned key verbatim while it is held. The spiral
         // path does NOT pin here — a manual spiral override re-seeds the orientation anchor in reset() and
         // then hands control back to continuity (see reset), so suppliedKey stays null under the spiral.
@@ -959,10 +904,6 @@ export class BoxWindowSubstrate implements Substrate {
         // SPIRAL frame: render the chosen collection from a signed LoF tonic by continuity + writable
         // cold start (Alexis's line-of-fifths model). The finder above is untouched; only the side changes.
         if (this.spiral && (this.suppliedKey === null || this.suppliedHard)) return this.spiralScale(relMajorPc);
-        // Manual forced COMMA SHIFT (non-spiral path): re-render the collection `forcedSide` commas away
-        // (±12 fifths each) from its default sig — a RELATIVE shift, matching the spiral path. Inert when
-        // 0 → byte-identical to the default (compose-golden stays green).
-        if (this.forcedSide !== 0) return majorScaleForSharps(KEYSIG_SHARPS[relMajorPc]! + this.forcedSide * 12);
         return majorScaleForTonic(relMajorPc);
     }
 
@@ -978,14 +919,7 @@ export class BoxWindowSubstrate implements Substrate {
         } else {
             this.frameLofAnchor = spiralOrient(relMajorPc, this.frameLofAnchor, this.spiralRange, this.spiralCenter);
         }
-        // Manual per-section forced COMMA SHIFT (viz hint), inert (0) in the presets. A RELATIVE shift of
-        // the rendered collection by `forcedSide` commas (12 fifths each) from the auto choice — NOT an
-        // absolute sharp/flat snap: +1 renders one comma sharper (D♭→C♯), −1 one flatter (F♯♯→G, so a note
-        // already on the sharp side can be nudged to natural/center). Composable across sections.
-        //   The shift is applied off the AUTO anchor into `frameLofTonic` (display + render) and NEVER
-        //   written back to `frameLofAnchor`; otherwise spiralOrient re-snaps to the shifted anchor next
-        //   onset and the +12 compounds every onset → runaway over-rotation (+9→+21→+33, triple sharps).
-        this.frameLofTonic = this.frameLofAnchor + this.forcedSide * 12;
+        this.frameLofTonic = this.frameLofAnchor;
         return lofMajorScale(this.frameLofTonic);
     }
 
