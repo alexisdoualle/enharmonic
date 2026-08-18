@@ -28,6 +28,21 @@ import { rawIntervalBetween, lineOfFifths } from './interval.js';
 import { intervalScore } from './scoring.js';
 import type { NoteContext, ScoredCandidate, Substrate, SubstrateTrace } from './kernel.js';
 
+/** Which post-score mechanism (if any) moved the pick off the frame's argmax, for the viz decision trace. */
+export type DecisionOverride =
+    | 'none' | 'lookahead-vertical-gate' | 'lookahead-coherence-gate' | 'sounding-tiebreak' | 'rel-minor-lt';
+/** One enharmonic candidate as scored at decision time: base frame score + the additive look-ahead /
+ *  neighbour-step deltas the commit loop applied. `base + laDelta + nsDelta` is the argmax key. */
+export interface DecisionCandidate { readonly c: PitchClass; readonly base: number; readonly laDelta: number; readonly nsDelta: number; }
+/** A full record of one commit decision — VIZ-ONLY instrumentation (populated only when the `trace`
+ *  option is on, which no shipped preset sets). Read-only; recording it never changes a spelling. */
+export interface DecisionTrace {
+    readonly frame: PitchClass[];              // LETTERS-order surface the candidates were scored against
+    readonly candidates: DecisionCandidate[];  // enharmonicCandidatesFor order
+    readonly chosen: PitchClass;
+    readonly override: DecisionOverride;        // what (if anything) overrode the base-frame argmax
+}
+
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
 const LETTER_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as const satisfies Record<Letter, number>;
 const SHARPEN_ORDER: readonly Letter[] = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
@@ -79,7 +94,8 @@ function majorScaleForTonic(relMajorPc: number): Map<Letter, PitchClass> {
 // "if we dig too far it may respell" (F♭ at −8 is KEPT; the fold happens only beyond it).
 const LETTER_LOF: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 const LOF_TO_LETTER: Record<number, Letter> = { 0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F' };
-const SPIRAL_RANGE = 8;   // deepest single spelling allowed (G♯=+8 / F♭=−8); realistic keys are ±7.
+// The deepest single spelling allowed is the `spiralRange` option (default/floor 6, up to 8 = G♯=+8 /
+// F♭=−8; realistic keys are ±7); the comments below say "SPIRAL_RANGE" for that per-instance cap.
 const COLD_RANGE = 7;     // a fresh start lands in a writable key: C♭(−7) … C♯(+7), never a deepening.
 
 /** Spell the pitch at signed line-of-fifths position `p` (…F=−1, C=0, G=1…, F♯=+6, C♯=+7, G♯=+8…). */
@@ -357,6 +373,11 @@ export interface BoxWindowSubstrateOptions {
     stWindow?: 'coonset' | 'recent' | 'last3';
     /** Time window (ms) for stWindow='recent'. Default 400. */
     stWindowMs?: number;
+    /** VIZ-ONLY (default off): record a {@link DecisionTrace} on every commit (base scores + look-ahead /
+     *  neighbour-step deltas + which override fired), readable via {@link BoxWindowSubstrate.decision}.
+     *  Record-only — it never influences a spelling — so it is byte-identical to off in the presets, which
+     *  never set it. The `viz/` debugger turns it on to render the per-candidate scoring table. */
+    trace?: boolean;
 }
 
 export class BoxWindowSubstrate implements Substrate {
@@ -404,6 +425,9 @@ export class BoxWindowSubstrate implements Substrate {
     private readonly stEpsilon: number;
     private readonly stWindow: 'coonset' | 'recent' | 'last3';
     private readonly stWindowMs: number;
+    private readonly trace: boolean;
+    /** VIZ-ONLY: the most recent commit's decision record (null until the first traced commit). */
+    private lastDecision: DecisionTrace | null = null;
     /** Committed-note history for the same-voice proxy: {midi, letter, alter, t}, time-ordered. */
     private noteHistory: { midi: number; step: Letter; alter: number; t: number }[] = [];
     /** SPIRAL mode: signed LoF tonic that renders the frame (null = cold, awaiting the first collection). */
@@ -449,6 +473,7 @@ export class BoxWindowSubstrate implements Substrate {
         this.stEpsilon = opts.stEpsilon ?? 0;
         this.stWindow = opts.stWindow ?? 'recent';
         this.stWindowMs = opts.stWindowMs ?? 400;
+        this.trace = opts.trace ?? false;
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
     }
 
@@ -486,6 +511,11 @@ export class BoxWindowSubstrate implements Substrate {
     }
 
     commit(midi: number, scored: readonly ScoredCandidate[], ctx: NoteContext): void {
+        // VIZ trace (record-only): the surface the candidates were scored against is `this.resolved` as it
+        // stands NOW — commit does not mutate it until the winning letter is set at the end. Deltas are
+        // gathered in the argmax loop below; the override tag is set by whichever post-total branch moves best.
+        const traceFrame = this.trace ? LETTERS.map(L => ({ ...this.resolved.get(L)! })) : null;
+        const traceCands: DecisionCandidate[] | null = this.trace ? [] : null;
         const resolveDir = ctx.resolveDir ?? 0;
         const laOn = this.lookAhead && resolveDir !== 0;
         // For the letter-aware modes: the frame's current letter for the resolution TARGET (a semitone
@@ -533,8 +563,10 @@ export class BoxWindowSubstrate implements Substrate {
             const sNoLa = score + nsDelta;
             if (s > bestScore) { bestScore = s; best = c; }
             if (sNoLa > bestNoLaScore) { bestNoLaScore = sNoLa; bestNoLa = c; }
+            if (traceCands) traceCands.push({ c, base: score, laDelta, nsDelta });
         }
         if (best === null) return;
+        let traceOverride: DecisionOverride = 'none';
 
         // LOOK-AHEAD VERTICAL GATE: the look-ahead is a tendency, the co-onset struck chord is
         // dispositive. When the look-ahead has MOVED the pick (best !== bestNoLa) to a spelling that forms
@@ -546,7 +578,7 @@ export class BoxWindowSubstrate implements Substrate {
         if (laOn && this.lookAheadVerticalGate && bestNoLa !== null && best !== bestNoLa && Math.abs(best.alter) >= 2) {
             const co = this.coOnsetCommitted(ctx.t ?? this.clock());
             const revert = co.length > 0 && wolfCount(best, co) > wolfCount(bestNoLa, co);
-            if (revert) best = bestNoLa;
+            if (revert) { best = bestNoLa; traceOverride = 'lookahead-vertical-gate'; }
         }
 
         // LOOK-AHEAD COHERENCE GATE: the resolution refines the LETTER within a side, but must not drag the
@@ -556,7 +588,7 @@ export class BoxWindowSubstrate implements Substrate {
         // the suppressed pick, revert. See {@link lookAheadCoherenceGate}.
         if (laOn && this.lookAheadCoherenceGate && bestNoLa !== null && best !== bestNoLa && this.noteHistory.length >= 4) {
             const c = this.recentCommitMedianLof(this.lookAheadCoherenceWindow);
-            if (c !== null && Math.abs(lineOfFifths(best) - c) > Math.abs(lineOfFifths(bestNoLa) - c)) best = bestNoLa;
+            if (c !== null && Math.abs(lineOfFifths(best) - c) > Math.abs(lineOfFifths(bestNoLa) - c)) { best = bestNoLa; traceOverride = 'lookahead-coherence-gate'; }
         }
 
         // SOUNDING-TIEBREAK: on a BASE-score (near-)tie between two CHROMATIC candidates, the full frame
@@ -564,7 +596,7 @@ export class BoxWindowSubstrate implements Substrate {
         // the higher (tie → candidate order). Uses the BASE scores (pre-LA), and OVERRIDES the pick above.
         if (this.soundingTiebreak && this.lastFrame !== null && scored.length >= 2) {
             const st = this.soundingTiebreakPick(scored, ctx);
-            if (st !== null) best = st;
+            if (st !== null) { if (st !== best) traceOverride = 'sounding-tiebreak'; best = st; }
         }
 
         // PREFER RELATIVE-MINOR LEADING TONE over the lowered tonic ♭1, gated on a SOUNDING DOMINANT
@@ -586,9 +618,11 @@ export class BoxWindowSubstrate implements Substrate {
                 const ltLetter = LETTERS[(LETTERS.indexOf(tonicLetter) + 6) % 7]!;     // the letter one step below the tonic
                 const lt = scored.find(sc => sc.c.step === ltLetter);
                 const ft = scored.find(sc => sc.c.step === tonicLetter);
-                if (lt && ft && lt.score >= ft.score - this.stEpsilon) best = lt.c;
+                if (lt && ft && lt.score >= ft.score - this.stEpsilon) { if (lt.c !== best) traceOverride = 'rel-minor-lt'; best = lt.c; }
             }
         }
+
+        if (traceCands && traceFrame) this.lastDecision = { frame: traceFrame, candidates: traceCands, chosen: { ...best }, override: traceOverride };
 
         this.resolved.set(best.step, best);
 
@@ -838,9 +872,14 @@ export class BoxWindowSubstrate implements Substrate {
     snapshot(): SubstrateTrace {
         return {
             resolvedScale: LETTERS.map(L => ({ ...this.resolved.get(L)! })),
+            // the bare box collection, before keep-alive/sounding overlays (null until the first frame)
+            frame: this.lastFrame ? LETTERS.map(L => ({ ...this.lastFrame!.get(L)! })) : undefined,
             frameLofTonic: this.spiral && this.frameLofTonic != null ? this.frameLofTonic : undefined,
         };
     }
+
+    /** VIZ-ONLY: the most recent commit's {@link DecisionTrace}, or null when `trace` is off / no commit yet. */
+    decision(): DecisionTrace | null { return this.lastDecision; }
 
     private frameScale(): Map<Letter, PitchClass> | null {
         if (this.framePcs.length === 0) return null;

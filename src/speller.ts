@@ -36,18 +36,36 @@ const BOX_DEFAULTS: BoxWindowSubstrateOptions = {
     frameWindowMs: 16000,
 };
 
-function createDiatonicSticky(opts: BoxWindowSubstrateOptions = {}): SpellerKernel {
+/**
+ * The exact BoxWindowSubstrate option bundles the two shipped rungs run — rung 2 (real-time) and rung 3
+ * (look-ahead). Exported for in-repo tooling ONLY (the `viz/` debugger builds the substrate from these
+ * so it reads the identical algorithm — zero drift — and can enable the `trace` observer). NOT part of
+ * the npm public surface: `index.ts` re-exports only {@link Speller} / {@link spellTwoPass}, so a path
+ * import is the only way to reach these. The single source of truth for both the builders below and the
+ * viz; keep them byte-equivalent to what {@link Speller} runs.
+ */
+export const DIATONIC_STICKY_OPTS: BoxWindowSubstrateOptions = {
+    ...NEIGHBOUR_STEP, ...SOUNDING_TIEBREAK, spiral: true, ...BOX_DEFAULTS,
+    keepAlive: true, stickyEvict: 'oldest',
+};
+export const DIATONIC_STICKY_LA_OPTS: BoxWindowSubstrateOptions = {
+    ...NEIGHBOUR_STEP, lookAheadVerticalGate: true, lookAheadCoherenceGate: true,
+    spiral: true, parallelThirdGate: true, ...BOX_DEFAULTS,
+    keepAlive: true, lookAhead: true, lookAheadMode: 'letter', stickyEvict: 'oldest',
+};
+
+/** Internal preset builders (see {@link DIATONIC_STICKY_OPTS}). The keep-alive / look-ahead identity
+ *  keys are re-pinned AFTER `opts` (as the original literal did), so a caller override — the injected
+ *  `clock`, the viz `trace` — cannot change what makes this rung this rung. Byte-identical to before. */
+export function createDiatonicSticky(opts: BoxWindowSubstrateOptions = {}): SpellerKernel {
     return new SpellerKernel(new BoxWindowSubstrate({
-        ...NEIGHBOUR_STEP, ...SOUNDING_TIEBREAK, spiral: true, ...BOX_DEFAULTS, ...opts,
-        keepAlive: true, stickyEvict: 'oldest',
+        ...DIATONIC_STICKY_OPTS, ...opts, keepAlive: true, stickyEvict: 'oldest',
     }));
 }
 
-function createDiatonicStickyLA(opts: BoxWindowSubstrateOptions = {}): SpellerKernel {
+export function createDiatonicStickyLA(opts: BoxWindowSubstrateOptions = {}): SpellerKernel {
     return new SpellerKernel(new BoxWindowSubstrate({
-        ...NEIGHBOUR_STEP, lookAheadVerticalGate: true, lookAheadCoherenceGate: true,
-        spiral: true, parallelThirdGate: true, ...BOX_DEFAULTS, ...opts,
-        keepAlive: true, lookAhead: true, lookAheadMode: 'letter', stickyEvict: 'oldest',
+        ...DIATONIC_STICKY_LA_OPTS, ...opts, keepAlive: true, lookAhead: true, lookAheadMode: 'letter', stickyEvict: 'oldest',
     }));
 }
 

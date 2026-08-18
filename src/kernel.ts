@@ -53,6 +53,10 @@ export interface ScoredCandidate {
 export interface SubstrateTrace {
     /** Current surface (frame + overlays), LETTERS order — backs `Speller.getResolvedScale`. */
     readonly resolvedScale?: readonly PitchClass[] | undefined;
+    /** The BARE frame (diatonic collection, before the keep-alive sticky and sounding overlays that
+     *  produce {@link resolvedScale}), LETTERS order. Read-only instrumentation: where it differs from
+     *  the surface is exactly the overlays' contribution. Omitted when the substrate has no frame yet. */
+    readonly frame?: readonly PitchClass[] | undefined;
     /** SPIRAL mode: the SIGNED line-of-fifths tonic that renders the frame (D♭=−5 vs C♯=+7 are distinct
      *  positions a mod-12 relative-major pc cannot tell apart) — backs the two-pass section-flip.
      *  Undefined when spiral off. */
