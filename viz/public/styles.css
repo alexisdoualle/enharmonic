@@ -67,18 +67,20 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 .wheel-legend b { color: var(--ink); }
 .note-dot-key { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); vertical-align: middle; }
 
-/* spiral what-if controls (range / centre), beside the wheel */
-.spiral-ctl { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+/* spiral what-if controls (range / centre) — one compact line directly above the wheel */
+.spiral-ctl { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
 .spiral-ctl.disabled { opacity: .55; }
-.ctl-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-.ctl-label { flex: 0 0 44px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); }
-.ctl-row button { width: 24px; height: 24px; flex: 0 0 24px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
-.ctl-row button:hover:not(:disabled) { border-color: var(--accent); }
-.ctl-row button:disabled { opacity: .4; cursor: default; }
-.ctl-val { flex: 1; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); }
-.ctl-foot { margin-top: 4px; font-size: 11px; color: var(--dim); text-align: center; min-height: 18px; }
-.ctl-reset { background: none; border: 0; color: var(--accent); cursor: pointer; font-size: 11px; padding: 2px 4px; }
-.ctl-reset:hover { text-decoration: underline; }
+.ctl-group { display: flex; align-items: center; gap: 4px; }
+/* thin rule between the range and centre sides, so the two steppers read as separate controls */
+.ctl-group + .ctl-group { padding-left: 10px; border-left: 1px solid var(--line); }
+.ctl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-right: 2px; }
+.ctl-group button { width: 20px; height: 20px; flex: 0 0 20px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+.ctl-group button:hover:not(:disabled) { border-color: var(--accent); }
+.ctl-group button:disabled { opacity: .4; cursor: default; }
+.ctl-val { min-width: 28px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); cursor: help; }
+.ctl-reset { background: none; border: 0; padding: 2px 4px; font-size: 11px; color: var(--accent); cursor: pointer; }
+.ctl-reset:hover:not(:disabled) { text-decoration: underline; }
+.ctl-reset:disabled { color: var(--dim); opacity: .5; cursor: default; }
 
 /* state table */
 .note-line { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 10px 12px; border-radius: 8px; background: #232833; border-left: 4px solid var(--dim); margin-bottom: 14px; }

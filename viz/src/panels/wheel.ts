@@ -54,6 +54,7 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     title.className = 'panel-title';
     title.textContent = 'spiral of fifths';
     host.appendChild(title);
+    host.appendChild(renderControls(opts));
 
     const DEPTH = opts.range;    // effective spiralRange the replay ran with (floor 6)
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
@@ -124,62 +125,70 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
         }
         host.appendChild(leg);
     }
-
-    host.appendChild(renderControls(opts));
 }
 
-/** The range / centre steppers, beside the spiral. Each rebuilds the speller on change; disabled in
- *  batch two-pass (the spiral is not the streaming frame there). `keyName` labels the window ends so the
- *  effect is legible — widening the range digs to deeper enharmonics, the centre biases sharp/flat. */
+/** Which stepper button was last pressed, so focus survives the panel rebuild each change triggers
+ *  (otherwise repeated keyboard/click stepping drops back to the body). */
+let lastPressed: string | null = null;
+
+/** The range / centre steppers, on one line above the spiral. Each rebuilds the speller on change;
+ *  disabled in batch two-pass (the spiral is not the streaming frame there). The window ends
+ *  (e.g. G♭…G♯) sit in the tooltip — widening the range digs to deeper enharmonics, the centre biases
+ *  sharp/flat. */
 function renderControls(opts: WheelOpts): HTMLElement {
     const { range, center, streaming, onChange } = opts;
     const wrap = document.createElement('div');
     wrap.className = 'spiral-ctl' + (streaming ? '' : ' disabled');
+    if (!streaming) wrap.title = 'streaming rungs only — batch two-pass has no spiral frame';
 
+    const focusLater: HTMLButtonElement[] = [];
     const stepper = (
         labelText: string, value: number, min: number, max: number,
-        fmt: (n: number) => string, set: (n: number) => void,
-    ): HTMLElement => {
-        const rowEl = document.createElement('div');
-        rowEl.className = 'ctl-row';
-        const dec = document.createElement('button');
-        dec.textContent = '−'; dec.disabled = !streaming || value <= min;
-        dec.addEventListener('click', () => set(value - 1));
-        const inc = document.createElement('button');
-        inc.textContent = '+'; inc.disabled = !streaming || value >= max;
-        inc.addEventListener('click', () => set(value + 1));
+        fmt: (n: number) => string, tip: string, set: (n: number) => void,
+    ) => {
+        const group = document.createElement('div');
+        group.className = 'ctl-group';
+        const lab = document.createElement('span');
+        lab.className = 'ctl-label'; lab.textContent = labelText;
         const val = document.createElement('span');
-        val.className = 'ctl-val'; val.textContent = fmt(value);
-        rowEl.innerHTML = `<span class="ctl-label">${labelText}</span>`;
-        rowEl.append(dec, val, inc);
-        return rowEl;
+        val.className = 'ctl-val'; val.textContent = fmt(value); val.title = tip;
+        const btn = (sign: -1 | 1) => {
+            const b = document.createElement('button');
+            b.textContent = sign < 0 ? '−' : '+';
+            b.disabled = !streaming || (sign < 0 ? value <= min : value >= max);
+            b.dataset.k = `${labelText}${sign}`;
+            b.addEventListener('click', () => { lastPressed = b.dataset.k!; set(value + sign); });
+            if (b.dataset.k === lastPressed) focusLater.push(b);
+            return b;
+        };
+        group.append(lab, btn(-1), val, btn(1));
+        wrap.appendChild(group);
     };
 
-    wrap.appendChild(stepper(
-        'range', range, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX,
-        n => `±${n} · ${keyName(center - n)}…${keyName(center + n)}`,
+    stepper(
+        'range', range, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX, n => `±${n}`,
+        `${keyName(center - range)}…${keyName(center + range)}`,
         n => onChange(n, center),
-    ));
-    wrap.appendChild(stepper(
-        'centre', center, SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX,
-        n => (n > 0 ? '+' : '') + n,
+    );
+    stepper(
+        'centre', center, SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX, n => (n > 0 ? '+' : '') + n,
+        'line-of-fifths writability bias',
         n => onChange(range, n),
-    ));
+    );
 
-    const foot = document.createElement('div');
-    foot.className = 'ctl-foot';
-    if (!streaming) {
-        foot.textContent = 'streaming rungs only';
-    } else if (range !== SPIRAL_RANGE_DEFAULT || center !== SPIRAL_CENTER_DEFAULT) {
-        const reset = document.createElement('button');
-        reset.className = 'ctl-reset';
-        reset.textContent = `reset to shipped (±${SPIRAL_RANGE_DEFAULT}, ${SPIRAL_CENTER_DEFAULT > 0 ? '+' : ''}${SPIRAL_CENTER_DEFAULT})`;
-        reset.addEventListener('click', () => onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT));
-        foot.appendChild(reset);
-    } else {
-        foot.textContent = 'shipped default';
-    }
-    wrap.appendChild(foot);
+    // Always in the layout — greyed out at the shipped preset — so it can't shove the steppers sideways
+    // the moment a value changes.
+    const shipped = `±${SPIRAL_RANGE_DEFAULT}, ${SPIRAL_CENTER_DEFAULT > 0 ? '+' : ''}${SPIRAL_CENTER_DEFAULT}`;
+    const reset = document.createElement('button');
+    reset.className = 'ctl-reset';
+    reset.textContent = 'reset';
+    reset.disabled = !streaming || (range === SPIRAL_RANGE_DEFAULT && center === SPIRAL_CENTER_DEFAULT);
+    reset.title = reset.disabled ? `at shipped default (${shipped})` : `back to shipped (${shipped})`;
+    reset.addEventListener('click', () => { lastPressed = null; onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT); });
+    wrap.appendChild(reset);
+
+    // preventScroll: refocusing must not nudge the page, which is the whole point of this panel change.
+    if (focusLater[0]) queueMicrotask(() => focusLater[0]!.focus({ preventScroll: true }));
     return wrap;
 }
 

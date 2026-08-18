@@ -100,8 +100,14 @@ function renderStrip() {
     }
     const cells = strip.children;
     for (let i = 0; i < cells.length; i++) cells[i]!.classList.toggle('cursor', i === state.step);
+    // Keep the cursor cell visible by scrolling the STRIP itself. scrollIntoView() would scroll the
+    // PAGE too, jumping back up to the strip whenever a re-render fires while reading the panels below.
     const cur = cells[state.step] as HTMLElement | undefined;
-    cur?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (cur) {
+        const c = cur.getBoundingClientRect(), s = strip.getBoundingClientRect(), pad = 8;
+        if (c.left < s.left + pad) strip.scrollLeft -= (s.left + pad) - c.left;
+        else if (c.right > s.right - pad) strip.scrollLeft += c.right - (s.right - pad);
+    }
 }
 
 function seek(i: number, audible = false) {
