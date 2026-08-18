@@ -1,6 +1,7 @@
 import { summarize } from './framework.js';
 
 await import('./speller.test.js');
+await import('./viz.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+viz-dist/
 corpora/
 .DS_Store
 *.log

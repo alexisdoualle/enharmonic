@@ -32,7 +32,9 @@
     "bench": "tsx test/eval/run.ts",
     "bench:update": "tsx test/eval/run.ts --update",
     "meredith:fetch": "bash scripts/fetch-meredith.sh",
-    "meredith": "tsx test/eval/meredith.ts"
+    "meredith": "tsx test/eval/meredith.ts",
+    "viz": "node viz/serve.mjs",
+    "viz:build": "node viz/build.mjs"
   },
   "keywords": [
     "music",
@@ -44,7 +46,9 @@
   "author": "Alexis Doualle",
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "esbuild": "^0.25.12",
     "tsx": "^4.22.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vexflow": "^4.2.5"
   }
 }

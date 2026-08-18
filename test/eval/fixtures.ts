@@ -20,6 +20,7 @@ export const FIXTURES = [
     'bach_wtc1_prelude1_c',
     'mozart_k545',
     'chopin_prelude_op28_no4',
+    'chopin_prelude_op28_no15',
     'grieg_death_of_ase',
     'bach_jesu_meine_freude',
 ] as const;

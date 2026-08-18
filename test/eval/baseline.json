@@ -59,6 +59,26 @@
       "total": 604
     }
   },
+  "chopin_prelude_op28_no15": {
+    "rt": {
+      "correct": 1143,
+      "flipped": 421,
+      "wrong": 2,
+      "total": 1566
+    },
+    "la": {
+      "correct": 1143,
+      "flipped": 421,
+      "wrong": 2,
+      "total": 1566
+    },
+    "tp": {
+      "correct": 1289,
+      "flipped": 275,
+      "wrong": 2,
+      "total": 1566
+    }
+  },
   "grieg_death_of_ase": {
     "rt": {
       "correct": 587,
