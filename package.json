@@ -1,0 +1,54 @@
+{
+  "name": "enharmonic",
+  "version": "0.0.1",
+  "description": "Real-time enharmonic pitch-spelling for MIDI input",
+  "license": "Apache-2.0",
+  "homepage": "https://tonalmap.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexisdoualle/enharmonic.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexisdoualle/enharmonic/issues"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "tsx test/run.ts && tsx test/eval/run.ts",
+    "bench": "tsx test/eval/run.ts",
+    "bench:update": "tsx test/eval/run.ts --update",
+    "meredith:fetch": "bash scripts/fetch-meredith.sh",
+    "meredith": "tsx test/eval/meredith.ts",
+    "viz": "node viz/serve.mjs",
+    "viz:build": "node viz/build.mjs"
+  },
+  "keywords": [
+    "music",
+    "midi",
+    "pitch-spelling",
+    "enharmonic",
+    "music-notation"
+  ],
+  "author": "Alexis Doualle",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vexflow": "^4.2.5"
+  }
+}
