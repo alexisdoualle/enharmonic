@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>enharmonic — speller debugger</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="toolbar">
+    <strong>enharmonic</strong> <span class="sub">speller debugger</span>
+    <label>fixture <select id="fixture"></select></label>
+    <label>speller
+      <select id="mode">
+        <option value="rt">② real-time (diatonic + sticky)</option>
+        <option value="la">③ + look-ahead</option>
+        <option value="tp">④ two-pass (offline)</option>
+      </select>
+    </label>
+    <span class="spacer"></span>
+    <span id="status"></span>
+  </header>
+
+  <section id="transport">
+    <button id="play" class="play" title="play / pause (space)">▶</button>
+    <button id="prev" title="previous onset (←)">‹</button>
+    <input type="range" id="scrub" min="0" max="0" value="0" />
+    <button id="next" title="next onset (→)">›</button>
+    <span id="pos" class="pos">0 / 0</span>
+    <label class="ctl" title="play audio (Web Audio EP synth)"><input type="checkbox" id="sound" checked /> 🔊</label>
+    <label class="ctl" title="playback speed (logarithmic; centre = 1×)">tempo
+      <input type="range" id="tempo" min="-1" max="1" step="0.01" value="0" />
+      <span id="tempo-val" class="pos">1×</span></label>
+  </section>
+
+  <div id="strip" class="strip" title="every onset, coloured by tier — click to jump"></div>
+
+  <section id="music">
+    <div id="staff" class="panel"></div>
+    <div id="pianoroll" class="panel"></div>
+  </section>
+
+  <section id="panels">
+    <div id="scoring" class="panel"></div>
+    <div id="wheel" class="panel"></div>
+    <div id="stateTable" class="panel"></div>
+  </section>
+
+  <footer>
+    Streams the real shipped speller (<code>src/</code>) note by note — <b>correct</b> / <b>flipped</b>
+    (right pitch, coherent enharmonic side) / <b>wrong</b>. Keys: ← → step, Home / End jump,
+    <b>⌘/Ctrl+C</b> copy this onset (settings + state + scoring) for pasting to an agent,
+    <b>⌘/Ctrl+⇧+C</b> copy the whole run.
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

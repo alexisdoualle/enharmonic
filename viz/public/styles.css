@@ -1,0 +1,147 @@
+:root {
+  --bg: #14161a; --panel: #1c2027; --ink: #e7e9ee; --dim: #9aa3b2; --line: #2c313b;
+  --accent: #6ea8fe; --correct: #57caa0; --flipped: #d8b35a; --wrong: #e06c75;
+  --coll: #2a3550; --tonic: #3a5bd0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
+
+#toolbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+}
+#toolbar strong { font-size: 16px; letter-spacing: .3px; }
+#toolbar .sub { color: var(--dim); font-size: 12px; }
+#toolbar label { color: var(--dim); font-size: 12px; }
+#toolbar select { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
+.spacer { flex: 1; }
+#status { font-size: 12px; color: var(--dim); }
+#status .correct { color: var(--accent); }   /* combined exact+flipped */
+#status .exact { color: var(--correct); }
+#status .flipped { color: var(--flipped); }
+#status .wrong { color: var(--wrong); }
+.dim { color: var(--dim); }
+
+#transport { display: flex; align-items: center; gap: 12px; padding: 12px 16px 4px; }
+#transport button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; width: 34px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1; }
+#transport button:hover { border-color: var(--accent); }
+#transport button.play { background: var(--tonic); border-color: var(--accent); }
+#scrub { flex: 1; accent-color: var(--accent); }
+.pos { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 84px; text-align: right; }
+#transport .ctl { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; white-space: nowrap; }
+#transport .ctl input[type=range] { width: 96px; accent-color: var(--accent); }
+#transport .ctl .pos { min-width: 34px; text-align: left; }
+
+.strip { display: flex; gap: 2px; padding: 6px 16px 12px; overflow-x: auto; }
+.strip-cell { flex: 0 0 8px; height: 22px; border: 0; border-radius: 2px; padding: 0; cursor: pointer; opacity: .8; }
+.strip-cell:hover { opacity: 1; }
+.strip-cell.cursor { outline: 2px solid var(--ink); outline-offset: 1px; opacity: 1; }
+.tier-correct { background: var(--correct); }
+.tier-flipped { background: var(--flipped); }
+.tier-wrong   { background: var(--wrong); }
+.tier-unread  { background: var(--dim); }
+
+/* music panels: staff over piano roll, both horizontally-scrolling inside their own box (never the page) */
+#music { display: flex; flex-direction: column; gap: 12px; padding: 8px 16px 0; }
+#staff, #pianoroll { padding: 0; overflow-x: auto; }
+#staff { background: #f4f4f6; border-radius: 8px; min-height: 130px; overflow-y: hidden; }
+/* the roll's height follows the piece's pitch span (up to ~5 octaves) — scroll vertically rather
+   than clip the key lane at the bottom. */
+#pianoroll { background: var(--panel); max-height: 460px; overflow-y: auto; }
+.staff-empty { padding: 10px 14px; color: #888; font-size: 12px; }
+
+/* three cards in one row: scoring (widest) · spiral (narrow, fixed-ish) · speller state.
+   minmax(0,…) lets the table columns shrink instead of forcing the page wider. */
+#panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(200px, 0.85fr) minmax(0, 1.1fr);
+  gap: 14px; padding: 8px 16px 16px; align-items: start;
+}
+/* stack once a single row would get too cramped */
+@media (max-width: 1040px) { #panels { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 13px; min-width: 0; }
+.panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--dim); margin-bottom: 10px; }
+
+/* spiral of fifths */
+.spiral { display: block; max-width: 220px; margin: 0 auto; }
+.spiral .note-dot { fill: var(--ink); stroke: #171b22; stroke-width: 1; }
+.wheel-legend { text-align: center; font-size: 12px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
+.wheel-legend b { color: var(--ink); }
+.note-dot-key { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); vertical-align: middle; }
+
+/* spiral what-if controls (range / centre) — one compact line directly above the wheel */
+.spiral-ctl { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.spiral-ctl.disabled { opacity: .55; }
+.ctl-group { display: flex; align-items: center; gap: 4px; }
+/* thin rule between the range and centre sides, so the two steppers read as separate controls */
+.ctl-group + .ctl-group { padding-left: 10px; border-left: 1px solid var(--line); }
+.ctl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-right: 2px; }
+.ctl-group button { width: 20px; height: 20px; flex: 0 0 20px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+.ctl-group button:hover:not(:disabled) { border-color: var(--accent); }
+.ctl-group button:disabled { opacity: .4; cursor: default; }
+.ctl-val { min-width: 28px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); cursor: help; }
+.ctl-reset { background: none; border: 0; padding: 2px 4px; font-size: 11px; color: var(--accent); cursor: pointer; }
+.ctl-reset:hover:not(:disabled) { text-decoration: underline; }
+.ctl-reset:disabled { color: var(--dim); opacity: .5; cursor: default; }
+
+/* state table */
+.note-line { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 10px 12px; border-radius: 8px; background: #232833; border-left: 4px solid var(--dim); margin-bottom: 14px; }
+.note-line.tier-correct { border-left-color: var(--correct); }
+.note-line.tier-flipped { border-left-color: var(--flipped); }
+.note-line.tier-wrong { border-left-color: var(--wrong); }
+.note-big { font-size: 26px; font-weight: 700; }
+.note-meta, .note-exp { color: var(--dim); font-size: 12px; }
+.note-meta { font-variant-numeric: tabular-nums; }
+.note-tier { font-size: 12px; }
+.field { margin-bottom: 14px; }
+.field-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-bottom: 6px; }
+.surface { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.surf-cell { text-align: center; padding: 8px 4px; border-radius: 6px; background: #232833; border: 1px solid var(--line); }
+.surf-cell.altered { background: #2c2438; border-color: #4a3d63; }
+/* surface cell the keep-alive / sounding overlay moved off the bare frame */
+.surf-cell.overlaid { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.surf-letter { display: block; font-size: 11px; color: var(--dim); }
+.surf-spell { display: block; font-size: 17px; font-weight: 600; }
+.sounding { display: flex; gap: 6px; flex-wrap: wrap; }
+.sound-chip { padding: 3px 9px; border-radius: 12px; background: #232833; border: 1px solid var(--line); font-size: 13px; }
+.sound-chip.current { background: var(--tonic); border-color: var(--accent); }
+
+/* scoring table — wrapped so a tight column scrolls the table, never the page. Fixed column widths and a
+   reserved row block keep the geometry identical from onset to onset instead of reflowing per content. */
+#scoring .score-scroll { overflow-x: auto; margin-top: 10px; }
+.score-table { table-layout: fixed; border-collapse: collapse; width: 100%; min-width: 348px; font-size: 12.5px; }
+.score-table .col-cand { width: 56px; }
+.score-table .col-total { width: 74px; }
+.score-table .col-delta { width: 30px; }
+.score-table th, .score-table td { height: 27px; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+.score-table th { height: 24px; font-size: 11px; color: var(--dim); font-weight: 600; text-align: left; }
+.score-table td.c, .score-table th.c { text-align: center; font-variant-numeric: tabular-nums; }
+.score-table tr.winner { background: rgba(110,168,254,.10); }
+.score-table tr.winner td { font-weight: 600; }
+.score-table tr.filler td { border-bottom-color: transparent; }
+.score-table td.total { font-variant-numeric: tabular-nums; }
+.score-table td.total b { font-size: 14px; }
+/* the winner caret keeps its slot on every row, so candidate names never shift sideways */
+.score-table .pick { display: inline-block; width: 13px; color: var(--accent); }
+.score-table .pick.blank { visibility: hidden; }
+.score-table .pos { color: var(--correct); }
+.score-table .neg { color: var(--wrong); }
+.score-table .zero, .score-table .dim { color: var(--dim); }
+/* two lines' worth of room: short and long decision notes occupy the same box */
+.decision-note { margin-top: 12px; min-height: 55px; font-size: 12.5px; color: var(--ink); background: #232833; border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; line-height: 1.5; }
+
+footer { color: var(--dim); font-size: 12px; padding: 4px 16px 24px; line-height: 1.6; }
+footer code, footer b { color: var(--ink); }
+
+/* "copied" flash for the clipboard shortcut — brief, corner-anchored, never in the way */
+.toast {
+  position: fixed; right: 18px; bottom: 18px; z-index: 50;
+  padding: 7px 14px; border-radius: 8px; font-size: 12px; letter-spacing: .3px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--accent);
+  box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  opacity: 0; transform: translateY(6px); pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.toast.show { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
