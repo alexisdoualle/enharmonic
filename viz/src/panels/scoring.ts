@@ -13,6 +13,10 @@ import { label } from '../format.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
+// Max enharmonic candidates for any pitch class (see src/candidates.ts) — the table reserves this many
+// rows so stepping between a 2-candidate and a 3-candidate onset does not resize the panel.
+const MAX_CANDIDATES = 3;
+
 // Mirror of src/scoring.ts `scoreFor` — the per-interval contribution to a candidate's base score.
 function scoreFor(quality: number, number: number): number {
     if (quality === 0) return (number === 4 || number === 5) ? 1 : 0;
@@ -59,17 +63,25 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
         + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex}</span>`;
     host.appendChild(head);
 
-    // table
+    // table — fixed geometry: every column is always present and every onset draws MAX_CANDIDATES rows,
+    // so the layout stays put while scrubbing.
+    const scroll = document.createElement('div');
+    scroll.className = 'score-scroll';
     const table = document.createElement('table');
     table.className = 'score-table';
+    table.innerHTML = `<colgroup>`
+        + `<col class="col-cand"><col class="col-total">`
+        + LETTERS.map(() => '<col class="col-slot">').join('')
+        + `<col class="col-delta"><col class="col-delta">`
+        + `</colgroup>`;
     const thead = document.createElement('tr');
     thead.innerHTML = `<th>cand</th><th class="c">total</th>`
         + LETTERS.map(L => {
             const p = frameByLetter.get(L);
             return `<th class="c" title="frame slot">${p ? label(p) : L}</th>`;
         }).join('')
-        + (anyLA ? '<th class="c" title="look-ahead delta">LA</th>' : '')
-        + (anyNS ? '<th class="c" title="neighbour-step delta">NS</th>' : '');
+        + '<th class="c" title="look-ahead delta">LA</th>'
+        + '<th class="c" title="neighbour-step delta">NS</th>';
     table.appendChild(thead);
 
     for (const c of dec.candidates) {
@@ -85,14 +97,21 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
             const name = intervalLabel(intervalBetween(c.c, fp));
             return `<td class="c ${numCls(contrib)}" title="${name}">${contrib === 0 ? '·' : sgn(contrib)}</td>`;
         }).join('');
-        tr.innerHTML = `<td>${isChosen ? '▶ ' : ''}${label(c.c)}</td>`
-            + `<td class="c total"><b>${sgn(total(c))}</b>${(anyLA || anyNS) ? ` <span class="dim">(${sgn(c.base)})</span>` : ''}</td>`
+        tr.innerHTML = `<td><span class="pick${isChosen ? '' : ' blank'}">▶</span>${label(c.c)}</td>`
+            + `<td class="c total"><b>${sgn(total(c))}</b> <span class="dim">(${sgn(c.base)})</span></td>`
             + cells
-            + (anyLA ? `<td class="c ${numCls(c.laDelta)}">${c.laDelta ? sgn(c.laDelta) : '·'}</td>` : '')
-            + (anyNS ? `<td class="c ${numCls(c.nsDelta)}">${c.nsDelta ? sgn(c.nsDelta) : '·'}</td>` : '');
+            + `<td class="c ${numCls(c.laDelta)}">${c.laDelta ? sgn(c.laDelta) : '·'}</td>`
+            + `<td class="c ${numCls(c.nsDelta)}">${c.nsDelta ? sgn(c.nsDelta) : '·'}</td>`;
         table.appendChild(tr);
     }
-    host.appendChild(table);
+    for (let i = dec.candidates.length; i < MAX_CANDIDATES; i++) {
+        const tr = document.createElement('tr');
+        tr.className = 'filler';
+        tr.innerHTML = `<td colspan="${2 + LETTERS.length + 2}"></td>`;
+        table.appendChild(tr);
+    }
+    scroll.appendChild(table);
+    host.appendChild(scroll);
 
     // decision note: what actually chose the pick
     const notes: string[] = [];

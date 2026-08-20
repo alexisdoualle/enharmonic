@@ -10,6 +10,7 @@ import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
 import { enable as audioEnable, playMidi, allNotesOff, audioNow } from './audio.js';
+import { contextReport, runReport, copyText, flash } from './copy.js';
 import { label } from './format.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -60,9 +61,10 @@ function renderStatus() {
     if (!r) { $('status').textContent = ''; return; }
     const t = r.tally;
     const pc = (x: number) => t.total ? (100 * x / t.total).toFixed(1) : '0.0';
+    // "correct" = exact + flipped (right pitch-class / coherent side); exact & flipped break it down.
     $('status').innerHTML = `${state.fixtureId} · ${MODE_NAME[state.mode]} · ${r.snapshots.length} onsets · `
-        + `<span class="correct">${pc(t.correct)}% correct (${t.correct})</span> · `
-        + `${pc(t.flipped)}% flipped (${t.flipped}) · `
+        + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
+        + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
         + `<span class="wrong">${pc(t.wrong)}% wrong (${t.wrong})</span>`
         + (t.unread ? ` · <span class="dim">${t.unread} unread</span>` : '');
 }
@@ -110,12 +112,21 @@ function renderStrip() {
     }
 }
 
-function seek(i: number, audible = false) {
-    stopPlay();          // manual navigation halts playback…
-    allNotesOff();       // …and silences whatever was ringing, so we start clean
+/** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there —
+ *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
+ *  slider, which seeks continuously while dragged and resumes once on release instead. */
+function seek(i: number, audible = false, resume = true) {
+    const wasPlaying = raf !== 0;
+    stopPlay();
+    allNotesOff();       // silence whatever was ringing, so the new position starts clean
     state.step = clampStep(state, i);
     render();
     syncUrl();
+    if (wasPlaying && resume) {
+        // Landing on the last onset is the natural end of the piece; don't loop back to the top.
+        if (state.step < (state.replay?.notes.length ?? 0) - 1) play();
+        return;
+    }
     if (audible && soundOn) {   // arrow-key stepping auditions the landed note
         const n = state.replay?.notes[state.step];
         if (n) { audioEnable(); playMidi(n.midi); }
@@ -217,6 +228,17 @@ function setTempo(rate: number) {
 // frame with a huge elapsed time and dump the whole backlog of past-due notes at once. So just pause.
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
 
+/** ⌘/Ctrl+C dumps the current onset (⇧ adds the whole run) as agent-pasteable text. A real text
+ *  selection still copies natively — the shortcut only claims the keystroke when nothing is selected. */
+function copyContext(ev: KeyboardEvent) {
+    if (!state.replay) return;
+    if ((window.getSelection()?.toString() ?? '').trim()) return;
+    ev.preventDefault();
+    const whole = ev.shiftKey;
+    const text = whole ? runReport(state) : contextReport(state);
+    void copyText(text).then(ok => flash(ok ? (whole ? 'run copied' : 'copied') : 'copy failed'));
+}
+
 function syncUrl() {
     if (!state.fixtureId) return;
     const u = new URL(location.href);
@@ -244,7 +266,18 @@ function wire() {
     initPianoRoll(seek);
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
-    $<HTMLInputElement>('scrub').addEventListener('input', e => seek(Number((e.target as HTMLInputElement).value)));
+    // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
+    // look-ahead scheduler, so playback pauses for the drag and picks up once at `change` (release).
+    let resumeAfterScrub = false;
+    $<HTMLInputElement>('scrub').addEventListener('input', e => {
+        if (raf) resumeAfterScrub = true;
+        seek(Number((e.target as HTMLInputElement).value), false, false);
+    });
+    $<HTMLInputElement>('scrub').addEventListener('change', () => {
+        if (!resumeAfterScrub) return;
+        resumeAfterScrub = false;
+        if (state.step < (state.replay?.notes.length ?? 0) - 1) play();
+    });
     $('prev').addEventListener('click', () => seek(state.step - 1, true));
     $('next').addEventListener('click', () => seek(state.step + 1, true));
     $('play').addEventListener('click', () => togglePlay());
@@ -257,7 +290,9 @@ function wire() {
     let resizeT = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = window.setTimeout(render, 120); });
     window.addEventListener('keydown', ev => {
-        if (/INPUT|SELECT/.test((ev.target as HTMLElement)?.tagName ?? '')) return;
+        if (/INPUT|SELECT|TEXTAREA/.test((ev.target as HTMLElement)?.tagName ?? '')) return;
+        if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
+        if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (ev.key === ' ') { ev.preventDefault(); togglePlay(); }
         else if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }

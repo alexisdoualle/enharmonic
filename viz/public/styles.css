@@ -17,7 +17,10 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 #toolbar select { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
 .spacer { flex: 1; }
 #status { font-size: 12px; color: var(--dim); }
-#status .correct { color: var(--correct); } #status .wrong { color: var(--wrong); }
+#status .correct { color: var(--accent); }   /* combined exact+flipped */
+#status .exact { color: var(--correct); }
+#status .flipped { color: var(--flipped); }
+#status .wrong { color: var(--wrong); }
 .dim { color: var(--dim); }
 
 #transport { display: flex; align-items: center; gap: 12px; padding: 12px 16px 4px; }
@@ -89,6 +92,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 .note-line.tier-wrong { border-left-color: var(--wrong); }
 .note-big { font-size: 26px; font-weight: 700; }
 .note-meta, .note-exp { color: var(--dim); font-size: 12px; }
+.note-meta { font-variant-numeric: tabular-nums; }
 .note-tier { font-size: 12px; }
 .field { margin-bottom: 14px; }
 .field-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--dim); margin-bottom: 6px; }
@@ -103,19 +107,41 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 .sound-chip { padding: 3px 9px; border-radius: 12px; background: #232833; border: 1px solid var(--line); font-size: 13px; }
 .sound-chip.current { background: var(--tonic); border-color: var(--accent); }
 
-/* scoring table — wrapped so a tight column scrolls the table, never the page */
-#scoring .score-table { display: block; overflow-x: auto; }
-.score-table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 10px; }
-.score-table th, .score-table td { padding: 5px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.score-table th { font-size: 11px; color: var(--dim); font-weight: 600; text-align: left; }
+/* scoring table — wrapped so a tight column scrolls the table, never the page. Fixed column widths and a
+   reserved row block keep the geometry identical from onset to onset instead of reflowing per content. */
+#scoring .score-scroll { overflow-x: auto; margin-top: 10px; }
+.score-table { table-layout: fixed; border-collapse: collapse; width: 100%; min-width: 348px; font-size: 12.5px; }
+.score-table .col-cand { width: 56px; }
+.score-table .col-total { width: 74px; }
+.score-table .col-delta { width: 30px; }
+.score-table th, .score-table td { height: 27px; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+.score-table th { height: 24px; font-size: 11px; color: var(--dim); font-weight: 600; text-align: left; }
 .score-table td.c, .score-table th.c { text-align: center; font-variant-numeric: tabular-nums; }
 .score-table tr.winner { background: rgba(110,168,254,.10); }
 .score-table tr.winner td { font-weight: 600; }
+.score-table tr.filler td { border-bottom-color: transparent; }
+.score-table td.total { font-variant-numeric: tabular-nums; }
 .score-table td.total b { font-size: 14px; }
+/* the winner caret keeps its slot on every row, so candidate names never shift sideways */
+.score-table .pick { display: inline-block; width: 13px; color: var(--accent); }
+.score-table .pick.blank { visibility: hidden; }
 .score-table .pos { color: var(--correct); }
 .score-table .neg { color: var(--wrong); }
 .score-table .zero, .score-table .dim { color: var(--dim); }
-.decision-note { margin-top: 12px; font-size: 12.5px; color: var(--ink); background: #232833; border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; line-height: 1.5; }
+/* two lines' worth of room: short and long decision notes occupy the same box */
+.decision-note { margin-top: 12px; min-height: 55px; font-size: 12.5px; color: var(--ink); background: #232833; border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 12px; line-height: 1.5; }
 
 footer { color: var(--dim); font-size: 12px; padding: 4px 16px 24px; line-height: 1.6; }
 footer code, footer b { color: var(--ink); }
+
+/* "copied" flash for the clipboard shortcut — brief, corner-anchored, never in the way */
+.toast {
+  position: fixed; right: 18px; bottom: 18px; z-index: 50;
+  padding: 7px 14px; border-radius: 8px; font-size: 12px; letter-spacing: .3px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--accent);
+  box-shadow: 0 6px 18px rgba(0,0,0,.45);
+  opacity: 0; transform: translateY(6px); pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+.toast.show { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
