@@ -2,5 +2,7 @@ node_modules/
 dist/
 viz-dist/
 corpora/
+results/
+CLAUDE.local.md
 .DS_Store
 *.log
