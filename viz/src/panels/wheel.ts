@@ -9,7 +9,7 @@
  * the fold-back cap past which continuity would respell rather than dig deeper.
  *
  * Ported from the lab viz (`music/wheel.ts` renderSpiral), stripped of the research local-key overlay.
- * depth/center are pinned to the shipped BoxWindowSubstrate defaults (spiralRange 6, spiralCenter +1).
+ * depth/center are pinned to the shipped DiatonicBaseSubstrate defaults (spiralRange 6, spiralCenter +1).
  */
 import type { Snapshot } from '../replay.js';
 import { fifths } from '../replay.js';
@@ -171,7 +171,7 @@ function renderControls(opts: WheelOpts): HTMLElement {
         n => onChange(n, center),
     );
     stepper(
-        'centre', center, SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX, n => (n > 0 ? '+' : '') + n,
+        'offset', center, SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX, n => (n > 0 ? '+' : '') + n,
         'line-of-fifths writability bias',
         n => onChange(range, n),
     );

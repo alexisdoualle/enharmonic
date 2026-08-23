@@ -1,20 +1,20 @@
 /**
- * BoxWindowSubstrate — the reverting, time-windowed frame model (diatonic lineage).
+ * DiatonicBaseSubstrate — the reverting, time-windowed frame model (diatonic lineage).
  *
  * A structurally different memory model from {@link PersistentSubstrate}: rather
  * than one drifting scale, the surface is REBUILT every note as
  *
- *     bare box frame  +  (keep-alive sticky)  +  the notes still sounding
+ *     bare diatonic base  +  (keep-alive)  +  the notes still sounding
  *
  * The frame is the diatonic COLLECTION (one of the 12 circle-of-fifths windows)
  * that leaves the fewest recently-sounding raw pitch classes outside it, held
- * with a stickiness margin — non-circular, it reads MIDI numbers never the
+ * with a hysteresis margin — non-circular, it reads MIDI numbers never the
  * speller's own decisions. A chromatic rides on top only while it sounds and its
  * slot reverts the moment it releases, so nothing accumulates.
  *
  * Two composable options reproduce the two standalone spellers byte-for-byte:
  *   - off                 ≡ DiatonicSpeller       (pure revert-and-overlay)
- *   - `keepAlive` (+cap)  ≡ DiatonicStickySpeller (a played chromatic stays in
+ *   - `keepAlive` (+cap)  ≡ DiatonicAnchorSpeller (a played chromatic stays in
  *     its slot until contradicted; capped to avoid runaway drift)
  *   - `lookAhead`         the opt-in leading-tone resolution bias, fed via
  *     NoteContext.resolveDir (the kernel/driver computes it).
@@ -160,14 +160,14 @@ function bestColdTonic(pcs: readonly number[], coldRange: number, center: number
 }
 
 // KNOB SENSITIVITY IS MEASURED — see docs/mechanism-ablation.md before tuning any of these. Under the
-// coherence scorer only keepAlive (the wrong-lever) and stickyCap≈3 materially move accuracy; the box
-// frame itself is a FLIP-lever (holds orientation, ~neutral on wrong); frameBoxMargin / stickyEvict /
-// frameWindowMs are ~washes. Falsified experiment flags were removed (paper presets never used them).
+// coherence scorer only keepAlive (the wrong-lever) and keepAliveCap≈3 materially move accuracy; the diatonic
+// base itself is a FLIP-lever (holds orientation, ~neutral on wrong); baseMargin / keepAliveEvict /
+// baseWindowMs are ~washes. Falsified experiment flags were removed (paper presets never used them).
 // Run `npx tsx tools/benchmark/ablate.ts --meredith` to reproduce. Don't re-walk these.
-export interface BoxWindowSubstrateOptions {
+export interface DiatonicBaseSubstrateOptions {
     clock?: () => number;
-    frameWindowMs?: number;
-    frameBoxMargin?: number;
+    baseWindowMs?: number;
+    baseMargin?: number;
     lookAhead?: boolean;
     lookAheadWeight?: number;
     /** How the look-ahead tips a resolving note (default 'sign'):
@@ -218,13 +218,13 @@ export interface BoxWindowSubstrateOptions {
     suppliedKeyMargin?: number;
     /** Keep a played chromatic alive in its slot until contradicted (DiatonicSticky). */
     keepAlive?: boolean;
-    /** Re-anchor cap: max simultaneously-sticky slots before the layer is wiped. Default 3. */
-    stickyCap?: number;
+    /** Re-anchor cap: max simultaneously-kept slots before the layer is wiped. Default 3. */
+    keepAliveCap?: number;
     /** What overflowing the cap does (default 'clear'):
-     *  - 'clear'  : wipe ALL sticky slots — resets the whole accumulated orientation (the original).
-     *  - 'oldest' : evict only the OLDEST sticky slot — bounded memory that KEEPS the orientation,
+     *  - 'clear'  : wipe ALL kept slots — resets the whole accumulated orientation (the original).
+     *  - 'oldest' : evict only the OLDEST kept slot — bounded memory that KEEPS the orientation,
      *               so a long flipped passage stays internally coherent instead of flickering. */
-    stickyEvict?: 'clear' | 'oldest';
+    keepAliveEvict?: 'clear' | 'oldest';
     /** SPIRAL frame (default off): render the held collection from a SIGNED line-of-fifths tonic chosen
      *  by continuity (dig to the nearest enharmonic of the held tonic) with a writable cold start,
      *  instead of the fixed minimal-accidental table. The collection FINDER is unchanged — only the
@@ -241,12 +241,12 @@ export interface BoxWindowSubstrateOptions {
      *  MEASURED 2026-08-12, real coherence scorer (raw + dedupeOnsets unique), FULL corpus, spiral OFF→ON,
      *  via `tools/probe/_spiralmeasure.ts` (also `_wtc2osc.ts` flip-flop, `_spiralreset.ts` per-piece reset):
      *
-     *      rung2 sticky     wrong 1.696% → 1.592%  (−348)   flip 12430 → 31004 (+18574)
-     *      rung3 sticky+LA  wrong 1.289% → 1.228%  (−206)   flip 12469 → 31048 (+18579)
+     *      rung2 anchor     wrong 1.696% → 1.592%  (−348)   flip 12430 → 31004 (+18574)
+     *      rung3 anchor+LA  wrong 1.289% → 1.228%  (−206)   flip 12469 → 31048 (+18579)
      *      two-pass rung4   wrong 1.03%  → 1.045%          (WASH/slight regress — see below)
      *
      *  `wrong` drops on EVERY fixture but shostakovich_sq8_op110 (+20/+23). Held-out Meredith (single-key
-     *  movements) is neutral-to-slightly-positive: sticky wrong 0.47→0.45, LA 0.31→0.31, tonal flat/up.
+     *  movements) is neutral-to-slightly-positive: anchor wrong 0.47→0.45, LA 0.31→0.31, tonal flat/up.
      *
      *  THE FLIP JUMP IS NOT A LOSS — it is the reframe of the old (deleted) signedOrient "13:1" verdict:
      *  under the comma-offset scorer a COHERENT flip is FREE (`flip`, not `wrong`), and CLAUDE.md states
@@ -284,7 +284,7 @@ export interface BoxWindowSubstrateOptions {
      *  pc 1 is C♯(+7), which over-sharpens real flat keys and craters. Negative biases flat. Shifts the
      *  cold-start, the tiebreak, AND the ±range window. */
     spiralCenter?: number;
-    /** PARALLEL-FLIP THIRD GATE (default off; ON in the look-ahead presets — {@link createDiatonicStickyLA}
+    /** PARALLEL-FLIP THIRD GATE (default off; ON in the look-ahead presets — {@link createDiatonicAnchorLA}
      *  and the two-pass). The THIRD is dispositive for major vs minor; the raised 6th/7th are melodic-minor
      *  inflections that belong to the minor key, NOT evidence for the parallel major. So a frame flip between
      *  PARALLEL collections (the major and minor of ONE tonic — ±3 fifths apart on the LoF: C major↔C minor =
@@ -308,14 +308,14 @@ export interface BoxWindowSubstrateOptions {
      *  root `(relMajorPc+4)` is currently SOUNDING (a struck V under the note — the LT is its 3rd), this
      *  takes the ♯7 instead, OVERRIDING {@link soundingTiebreak} (whose pure-consonance vote wrongly
      *  prefers the ♭1: C♭ makes a consonant m3 with a sounding ♭6 where B makes a dissonant aug2). The
-     *  rel-minor tonic is read from the COLLECTION ({@link frameBoxCur}), NOT the noisy key tracker.
+     *  rel-minor tonic is read from the COLLECTION ({@link baseCur}), NOT the noisy key tracker.
      *
      *  The gate is a VERTICAL DOMINANT, deliberately: a leading tone splits into a vertical regime (inside
      *  a struck V, spelling determinate now — this catches it) and a melodic/arpeggiated regime (no V
      *  struck with it — only the resolution disambiguates → {@link lookAhead}). The two are complementary,
      *  which is why this stacks with look-ahead. Looser gates (rel-minor tonic merely present, or dominant
      *  merely recent) let major-key ♭6 borrowings through — measured damage; the vertical simultaneity is
-     *  what makes it clean. Default-ON in createDiatonicSticky / …LA; OFF in the two-pass (rung 4), whose
+     *  what makes it clean. Default-ON in createDiatonicAnchor / …LA; OFF in the two-pass (rung 4), whose
      *  own backward pass is the better offline side-fixer (streaming gate washes-to-worse there, like the
      *  spiral). Held-out Meredith: rung2 clean −39 / noisy −109 wrong, rung3 −8 / −14, flip flat. */
     preferRelMinorLT?: boolean;
@@ -374,28 +374,28 @@ export interface BoxWindowSubstrateOptions {
     /** Time window (ms) for stWindow='recent'. Default 400. */
     stWindowMs?: number;
     /** VIZ-ONLY (default off): record a {@link DecisionTrace} on every commit (base scores + look-ahead /
-     *  neighbour-step deltas + which override fired), readable via {@link BoxWindowSubstrate.decision}.
+     *  neighbour-step deltas + which override fired), readable via {@link DiatonicBaseSubstrate.decision}.
      *  Record-only — it never influences a spelling — so it is byte-identical to off in the presets, which
      *  never set it. The `viz/` debugger turns it on to render the per-candidate scoring table. */
     trace?: boolean;
 }
 
-export class BoxWindowSubstrate implements Substrate {
+export class DiatonicBaseSubstrate implements Substrate {
     private resolved = new Map<Letter, PitchClass>();
     private active = new Map<number, Letter>();
     private activeSpelling = new Map<number, PitchClass[]>();
     private framePcs: { pc: number; t: number }[] = [];
-    private sticky = new Map<Letter, PitchClass>();
-    private frameBoxCur: number | null = null;
+    private kept = new Map<Letter, PitchClass>();
+    private baseCur: number | null = null;
     private suppliedKey: number | null = null;
     private suppliedFrame: Map<Letter, PitchClass> | null = null;
     private suppliedHard = false;   // manual frame override → PIN the collection (ignore the window); vs a soft key-sig hint
     /** Bare frame from the most recent frameFor, needed by commit's keep-alive update. */
-    private lastFrame: Map<Letter, PitchClass> | null = null;
+    private lastBase: Map<Letter, PitchClass> | null = null;
 
     private readonly clock: () => number;
-    private readonly frameWindowMs: number;
-    private readonly frameBoxMargin: number;
+    private readonly baseWindowMs: number;
+    private readonly baseMargin: number;
     private readonly lookAhead: boolean;
     private readonly lookAheadWeight: number;
     private readonly lookAheadMode: 'sign' | 'letter' | 'samepen';
@@ -403,8 +403,8 @@ export class BoxWindowSubstrate implements Substrate {
     private readonly frameSoftMargin: number;
     private readonly suppliedKeyMargin: number | null;
     private readonly keepAlive: boolean;
-    private readonly stickyCap: number;
-    private readonly stickyEvict: 'clear' | 'oldest';
+    private readonly keepAliveCap: number;
+    private readonly keepAliveEvict: 'clear' | 'oldest';
     private readonly spiral: boolean;
     private readonly spiralRange: number;
     private readonly spiralCenter: number;
@@ -438,10 +438,10 @@ export class BoxWindowSubstrate implements Substrate {
     /** SPIRAL mode: still deciding the cold-start orientation (fewer than 3 distinct pcs since reset). */
     private superposed = true;
 
-    constructor(opts: BoxWindowSubstrateOptions = {}) {
+    constructor(opts: DiatonicBaseSubstrateOptions = {}) {
         this.clock = opts.clock ?? (() => Date.now());
-        this.frameWindowMs = opts.frameWindowMs ?? 8000;
-        this.frameBoxMargin = opts.frameBoxMargin ?? 3;
+        this.baseWindowMs = opts.baseWindowMs ?? 8000;
+        this.baseMargin = opts.baseMargin ?? 3;
         this.lookAhead = opts.lookAhead ?? false;
         this.lookAheadWeight = opts.lookAheadWeight ?? 2;
         this.lookAheadMode = opts.lookAheadMode ?? 'sign';
@@ -449,8 +449,8 @@ export class BoxWindowSubstrate implements Substrate {
         this.frameSoftMargin = opts.frameSoftMargin ?? 18;
         this.suppliedKeyMargin = opts.suppliedKeyMargin ?? null;
         this.keepAlive = opts.keepAlive ?? false;
-        this.stickyCap = opts.stickyCap ?? 3;
-        this.stickyEvict = opts.stickyEvict ?? 'clear';
+        this.keepAliveCap = opts.keepAliveCap ?? 3;
+        this.keepAliveEvict = opts.keepAliveEvict ?? 'clear';
         this.spiral = opts.spiral ?? false;
         // Default 6 = hug the 12-key convention (fewest flips); raise toward 8 for deeper digging / more
         // coherence. Floored at 6 (pc 6 F♯/G♭ has no shallower spelling).
@@ -482,20 +482,20 @@ export class BoxWindowSubstrate implements Substrate {
         const t = ctx.t ?? this.clock();
         const pc = ((midi % 12) + 12) % 12;
         this.framePcs.push({ pc, t });
-        const cutoff = t - this.frameWindowMs;
+        const cutoff = t - this.baseWindowMs;
         while (this.framePcs.length && this.framePcs[0]!.t < cutoff) this.framePcs.shift();
-        // 2. Infer the box frame. With keep-alive, a window change wipes sticky.
-        const prevWindow = this.frameBoxCur;
-        const frame = this.frameScale();
-        if (this.keepAlive && prevWindow !== null && this.frameBoxCur !== prevWindow) this.sticky.clear();
+        // 2. Infer the diatonic base. With keep-alive, a window change wipes the kept layer.
+        const prevWindow = this.baseCur;
+        const frame = this.findBase();
+        if (this.keepAlive && prevWindow !== null && this.baseCur !== prevWindow) this.kept.clear();
 
-        // 3. Rebuild the surface = frame, (keep-alive sticky), then sounding overlay.
+        // 3. Rebuild the surface = frame, (keep-alive), then sounding overlay.
         if (frame !== null) {
             for (const [L, pc] of frame) this.resolved.set(L, { step: pc.step, alter: pc.alter });
             if (this.keepAlive) {
-                for (const [L, sp] of this.sticky) {
+                for (const [L, sp] of this.kept) {
                     if (frame.get(L)!.alter !== sp.alter) this.resolved.set(L, sp);
-                    else this.sticky.delete(L);
+                    else this.kept.delete(L);
                 }
             }
         }
@@ -506,7 +506,7 @@ export class BoxWindowSubstrate implements Substrate {
             if (held) this.resolved.set(L, held);
         }
 
-        this.lastFrame = frame;
+        this.lastBase = frame;
         return this.resolved;
     }
 
@@ -594,26 +594,26 @@ export class BoxWindowSubstrate implements Substrate {
         // SOUNDING-TIEBREAK: on a BASE-score (near-)tie between two CHROMATIC candidates, the full frame
         // can't decide; re-score the tied pair against a SHORT recency window of struck notes and pick
         // the higher (tie → candidate order). Uses the BASE scores (pre-LA), and OVERRIDES the pick above.
-        if (this.soundingTiebreak && this.lastFrame !== null && scored.length >= 2) {
+        if (this.soundingTiebreak && this.lastBase !== null && scored.length >= 2) {
             const st = this.soundingTiebreakPick(scored, ctx);
             if (st !== null) { if (st !== best) traceOverride = 'sounding-tiebreak'; best = st; }
         }
 
         // PREFER RELATIVE-MINOR LEADING TONE over the lowered tonic ♭1, gated on a SOUNDING DOMINANT
-        // (OVERRIDES ST). The note's pc = (frameBoxCur+8) is enharmonically the ♯7 of the relative minor
+        // (OVERRIDES ST). The note's pc = (baseCur+8) is enharmonically the ♯7 of the relative minor
         // (a leading tone) or its ♭1 (lowered tonic, over-rotation). If something (ST, or a raw-consonance
         // tie) is about to commit the ♭1 letter AND the rel-minor DOMINANT root is currently sounding (a
         // struck V — the LT is its 3rd) AND the ♯7 letter is base-score-competitive, take the ♯7. The
         // collection fixes the rel-minor tonic (no key reader); the vertical dominant is the functional
         // gate that keeps it clean (see the option doc).
-        if (this.preferRelMinorLT && this.frameBoxCur !== null && this.lastFrame !== null && scored.length >= 2
-            && (((midi % 12) + 12) % 12) === (this.frameBoxCur + 8) % 12) {
-            const minorTonicPc = (this.frameBoxCur + 9) % 12;
-            const domPc = (this.frameBoxCur + 4) % 12;                                 // rel-minor dominant root
+        if (this.preferRelMinorLT && this.baseCur !== null && this.lastBase !== null && scored.length >= 2
+            && (((midi % 12) + 12) % 12) === (this.baseCur + 8) % 12) {
+            const minorTonicPc = (this.baseCur + 9) % 12;
+            const domPc = (this.baseCur + 4) % 12;                                 // rel-minor dominant root
             let domSounding = false;
             for (const m of this.active.keys()) if ((((m % 12) + 12) % 12) === domPc) { domSounding = true; break; }
             let tonicLetter: Letter | null = null;
-            for (const L of LETTERS) if (pcVal(this.lastFrame.get(L)!) === minorTonicPc) { tonicLetter = L; break; }
+            for (const L of LETTERS) if (pcVal(this.lastBase.get(L)!) === minorTonicPc) { tonicLetter = L; break; }
             if (domSounding && tonicLetter && best.step === tonicLetter) {             // about to commit the ♭1 under a struck V
                 const ltLetter = LETTERS[(LETTERS.indexOf(tonicLetter) + 6) % 7]!;     // the letter one step below the tonic
                 const lt = scored.find(sc => sc.c.step === ltLetter);
@@ -627,13 +627,13 @@ export class BoxWindowSubstrate implements Substrate {
         this.resolved.set(best.step, best);
 
         // Keep-alive update: a chromatic commit is kept; a frame-matching one clears.
-        if (this.keepAlive && this.lastFrame !== null) {
-            const fr = this.lastFrame.get(best.step)!;
-            if (fr.alter !== best.alter) this.sticky.set(best.step, best);
-            else this.sticky.delete(best.step);
-            if (this.sticky.size > this.stickyCap) {
-                if (this.stickyEvict === 'oldest') this.sticky.delete(this.sticky.keys().next().value!);
-                else this.sticky.clear();
+        if (this.keepAlive && this.lastBase !== null) {
+            const fr = this.lastBase.get(best.step)!;
+            if (fr.alter !== best.alter) this.kept.set(best.step, best);
+            else this.kept.delete(best.step);
+            if (this.kept.size > this.keepAliveCap) {
+                if (this.keepAliveEvict === 'oldest') this.kept.delete(this.kept.keys().next().value!);
+                else this.kept.clear();
             }
         }
 
@@ -750,7 +750,7 @@ export class BoxWindowSubstrate implements Substrate {
         }
         if (i0 < 0 || i1 < 0) return null;
         if (Math.abs(scored[i0]!.score - scored[i1]!.score) > this.stEpsilon) return null;
-        const frameMember = (c: PitchClass) => this.lastFrame!.get(c.step)!.alter === c.alter;
+        const frameMember = (c: PitchClass) => this.lastBase!.get(c.step)!.alter === c.alter;
         if (frameMember(scored[i0]!.c) || frameMember(scored[i1]!.c)) return null;    // frame decides — not chromatic
         // The tied pair, in CANDIDATE order (scored[] is enharmonicCandidatesFor order).
         const lo = Math.min(i0, i1), hi = Math.max(i0, i1);
@@ -813,11 +813,11 @@ export class BoxWindowSubstrate implements Substrate {
         // (frame-independent), so this is exactly what makes a held pitch survive the reset. Clearing
         // them orphaned held notes → getSpelling() fell through to the new frame at note-off.
         this.framePcs = [];
-        this.frameBoxCur = null;
+        this.baseCur = null;
         this.suppliedKey = null;
         this.suppliedFrame = null;
         this.suppliedHard = false;
-        this.sticky.clear();
+        this.kept.clear();
         this.frameLofTonic = null;
         this.frameLofAnchor = null;
         this.superposed = true;
@@ -832,7 +832,7 @@ export class BoxWindowSubstrate implements Substrate {
                 let eq = got.size === want.size;
                 for (const x of want) if (!got.has(x)) { eq = false; break; }
                 if (eq) {
-                    this.frameBoxCur = c;
+                    this.baseCur = c;
                     if (this.spiral && hard) {
                         // SPIRAL, manual override: INJECT the orientation, then hand back to continuity —
                         // a manual reset re-seeds the state and lets the library run on from there, NOT a
@@ -872,8 +872,8 @@ export class BoxWindowSubstrate implements Substrate {
     snapshot(): SubstrateTrace {
         return {
             resolvedScale: LETTERS.map(L => ({ ...this.resolved.get(L)! })),
-            // the bare box collection, before keep-alive/sounding overlays (null until the first frame)
-            frame: this.lastFrame ? LETTERS.map(L => ({ ...this.lastFrame!.get(L)! })) : undefined,
+            // the bare diatonic base collection, before keep-alive/sounding overlays (null until the first frame)
+            frame: this.lastBase ? LETTERS.map(L => ({ ...this.lastBase!.get(L)! })) : undefined,
             frameLofTonic: this.spiral && this.frameLofTonic != null ? this.frameLofTonic : undefined,
         };
     }
@@ -881,7 +881,7 @@ export class BoxWindowSubstrate implements Substrate {
     /** VIZ-ONLY: the most recent commit's {@link DecisionTrace}, or null when `trace` is off / no commit yet. */
     decision(): DecisionTrace | null { return this.lastDecision; }
 
-    private frameScale(): Map<Letter, PitchClass> | null {
+    private findBase(): Map<Letter, PitchClass> | null {
         if (this.framePcs.length === 0) return null;
         const hist = new Array(12).fill(0);
         for (const e of this.framePcs) hist[e.pc]++;
@@ -898,9 +898,9 @@ export class BoxWindowSubstrate implements Substrate {
             if (o < bestOut) { bestOut = o; best = c; }
         }
         let relMajorPc = best;
-        const heldWithinMargin = this.frameBoxCur !== null && outside(this.frameBoxCur) <= bestOut + this.frameBoxMargin;
-        if (this.frameBoxCur !== null && heldWithinMargin) {
-            relMajorPc = this.frameBoxCur;
+        const heldWithinMargin = this.baseCur !== null && outside(this.baseCur) <= bestOut + this.baseMargin;
+        if (this.baseCur !== null && heldWithinMargin) {
+            relMajorPc = this.baseCur;
         }
         // HARD-PIN AUTO-RELEASE: a manual pin (suppliedHard) otherwise forces its collection for the rest
         // of the piece. Drop it once the AUTO best-fit strictly contains the music better than the pin for
@@ -926,16 +926,16 @@ export class BoxWindowSubstrate implements Substrate {
         // one tonic) must be CONFIRMED by the third. The two collections differ essentially in the shared
         // tonic's 3rd (E♮ for C major vs E♭ for C minor); allow the flip only if the target side's third is
         // struck MORE than the other, else the melodic raised 6/7 (or a passing chromatic) is spoofing it.
-        if (this.parallelThirdGate && this.frameBoxCur !== null && relMajorPc !== this.frameBoxCur) {
-            const diff = ((relMajorPc - this.frameBoxCur) % 12 + 12) % 12;
+        if (this.parallelThirdGate && this.baseCur !== null && relMajorPc !== this.baseCur) {
+            const diff = ((relMajorPc - this.baseCur) % 12 + 12) % 12;
             if (diff === 3 || diff === 9) {                             // parallel pair (3 fifths apart)
-                const M = diff === 3 ? this.frameBoxCur : relMajorPc;   // major-side collection = shared tonic pc
+                const M = diff === 3 ? this.baseCur : relMajorPc;   // major-side collection = shared tonic pc
                 const maj3 = hist[(M + 4) % 12], min3 = hist[(M + 3) % 12];
                 const confirmed = relMajorPc === M ? maj3 > min3 : min3 > maj3;
-                if (!confirmed) relMajorPc = this.frameBoxCur;          // block the unconfirmed parallel flip
+                if (!confirmed) relMajorPc = this.baseCur;          // block the unconfirmed parallel flip
             }
         }
-        this.frameBoxCur = relMajorPc;
+        this.baseCur = relMajorPc;
         // A SOFT key-sig hint (non-spiral pin) renders the pinned key verbatim while it is held. The spiral
         // path does NOT pin here — a manual spiral override re-seeds the orientation anchor in reset() and
         // then hands control back to continuity (see reset), so suppliedKey stays null under the spiral.

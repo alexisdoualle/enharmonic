@@ -14,7 +14,7 @@ import { ascii } from './format.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const MODE_LONG: Record<Mode, string> = {
-    rt: 'real-time (diatonic + sticky)',
+    rt: 'real-time (diatonic anchor)',
     la: 'real-time + look-ahead',
     tp: 'two-pass (offline batch)',
 };
@@ -76,7 +76,7 @@ export function contextReport(s: AppState): string {
             return LETTERS.map(x => pad(m.has(x) ? pitch(m.get(x)!) : '·', 3)).join(' ').trimEnd();
         };
         if (snap.frame) L.push(`frame:    ${byLetter(snap.frame)}`);
-        if (snap.resolvedScale) L.push(`surface:  ${byLetter(snap.resolvedScale)}   (frame + sticky + sounding overlays)`);
+        if (snap.resolvedScale) L.push(`surface:  ${byLetter(snap.resolvedScale)}   (frame + keep-alive + sounding overlays)`);
         if (snap.frame && snap.resolvedScale) {
             const fm = new Map(snap.frame.map(p => [p.step, p]));
             const diff = snap.resolvedScale

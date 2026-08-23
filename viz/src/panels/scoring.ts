@@ -7,7 +7,7 @@
  * table is exactly the decision the shipped speller made.
  */
 import type { Snapshot } from '../replay.js';
-import type { DecisionCandidate } from '../../../src/box.js';
+import type { DecisionCandidate } from '../../../src/base.js';
 import { rawIntervalBetween, intervalBetween, intervalLabel } from '../../../src/interval.js';
 import { label } from '../format.js';
 

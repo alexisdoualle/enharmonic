@@ -8,7 +8,7 @@
  *     do I score this note against?" (`frameFor`), records the chosen spelling
  *     (`commit`), and serves read-back (`readBack` / `frameLookup`). Different
  *     substrates implement different memory models — slot-mutating *persistent*
- *     (Core/heptatonic) vs reverting *box-window* (diatonic) — behind one
+ *     (Core/heptatonic) vs reverting *diatonic base* — behind one
  *     interface, so the kernel never knows which it is driving.
  *   - a {@link ScoringPolicy}, which ranks each candidate against the frame
  *     (the interval-relatedness pillar, by default).
@@ -25,7 +25,7 @@ import { intervalScore } from './scoring.js';
 /** Per-note context passed to the substrate. Streaming-only spellers ignore the
  *  optional fields; time-windowed / look-ahead substrates read them. */
 export interface NoteContext {
-    /** Look-ahead resolution direction (+1 up, -1 down, 0 none). Box/sticky use it; persistent ignores. */
+    /** Look-ahead resolution direction (+1 up, -1 down, 0 none). Base/keep-alive use it; persistent ignores. */
     readonly resolveDir?: number;
     /** Event timestamp in ms. Box-window substrates need it; persistent ignores. */
     readonly t?: number;
@@ -53,7 +53,7 @@ export interface ScoredCandidate {
 export interface SubstrateTrace {
     /** Current surface (frame + overlays), LETTERS order — backs `Speller.getResolvedScale`. */
     readonly resolvedScale?: readonly PitchClass[] | undefined;
-    /** The BARE frame (diatonic collection, before the keep-alive sticky and sounding overlays that
+    /** The BARE frame (diatonic collection, before the keep-alive and sounding overlays that
      *  produce {@link resolvedScale}), LETTERS order. Read-only instrumentation: where it differs from
      *  the surface is exactly the overlays' contribution. Omitted when the substrate has no frame yet. */
     readonly frame?: readonly PitchClass[] | undefined;

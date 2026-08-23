@@ -37,7 +37,7 @@ const spelled = spellTwoPass([
 
 | Call | Latency | Role |
 |---|---|---|
-| `new Speller()` | real-time | Diatonic box + keep-alive (default) |
+| `new Speller()` | real-time | Diatonic base + keep-alive (default) |
 | `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead |
 | `spellTwoPass(notes)` | offline | Forward + backward + boundary resolve |
 

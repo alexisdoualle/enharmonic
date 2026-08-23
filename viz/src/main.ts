@@ -17,7 +17,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const state: AppState = { ...initialState };
 
 const MODE_NAME: Record<Mode, string> = {
-    rt: '② real-time (diatonic + sticky)',
+    rt: '② real-time (diatonic anchor)',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
 };

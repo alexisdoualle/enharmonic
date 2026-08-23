@@ -1,6 +1,6 @@
 /**
  * State table: the speller's surface at the current onset — the 7-letter resolved scale (frame +
- * keep-alive sticky + sounding overlay), the note just committed vs its ground truth, and the notes
+ * keep-alive + sounding overlay), the note just committed vs its ground truth, and the notes
  * still ringing. This is read straight from the shipped kernel's snapshot, so it is exactly the state
  * the spelling decision saw.
  */
@@ -28,8 +28,8 @@ export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void
         + (snap.expected ? `<span class="note-exp">expected ${label(snap.expected)}</span>` : '');
     host.appendChild(noteBox);
 
-    // The bare box frame (the diatonic collection), then the resolved surface it feeds. Where the surface
-    // differs from the frame is the keep-alive-sticky + sounding overlay — those surface cells are marked.
+    // The bare diatonic base (the diatonic collection), then the resolved surface it feeds. Where the surface
+    // differs from the frame is the keep-alive + sounding overlay — those surface cells are marked.
     const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
     const surfByLetter = new Map(snap.resolvedScale?.map(p => [p.step, p]) ?? []);
 

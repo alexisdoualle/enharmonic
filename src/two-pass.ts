@@ -1,6 +1,6 @@
 /**
  * Two-pass batch speller — the opt-in NON-streaming entry point (CLAUDE.md "optional look-ahead for
- * non-live music"). Streaming box spellers switch enharmonic side LATE at modulation boundaries (they
+ * non-live music"). Streaming anchor spellers switch enharmonic side LATE at modulation boundaries (they
  * see only past evidence), so a section's opening lags on the previous side. With the whole piece in
  * hand we can do better: run the base speller FORWARD and again on the time-REVERSED note stream (so it
  * lags the OTHER way, early not late), then resolve the two:
@@ -14,12 +14,12 @@
  *     wolf-cost counts |ΔLoF| ≥ 7 intervals (dim4/aug2 — a misspelling tell) against the reliable
  *     bracketing agreement notes (±hw, 1/distance weighted).
  *
- * On the 65-fixture corpus this lifts diatonic-sticky+LA from tonal 97.69% to ~98.3% (wrong −25%),
+ * On the 65-fixture corpus this lifts diatonic anchor+LA from tonal 97.69% to ~98.3% (wrong −25%),
  * reducing flips AND genuine errors. Batch/offline only — the streaming path is unaffected.
  */
 import type { Letter, PitchClass } from './pitch.js';
 import { SpellerKernel } from './kernel.js';
-import { BoxWindowSubstrate } from './box.js';
+import { DiatonicBaseSubstrate } from './base.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -28,7 +28,7 @@ export interface TwoPassNote {
 }
 
 export interface TwoPassOptions {
-    /** Base streaming speller to run in both directions (default: diatonic-sticky + letter look-ahead). */
+    /** Base streaming speller to run in both directions (default: diatonic anchor + letter look-ahead). */
     make?: () => SpellerKernel;
     /** Coherence-window radius (onsets) for the wolf-cost. Default 16. */
     hw?: number;
@@ -36,7 +36,7 @@ export interface TwoPassOptions {
     rstab?: number;
     /** SECTION-FLIP (default off): after the resolve, flip whole coherent SECTIONS to their more-writable
      *  enharmonic (see {@link sectionFlipPass}). Requires a SPIRAL base (needs the frame LoF-tonic trace),
-     *  so enabling this forces the base speller to `createDiatonicStickyLA({ spiral: true })` unless `make`
+     *  so enabling this forces the base speller to `createDiatonicAnchorLA({ spiral: true })` unless `make`
      *  is given explicitly. Offline only.
      *
      *  MEASURED, DEFAULT-OFF (does not earn a ladder slot; `tools/probe/_tp3way.ts`). It is a clean win
@@ -171,11 +171,11 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
     // better offline side-fixer than the spiral (measured wash-to-worse). `preferRelMinorLT` and
     // `lookAheadCoherenceGate` are pinned OFF for the same reason: they're streaming helpers that regress
     // on the two-pass (the backward pass already fixes these).
-    const make = opts.make ?? (() => new SpellerKernel(new BoxWindowSubstrate({
+    const make = opts.make ?? (() => new SpellerKernel(new DiatonicBaseSubstrate({
         neighbourStep: true, neighbourRunGate: 2, neighbourStepWeight: 2, neighbourVerticalGate: true,
-        lookAheadVerticalGate: true, parallelThirdGate: true, frameWindowMs: 16000,
+        lookAheadVerticalGate: true, parallelThirdGate: true, baseWindowMs: 16000,
         spiral: opts.sectionFlip ?? false, preferRelMinorLT: false, lookAheadCoherenceGate: false,
-        keepAlive: true, lookAhead: true, lookAheadMode: 'letter', stickyEvict: 'oldest',
+        keepAlive: true, lookAhead: true, lookAheadMode: 'letter', keepAliveEvict: 'oldest',
     })));
     const hw = opts.hw ?? 16;
     const rstab = opts.rstab ?? 4;

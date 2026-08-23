@@ -2,7 +2,7 @@
  * Replay: drive the REAL shipped speller over a fixture and capture one snapshot per onset.
  *
  * Zero drift by construction — the streaming rungs build the exact kernel the public `Speller` builds
- * (via the internal `createDiatonicSticky*` preset builders), and the batch rung calls the shipped
+ * (via the internal `createDiatonicAnchor*` preset builders), and the batch rung calls the shipped
  * `spellTwoPass`. The viz never re-implements a spelling decision; it only reads what the kernel holds
  * (`kernel.snapshot()` → resolved surface + signed line-of-fifths tonic) plus each note's own committed
  * spelling (`getSpelling`). Key signatures in the fixture (`respell` events) are IGNORED, matching the
@@ -11,8 +11,8 @@
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { spellTwoPass } from '../../src/index.js';
 import { SpellerKernel } from '../../src/kernel.js';
-import { BoxWindowSubstrate, type DecisionTrace } from '../../src/box.js';
-import { DIATONIC_STICKY_OPTS, DIATONIC_STICKY_LA_OPTS } from '../../src/speller.js';
+import { DiatonicBaseSubstrate, type DecisionTrace } from '../../src/base.js';
+import { DIATONIC_ANCHOR_OPTS, DIATONIC_ANCHOR_LA_OPTS } from '../../src/speller.js';
 import { classifyOnsets } from '../../test/eval/score.js';
 
 export type Mode = 'rt' | 'la' | 'tp';
@@ -38,8 +38,8 @@ export interface Snapshot {
     t: number;
     committed: Pitch | null;         // this note's own committed spelling
     expected: Pitch | null;
-    resolvedScale: PitchClass[] | null;   // the 7-letter surface (frame + sticky + sounding)
-    frame: PitchClass[] | null;           // the bare box collection, before sticky/sounding overlays
+    resolvedScale: PitchClass[] | null;   // the 7-letter surface (frame + keep-alive + sounding)
+    frame: PitchClass[] | null;           // the bare diatonic base collection, before keep-alive/sounding overlays
     frameLofTonic: number | undefined;    // signed line-of-fifths tonic (spiral); distinguishes C♯ from D♭
     sounding: Sounding[];            // notes ringing at this onset (incl. this one)
     decision: DecisionTrace | null;  // per-candidate scores + deltas + override (streaming rungs; null in batch)
@@ -135,9 +135,9 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     }
 
     // Build the substrate directly from the shipped preset options + the record-only viz trace, keeping
-    // the box reference so we can read its per-onset decision. Identical config to `Speller`, so zero drift.
-    const box = new BoxWindowSubstrate({ ...(mode === 'la' ? DIATONIC_STICKY_LA_OPTS : DIATONIC_STICKY_OPTS), spiralRange, spiralCenter, trace: true });
-    const kernel = new SpellerKernel(box);
+    // the base reference so we can read its per-onset decision. Identical config to `Speller`, so zero drift.
+    const base = new DiatonicBaseSubstrate({ ...(mode === 'la' ? DIATONIC_ANCHOR_LA_OPTS : DIATONIC_ANCHOR_OPTS), spiralRange, spiralCenter, trace: true });
+    const kernel = new SpellerKernel(base);
     const dirs = onsetDirs(events);
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const notes: ReplayNote[] = [];
@@ -185,7 +185,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             resolvedScale = snap?.resolvedScale ? snap.resolvedScale.map(p => ({ ...p })) : null;
             frame = snap?.frame ? snap.frame.map(p => ({ ...p })) : null;
             frameLofTonic = snap?.frameLofTonic;
-            decision = box.decision();
+            decision = base.decision();
         }
         if (committed) sounding.set(e.midi!, committed);
         const octave = Math.floor(e.midi! / 12) - 1;
