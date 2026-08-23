@@ -9,7 +9,8 @@
  *   P1, M2, m2, M7, m7             0   neutral
  *   A / d (any interval number)   −1   dissonant
  *   AA / dd                       −2   extreme dissonance
- *   AAA+ / ddd+                    0   fallback
+ *   AAA+ / ddd+                   −2   extreme dissonance (clamped — more
+ *                                      distortion is never less dissonant)
  *
  * Higher score wins. The consonance bonuses are what cause the algorithm
  * to lock in to a key: a candidate that forms strong-consonance intervals
@@ -38,8 +39,7 @@ function scoreFor(quality: number, number: number): number {
         return 0; // 2nds and 7ths: neutral
     }
     if (absQ === 2) return -1; // Augmented / diminished
-    if (absQ === 3) return -2; // Doubly augmented / diminished
-    return 0; // Triply or more: fall through
+    return -2; // Doubly-augmented / diminished and beyond: extreme dissonance
 }
 
 /**
