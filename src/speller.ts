@@ -1,11 +1,11 @@
 /**
- * Speller — the shipped product API (paper rungs 2 / 3).
+ * Speller — the shipped real-time product API.
  *
- * One class, latency modes:
- *   - `new Speller()`                 → real-time (diatonic anchor, spiral on)
+ * One class, two latency modes:
+ *   - `new Speller()`                    → real-time (diatonic anchor, spiral on)
  *   - `new Speller({ lookAhead: true })` → near-real-time (letter-aware look-ahead)
  *
- * Offline ceiling is {@link spellTwoPass} (rung 4), not this class.
+ * For offline use with the whole piece in hand, see {@link spellTwoPass} (highest accuracy).
  */
 
 import type { Pitch, PitchClass } from './pitch.js';
@@ -16,7 +16,11 @@ import { DiatonicBaseSubstrate, type DiatonicBaseSubstrateOptions } from './base
 export interface SpellerOptions {
     /** Virtual clock for the time-windowed frame. Default `Date.now`. */
     clock?: () => number;
-    /** Letter-aware look-ahead (paper rung 3). Default `false` (rung 2). */
+    /**
+     * Letter-aware look-ahead: the caller supplies each note's resolution direction
+     * (`NoteContext.resolveDir`) from a small forward buffer, so a spelling can wait for
+     * what comes next instead of committing blind. Default `false` (pure real-time).
+     */
     lookAhead?: boolean;
 }
 
@@ -37,7 +41,7 @@ const ANCHOR_DEFAULTS: DiatonicBaseSubstrateOptions = {
 };
 
 /**
- * The exact DiatonicBaseSubstrate option bundles the two shipped rungs run — rung 2 (real-time) and rung 3
+ * The exact DiatonicBaseSubstrate option bundles the two shipped modes run — real-time and near-real-time
  * (look-ahead). Exported for in-repo tooling ONLY (the `viz/` debugger builds the substrate from these
  * so it reads the identical algorithm — zero drift — and can enable the `trace` observer). NOT part of
  * the npm public surface: `index.ts` re-exports only {@link Speller} / {@link spellTwoPass}, so a path
@@ -69,6 +73,31 @@ export function createDiatonicAnchorLA(opts: DiatonicBaseSubstrateOptions = {}):
     }));
 }
 
+/*
+ * FUTURE — near-real-time revision API (not implemented).
+ *
+ * The gap this fills is REVISABILITY, not side-awareness. `Speller` commits forward-only
+ * and never revises a spelling it has emitted; a note's spelling is also discarded on
+ * `noteOff` (no per-onset history; `getSpelling` is keyed by midi, not onset). But some
+ * spellings only become decidable AFTER the note that needs them is already out the door —
+ * classically at a boundary, where notes committed just before the context shifted are left
+ * stranded on the old spelling while their neighbours move on, so the passage reads as an
+ * incoherent MIX (a `wrong`, not a clean flip). That is a pure COHERENCE repair on the
+ * already-emitted notes ("these no longer cohere with their neighbours, re-spell them") — it
+ * needs no side/orientation oracle. Forward-only look-ahead structurally cannot reach those
+ * notes; the two-pass BACKWARD pass can, which is the whole of what it adds here.
+ *
+ * A consumer that wants "spell live, then correct on hindsight" — a piano-roll or chord
+ * identifier flipping an already-shown G♯ to A♭ once the line clarifies — must today run
+ * {@link spellTwoPass} over a sliding window of recent notes and diff the result itself.
+ *
+ * The intended near-real-time capability is for `Speller` to own this: retain a BOUNDED
+ * history of recent onsets and emit a revision signal — e.g. "the note 4 onsets ago, read
+ * as G♯, is now A♭" — so consumers can repair in place rather than re-running two-pass.
+ * That needs three things this API lacks: (1) onset identity (`noteOn` returns a token, or
+ * accepts a caller id), (2) retained per-onset history, (3) a change event / callback.
+ * Voice/onset attribution is the known hard part (see the respell notes).
+ */
 export class Speller {
     private readonly kernel: SpellerKernel;
     readonly lookAhead: boolean;

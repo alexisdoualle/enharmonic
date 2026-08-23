@@ -43,6 +43,25 @@ const spelled = spellTwoPass([
 
 Pass `clock: () => ms` (and per-event `t`) for deterministic / batch replay.
 
+### Timing
+
+Every mode from the real-time default (diatonic base + keep-alive) onward is **clock-driven**: a note's
+`t` (or `clock()` when `t` is omitted, defaulting to `Date.now()`) feeds three time windows —
+
+| Window | Default | Role |
+|---|--:|---|
+| Frame window | 16000 ms | how long a struck pitch-class stays in the diatonic collection |
+| Neighbour window | 1500 ms | horizon for the step/neighbour disambiguation |
+| Co-onset grouping | `t` equality | notes sharing a `t` are one chord (keep-alive / vertical tie-break) |
+
+For **genuine live input** (notes arriving over wall-clock time) `t` may be omitted; `Date.now()`
+supplies real spacing. For **programmatic replay** (feeding a sequence in a loop) `t` is required —
+without it every note collapses to one instant and the windows never advance.
+
+These durations are corpus-averaged constants, not first principles: they approximate primitives a
+future version could detect directly (e.g. a cadence firing a frame **reset** so the collection turns
+over on the beat the ear hears it, instead of lagging the key by several measures).
+
 ## Status
 
 Private pre-release. Algorithm development and the full benchmark corpus live in the
