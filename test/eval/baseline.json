@@ -1,5 +1,11 @@
 {
   "bach_wtc1_prelude1_c": {
+    "core": {
+      "correct": 533,
+      "flipped": 0,
+      "wrong": 2,
+      "total": 535
+    },
     "rt": {
       "correct": 533,
       "flipped": 0,
@@ -20,6 +26,12 @@
     }
   },
   "mozart_k545": {
+    "core": {
+      "correct": 1274,
+      "flipped": 0,
+      "wrong": 8,
+      "total": 1282
+    },
     "rt": {
       "correct": 1273,
       "flipped": 0,
@@ -40,6 +52,12 @@
     }
   },
   "chopin_prelude_op28_no4": {
+    "core": {
+      "correct": 552,
+      "flipped": 0,
+      "wrong": 52,
+      "total": 604
+    },
     "rt": {
       "correct": 586,
       "flipped": 0,
@@ -60,6 +78,12 @@
     }
   },
   "chopin_prelude_op28_no15": {
+    "core": {
+      "correct": 944,
+      "flipped": 620,
+      "wrong": 2,
+      "total": 1566
+    },
     "rt": {
       "correct": 1143,
       "flipped": 421,
@@ -80,6 +104,12 @@
     }
   },
   "grieg_death_of_ase": {
+    "core": {
+      "correct": 588,
+      "flipped": 0,
+      "wrong": 18,
+      "total": 606
+    },
     "rt": {
       "correct": 587,
       "flipped": 0,
@@ -100,6 +130,12 @@
     }
   },
   "bach_jesu_meine_freude": {
+    "core": {
+      "correct": 7370,
+      "flipped": 0,
+      "wrong": 4,
+      "total": 7374
+    },
     "rt": {
       "correct": 7367,
       "flipped": 0,

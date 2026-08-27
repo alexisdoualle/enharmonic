@@ -19,8 +19,8 @@ import { scoreTiers, type Tiers } from './score.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = join(HERE, 'baseline.json');
-const MODES: Mode[] = ['rt', 'la', 'tp'];
-const MODE_LABEL: Record<Mode, string> = { rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
+const MODES: Mode[] = ['core', 'rt', 'la', 'tp'];
+const MODE_LABEL: Record<Mode, string> = { core: 'core (rung 1)', rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
 
 type Cell = Pick<Tiers, 'correct' | 'flipped' | 'wrong' | 'total'>;
 type Snapshot = Record<string, Record<Mode, Cell>>;

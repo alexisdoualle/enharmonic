@@ -1,14 +1,24 @@
 /**
- * CoreSpeller — pedagogical two-pillar foundation (~100 lines).
+ * CoreSpeller — rung 1: the pedagogical two-pillar foundation (~100 lines).
  *
- * The 7-letter limit + interval aug/dim interval scoring, and nothing else.
- * Not part of the product API — see `Speller` / `spellTwoPass`. Kept here so the
- * paper's rung-1 figure stays readable beside the library.
+ * The 7-letter limit + interval aug/dim scoring, and nothing else — the minimal
+ * causal baseline the rest of the ladder (Speller rungs 2/3, spellTwoPass rung 4)
+ * improves on. Frameless and PERSISTENT: one drifting scale whose slots are
+ * overwritten and never reverted, structurally unlike the reverting
+ * DiatonicBaseSubstrate the shipped spellers run on.
+ *
+ * NOT part of the product API: it is deliberately the weakest speller (highest
+ * `wrong%`), strictly dominated at its own latency by `Speller`, so it is not
+ * re-exported from `index.ts` and the package `exports` gate keeps it off the npm
+ * surface. It lives in `src/` (not a throwaway example) so the bench can drive and
+ * score it as rung 1 — keeping the repo's ladder figure faithful to the paper's —
+ * and so its source stays readable beside its siblings. Reachable only by an
+ * in-repo path import (the eval harness, the viz).
  */
 
-import { enharmonicCandidatesFor } from '../src/candidates.js';
-import { pitchClassValue, type Letter, type Pitch, type PitchClass } from '../src/pitch.js';
-import { intervalScore } from '../src/scoring.js';
+import { enharmonicCandidatesFor } from './candidates.js';
+import { pitchClassValue, type Letter, type Pitch, type PitchClass } from './pitch.js';
+import { intervalScore } from './scoring.js';
 
 const LETTER_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as const satisfies Record<Letter, number>;
 const ALL_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];

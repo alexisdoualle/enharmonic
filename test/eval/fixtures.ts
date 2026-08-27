@@ -12,6 +12,17 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
 import { Speller, spellTwoPass } from '../../src/index.js';
+import type { NoteContext } from '../../src/kernel.js';
+import { CoreSpeller } from '../../src/core.js';
+
+/** The streaming surface `drive` needs — satisfied by both the shipped `Speller` and the
+ *  package-private rung-1 `CoreSpeller` (which ignores the look-ahead `ctx` and has no `lookAhead`). */
+export interface StreamingSpeller {
+    readonly lookAhead?: boolean;
+    noteOn(midi: number, ctx?: NoteContext): void;
+    noteOff(midi: number): void;
+    getSpelling(midi: number): Pitch | null;
+}
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -47,7 +58,7 @@ export function loadExpected(id: string): Expected[] {
  * spelling). For look-ahead mode, `resolveDir` is derived from the next ±1-semitone
  * onset within `horizon` upcoming onsets — the small forward buffer a real caller feeds.
  */
-export function drive(s: Speller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
+export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
     const out: (Pitch | null)[] = [];
     const pending = new Map<number, number[]>();
     for (let i = 0; i < events.length; i++) {
@@ -92,10 +103,12 @@ export function onNotes(events: BatchEv[]): { midi: number; tOn: number; tOff: n
     return notes;
 }
 
-export type Mode = 'rt' | 'la' | 'tp';
+/** `core` = rung 1 (frameless baseline); `rt`/`la` = rungs 2/3 (Speller); `tp` = rung 4 (two-pass). */
+export type Mode = 'core' | 'rt' | 'la' | 'tp';
 
-/** Produce predictions for a fixture in the given latency mode, paired 1:1 with expected. */
+/** Produce predictions for a fixture in the given rung/latency mode, paired 1:1 with expected. */
 export function predict(mode: Mode, events: BatchEv[]): (Pitch | null)[] {
     if (mode === 'tp') return spellTwoPass(onNotes(events)) as (Pitch | null)[];
+    if (mode === 'core') return drive(new CoreSpeller(), events);
     return drive(new Speller(mode === 'la' ? { lookAhead: true } : {}), events);
 }

@@ -19,7 +19,8 @@ import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, predict, type Mode } fro
 import { scoreTiers } from './eval/score.js';
 import { buildReplay, type RawEvent } from '../viz/src/replay.js';
 
-const MODES: Mode[] = ['rt', 'la', 'tp'];
+// The viz replays only the shipped spellers (rungs 2–4); rung 1 (`core`) has no viz path.
+const MODES: Exclude<Mode, 'core'>[] = ['rt', 'la', 'tp'];
 
 /** Raw events.json (on/off/respell) — what the viz consumes directly. */
 const loadRaw = (id: string): RawEvent[] =>
