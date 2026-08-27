@@ -21,6 +21,8 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Speller, spellTwoPass, type Pitch } from '../../src/index.js';
+import { CoreSpeller } from '../../src/core.js';
+import type { StreamingSpeller } from './fixtures.js';
 import { scoreTiers } from './score.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -69,13 +71,13 @@ function events(notes: Note[]): { t: number; on: boolean; midi: number; i: numbe
     return evs;
 }
 
-type Mode = 'rt' | 'la' | 'tp';
+type Mode = 'core' | 'rt' | 'la' | 'tp';
 
 function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     if (mode === 'tp') {
         return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset, tOff: n.onset + n.dur }))) as (Pitch | null)[];
     }
-    const s = new Speller(mode === 'la' ? { lookAhead: true } : {});
+    const s: StreamingSpeller = mode === 'core' ? new CoreSpeller() : new Speller(mode === 'la' ? { lookAhead: true } : {});
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
@@ -104,38 +106,46 @@ const files = readdirSync(dir).filter(f => f.endsWith('.opnd-m')).sort();
 
 // --- score ---------------------------------------------------------------------------------
 const MODES: { key: Mode; label: string }[] = [
+    { key: 'core', label: 'core (rung 1)' },
     { key: 'rt', label: 'real-time' },
     { key: 'la', label: 'look-ahead' },
     { key: 'tp', label: 'two-pass' },
 ];
-const agg: Record<Mode, { correct: number; flipped: number; wrong: number; total: number }> = {
-    rt: { correct: 0, flipped: 0, wrong: 0, total: 0 },
-    la: { correct: 0, flipped: 0, wrong: 0, total: 0 },
-    tp: { correct: 0, flipped: 0, wrong: 0, total: 0 },
+const agg: Record<Mode, { correct: number; flipped: number; wrong: number; unread: number; total: number }> = {
+    core: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
+    rt: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
+    la: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
+    tp: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
 };
 for (const f of files) {
     const notes = parseOpndv(readFileSync(join(dir, f), 'utf8'));
     const expected = notes.map(n => ({ step: n.step, alter: n.alter }));
+    const keys = notes.map(n => n.onset); // co-struck notes share an onset tatum
     for (const { key } of MODES) {
-        const t = scoreTiers(predict(key, notes), expected);
+        const t = scoreTiers(predict(key, notes), expected, keys);
         agg[key].correct += t.correct; agg[key].flipped += t.flipped;
-        agg[key].wrong += t.wrong; agg[key].total += t.total;
+        agg[key].wrong += t.wrong; agg[key].unread += t.unread; agg[key].total += t.total;
     }
 }
 
+// Percentages are over COMMITTED notes (correct+flipped+wrong), matching the lab: an abstained/unread
+// note (no read-back — the jittered noisy corpus produces a few) is excluded, not counted as wrong.
+const committedOf = (a: { correct: number; flipped: number; wrong: number }) => a.correct + a.flipped + a.wrong;
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
-console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — ${files.length} movements, ${agg.rt.total} notes`);
+const absTotal = MODES.reduce((s, { key }) => s + agg[key].unread, 0);
+console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
 console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'tonal%'.padStart(7)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const { key, label } of MODES) {
     const a = agg[key];
-    console.log(`  ${label.padEnd(12)} ${pct(a.correct, a.total)}% ${pct(a.correct + a.flipped, a.total)}% ${pct(a.flipped, a.total)}% ${pct(a.wrong, a.total)}%`);
+    const n = committedOf(a);
+    console.log(`  ${label.padEnd(12)} ${pct(a.correct, n)}% ${pct(a.correct + a.flipped, n)}% ${pct(a.flipped, n)}% ${pct(a.wrong, n)}%`);
 }
 console.log(`  exact = strict composer match (ps13 metric); tonal = exact + coherent flip.`);
 
 // --- optional regression check (clean corpus published thresholds) -------------------------
 if (check && !noisy) {
-    const laExact = 100 * agg.la.correct / agg.la.total;
-    const tpExact = 100 * agg.tp.correct / agg.tp.total;
+    const laExact = 100 * agg.la.correct / committedOf(agg.la);
+    const tpExact = 100 * agg.tp.correct / committedOf(agg.tp);
     const fails: string[] = [];
     if (laExact < 99.50) fails.push(`look-ahead exact ${laExact.toFixed(2)}% < 99.50%`);
     if (tpExact < 99.70) fails.push(`two-pass exact ${tpExact.toFixed(2)}% < 99.70%`);

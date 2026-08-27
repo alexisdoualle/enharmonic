@@ -14,7 +14,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { FIXTURES, loadEvents, loadExpected, predict, type Mode } from './fixtures.js';
+import { FIXTURES, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './fixtures.js';
 import { scoreTiers, type Tiers } from './score.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -30,9 +30,10 @@ function measure(): Snapshot {
     for (const id of FIXTURES) {
         const events = loadEvents(id);
         const expected = loadExpected(id);
+        const keys = onsetKeys(events);
         snap[id] = {} as Record<Mode, Cell>;
         for (const mode of MODES) {
-            const t = scoreTiers(predict(mode, events), expected);
+            const t = scoreTiers(predict(mode, events), expected, keys);
             if (t.unread) throw new Error(`${id}/${mode}: ${t.unread} unread onset(s)`);
             snap[id]![mode] = { correct: t.correct, flipped: t.flipped, wrong: t.wrong, total: t.total };
         }

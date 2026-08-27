@@ -79,27 +79,27 @@
   },
   "chopin_prelude_op28_no15": {
     "core": {
-      "correct": 944,
-      "flipped": 620,
-      "wrong": 2,
+      "correct": 934,
+      "flipped": 612,
+      "wrong": 20,
       "total": 1566
     },
     "rt": {
-      "correct": 1143,
-      "flipped": 421,
-      "wrong": 2,
+      "correct": 1138,
+      "flipped": 414,
+      "wrong": 14,
       "total": 1566
     },
     "la": {
-      "correct": 1143,
-      "flipped": 421,
-      "wrong": 2,
+      "correct": 1138,
+      "flipped": 414,
+      "wrong": 14,
       "total": 1566
     },
     "tp": {
-      "correct": 1289,
-      "flipped": 275,
-      "wrong": 2,
+      "correct": 1276,
+      "flipped": 273,
+      "wrong": 17,
       "total": 1566
     }
   },

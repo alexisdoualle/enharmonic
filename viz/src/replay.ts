@@ -205,7 +205,11 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     // diverge from the parity baseline. flip-vs-wrong needs the whole onset run in view (a lone
     // off-side note is `wrong`, not `flipped`), so it can't be decided inline; snapshots and notes are
     // both in onset order → positional.
-    const tiers = classifyOnsets(snapshots.map(s => s.committed), snapshots.map(s => expected[s.onIndex] ?? null));
+    const tiers = classifyOnsets(
+        snapshots.map(s => s.committed),
+        snapshots.map(s => expected[s.onIndex] ?? null),
+        snapshots.map(s => s.t), // onset time groups co-struck notes — same key the bench uses
+    );
     snapshots.forEach((s, k) => { s.tier = tiers[k]!; });
     notes.forEach((n, k) => { n.tier = tiers[k]!; });
 

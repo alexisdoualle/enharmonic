@@ -15,7 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertEq, suite, test } from './framework.js';
-import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, predict, type Mode } from './eval/fixtures.js';
+import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
 import { buildReplay, type RawEvent } from '../viz/src/replay.js';
 
@@ -32,8 +32,9 @@ suite('viz ↔ bench parity', () => {
             test(`${id}/${mode}: viz tally == bench scoreTiers`, () => {
                 const raw = loadRaw(id);
                 const expected = loadExpected(id);
+                const events = loadEvents(id);
                 const vizTally = buildReplay(mode, raw, expected).tally;
-                const bench = scoreTiers(predict(mode, loadEvents(id)), expected);
+                const bench = scoreTiers(predict(mode, events), expected, onsetKeys(events));
                 assertEq(
                     { correct: vizTally.correct, flipped: vizTally.flipped, wrong: vizTally.wrong, unread: vizTally.unread, total: vizTally.total },
                     { correct: bench.correct, flipped: bench.flipped, wrong: bench.wrong, unread: bench.unread, total: bench.total },

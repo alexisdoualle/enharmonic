@@ -86,6 +86,12 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
     return out;
 }
 
+/** Onset key per prediction: the `t` of each `on` event, in onset order. Predictions (every mode) and
+ *  the expected list are paired 1:1 with `on` events, so this groups co-struck notes for the scorer. */
+export function onsetKeys(events: BatchEv[]): number[] {
+    return events.filter(e => e.type === 'on').map(e => e.t);
+}
+
 /** Collapse an event list to offline notes (`{midi,tOn,tOff}`) in onset order for two-pass. */
 export function onNotes(events: BatchEv[]): { midi: number; tOn: number; tOff: number }[] {
     const notes: { midi: number; tOn: number; tOff: number }[] = [];
