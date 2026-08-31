@@ -290,11 +290,14 @@ function wire() {
     let resizeT = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = window.setTimeout(render, 120); });
     window.addEventListener('keydown', ev => {
-        if (/INPUT|SELECT|TEXTAREA/.test((ev.target as HTMLElement)?.tagName ?? '')) return;
+        const tag = (ev.target as HTMLElement)?.tagName ?? '';
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
-        if (ev.key === ' ') { ev.preventDefault(); togglePlay(); }
-        else if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
+        // Spacebar always plays/pauses — even while a <select> (e.g. the fixture picker) holds
+        // focus after a change — except in real text fields where a space is literal input.
+        if (ev.key === ' ' && !/INPUT|TEXTAREA/.test(tag)) { ev.preventDefault(); togglePlay(); return; }
+        if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
+        if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
         else if (ev.key === 'End') { ev.preventDefault(); seek((state.replay?.snapshots.length ?? 1) - 1); }
