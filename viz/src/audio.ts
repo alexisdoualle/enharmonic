@@ -29,17 +29,62 @@ function ensure(): AudioContext {
         comp.attack.value = 0.005;
         comp.release.value = 0.18;
         master.connect(comp).connect(ctx.destination);
+        // Warm the render thread with a one-sample silent buffer so its FIRST real output isn't delayed
+        // by cold-start spin-up (which let the playhead start moving before any sound was heard).
+        const warm = ctx.createBufferSource();
+        warm.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+        warm.connect(ctx.destination);
+        warm.start();
     }
     if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
 }
 
-/** Call from a user gesture (e.g. the sound toggle / play button) to unlock audio. */
-export function enable(): void { ensure(); }
+/** Call from a user gesture (e.g. the sound toggle / play button) to unlock audio. The returned
+ *  promise resolves once the AudioContext is actually running — on first unlock its clock stays at 0
+ *  until the resume lands, so callers that anchor a clock should wait for this before reading now(). */
+export function enable(): Promise<void> {
+    const c = ensure();
+    return c.state === 'running' ? Promise.resolve() : c.resume();
+}
+
+/** Resolves once the audio clock is actually PRODUCING OUTPUT. resume() can resolve while the render
+ *  thread is still spinning up — currentTime / getOutputTimestamp not yet advancing — which on the
+ *  first play let the playhead start before any sound. Polls until the output clock moves (or a short
+ *  safety cap), so callers can anchor the visual clock against a clock that has truly started. */
+export function whenPlaying(): Promise<void> {
+    const c = ensure();
+    const clock = () => c.getOutputTimestamp?.().contextTime || c.currentTime;
+    return new Promise(resolve => {
+        const started = performance.now();
+        const t0 = clock();
+        const tick = () => {
+            if (clock() > t0 || performance.now() - started > 500) resolve();
+            else requestAnimationFrame(tick);
+        };
+        tick();
+    });
+}
 
 /** The AudioContext's monotonic clock (seconds) — schedule notes AHEAD of the playhead so timing is
  *  sample-accurate and immune to main-thread render jank. */
 export function audioNow(): number { return ensure().currentTime; }
+
+/** Anchor for starting playback `leadSec` from now. `ctx` is the audio-clock time to schedule the
+ *  first onset at — always in the future (currentTime + lead), so it is never clamped. `perf` is the
+ *  performance-clock time at which that onset actually reaches the SPEAKERS: it folds in the output
+ *  latency via getOutputTimestamp's ctx→perf mapping, so anchoring the visual playhead to it keeps
+ *  sight and sound together — even on the cold first play when output latency is largest. Without a
+ *  timestamp (unsupported), falls back to assuming zero output latency. */
+export function scheduleAnchor(leadSec: number): { ctx: number; perf: number } {
+    const c = ensure();
+    const startCtx = c.currentTime + leadSec;
+    const ts = c.getOutputTimestamp?.();
+    if (ts && ts.performanceTime && ts.contextTime != null) {
+        return { ctx: startCtx, perf: ts.performanceTime + (startCtx - ts.contextTime) * 1000 };
+    }
+    return { ctx: startCtx, perf: performance.now() + leadSec * 1000 };
+}
 
 const freqOf = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 

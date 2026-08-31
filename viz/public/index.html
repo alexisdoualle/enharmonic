@@ -31,6 +31,9 @@
     <label class="ctl" title="playback speed (logarithmic; centre = 1×)">tempo
       <input type="range" id="tempo" min="-1" max="1" step="0.01" value="0" />
       <span id="tempo-val" class="pos">1×</span></label>
+    <label class="ctl" title="delay the playhead to match audio output latency — raise for Bluetooth headphones (added on top of the auto-measured latency)">sync
+      <input type="range" id="latency" min="0" max="500" step="10" value="0" />
+      <span id="latency-val" class="pos">0ms</span></label>
   </section>
 
   <div id="strip" class="strip" title="every onset, coloured by tier — click to jump"></div>

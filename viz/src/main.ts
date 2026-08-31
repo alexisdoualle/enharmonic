@@ -9,7 +9,7 @@ import { renderStateTable } from './panels/stateTable.js';
 import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
-import { enable as audioEnable, playMidi, allNotesOff, audioNow } from './audio.js';
+import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { label } from './format.js';
 
@@ -116,7 +116,7 @@ function renderStrip() {
  *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
  *  slider, which seeks continuously while dragged and resumes once on release instead. */
 function seek(i: number, audible = false, resume = true) {
-    const wasPlaying = raf !== 0;
+    const wasPlaying = raf !== 0 || pending;
     stopPlay();
     allNotesOff();       // silence whatever was ringing, so the new position starts clean
     state.step = clampStep(state, i);
@@ -140,6 +140,12 @@ function seek(i: number, audible = false, resume = true) {
 // note still rings on time. Adapted from the lab viz's player.
 let soundOn = true;
 let tempoRate = 1;                 // playback speed multiplier (tempo slider); >1 faster
+// Extra playhead delay (ms) ADDED on top of the auto-measured output latency, for setups the browser
+// under-reports — chiefly Bluetooth headphones, whose latency getOutputTimestamp misses. Applied to
+// the VISUAL playhead only (never to when audio is scheduled), so raising it lets sight catch up to
+// late sound. Persisted per-browser.
+const LATENCY_KEY = 'viz.audioOffsetMs';
+let audioOffsetMs = (() => { try { const v = Number(localStorage.getItem(LATENCY_KEY)); return Number.isFinite(v) ? v : 0; } catch { return 0; } })();
 const MAX_GAP_MS = 1800;           // cap a long held note / big rest so playback doesn't stall on silence
 const LOOKAHEAD_MS = 150;          // schedule audio this far ahead of the playhead (covers a dropped frame)
 const MIN_NOTE_SEC = 0.12, MAX_NOTE_SEC = 8;   // floor / ceiling on a single note's ring
@@ -170,19 +176,42 @@ function ensureTimeline(replay: Replay): number[] {
     return timeline;
 }
 
-let raf = 0, t0Perf = 0, t0Ctx = 0, basePlay = 0, audioIdx = 0;
-function stopPlay() { if (raf) { cancelAnimationFrame(raf); raf = 0; updatePlayBtn(); } }
-function updatePlayBtn() { $('play').textContent = raf ? '⏸' : '▶'; }
+const START_LEAD_MS = 120;         // schedule the first onset this far ahead so it lands cleanly
+let raf = 0, pending = false, t0Perf = 0, t0Ctx = 0, basePlay = 0, audioIdx = 0;
+// `silence` cuts the notes already committed to the audio clock (the LOOKAHEAD buffer keeps ringing
+// otherwise, so a pause would let sound run on past the stopped playhead). The natural end of the
+// piece passes false so the final chord rings out instead of being clipped.
+function stopPlay(silence = true) { pending = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } if (silence && soundOn) allNotesOff(); updatePlayBtn(); }
+function updatePlayBtn() { $('play').textContent = (raf || pending) ? '⏸' : '▶'; }
 
 function play() {
     if (!state.replay || !state.replay.notes.length) return;
     const notes = state.replay.notes;
     if (state.step >= notes.length - 1) state.step = 0;   // restart from the top if parked at the end
-    const tl = ensureTimeline(state.replay);
-    t0Perf = performance.now();
-    basePlay = tl[state.step]!;
+    ensureTimeline(state.replay);
+    pending = true;
+    updatePlayBtn();
+    // On the very first play the AudioContext must resume AND its render thread must actually start
+    // producing output before its clock advances; wait for both, then anchor the clocks together (see
+    // startClocks). On later plays the context is already running, so this resolves immediately.
+    if (soundOn) void audioEnable().then(audioReady).then(startClocks);
+    else startClocks();
+}
+function startClocks() {
+    if (!pending || !state.replay) return;   // a pause during the async resume cancels the start
+    pending = false;
+    basePlay = timeline[state.step]!;
     audioIdx = state.step;
-    if (soundOn) { audioEnable(); t0Ctx = audioNow(); }
+    if (soundOn) {
+        // Schedule the first onset START_LEAD_MS ahead on the audio clock (future → never clamped), and
+        // anchor the visual playhead to when that onset actually reaches the SPEAKERS — scheduleAnchor
+        // folds in the output latency, so sight and sound start together even on the cold first play.
+        const a = scheduleAnchor(START_LEAD_MS / 1000);
+        t0Ctx = a.ctx;
+        t0Perf = a.perf;
+    } else {
+        t0Perf = performance.now();
+    }
     updatePlayBtn();
     frame();
 }
@@ -202,21 +231,28 @@ function frame() {
             audioIdx++;
         }
     }
+    // The playhead trails the audio position by the user's extra offset (sound arrives that much later
+    // than the browser reports, e.g. Bluetooth) so sight and sound line up. Audio scheduling above is
+    // untouched — only the visual cursor is delayed.
+    const nowVisual = nowPlay - (soundOn ? audioOffsetMs : 0) * tempoRate;
     // Advance the visual playhead to the latest onset whose time has arrived (may jump several under load).
     let i = state.step;
-    while (i < notes.length - 1 && tl[i + 1]! <= nowPlay) i++;
+    while (i < notes.length - 1 && tl[i + 1]! <= nowVisual) i++;
     if (i !== state.step) { state.step = i; render(); }
     // Stop once the playhead reached the end AND all audio has been handed off to the clock.
-    if (state.step >= notes.length - 1 && (!soundOn || audioIdx >= notes.length)) { stopPlay(); render(); return; }
+    if (state.step >= notes.length - 1 && (!soundOn || audioIdx >= notes.length)) { stopPlay(false); render(); return; }
     raf = requestAnimationFrame(frame);
 }
 
-function togglePlay() { if (raf) stopPlay(); else play(); }
+function togglePlay() { if (raf || pending) stopPlay(); else play(); }
 
 function setTempo(rate: number) {
     if (raf) {   // re-anchor the clock at the CURRENT position (old rate) before applying the new rate,
-        basePlay = basePlay + (performance.now() - t0Perf) * tempoRate;   // else the whole elapsed span
-        t0Perf = performance.now();                                       // rescales and the playhead LEAPS
+        // else the whole elapsed span rescales and the playhead LEAPS. A moving playhead can't be
+        // delayed to the speaker instant without stalling, so re-anchor now-to-now (playhead and audio
+        // both continue from this instant); the small output-latency offset is imperceptible mid-play.
+        basePlay = basePlay + (performance.now() - t0Perf) * tempoRate;
+        t0Perf = performance.now();
         if (soundOn) t0Ctx = audioNow();
     }
     tempoRate = rate;
@@ -286,6 +322,14 @@ function wire() {
         if (soundOn) audioEnable(); else allNotesOff();
     });
     $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(posToRate(Number((e.target as HTMLInputElement).value))));
+    const latencyEl = $<HTMLInputElement>('latency');
+    latencyEl.value = String(audioOffsetMs);
+    $('latency-val').textContent = `${audioOffsetMs}ms`;
+    latencyEl.addEventListener('input', e => {
+        audioOffsetMs = Number((e.target as HTMLInputElement).value);
+        $('latency-val').textContent = `${audioOffsetMs}ms`;
+        try { localStorage.setItem(LATENCY_KEY, String(audioOffsetMs)); } catch { /* storage blocked */ }
+    });
     // The staff scales to fit its panel width, so re-render (debounced) when the window resizes.
     let resizeT = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = window.setTimeout(render, 120); });
