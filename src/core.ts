@@ -1,5 +1,5 @@
 /**
- * CoreSpeller — rung 1: the pedagogical two-pillar foundation (~100 lines).
+ * CoreSpeller — rung 1: the pedagogical two-pillar foundation.
  *
  * The 7-letter limit + interval aug/dim scoring, and nothing else — the minimal
  * causal baseline the rest of the ladder (Speller rungs 2/3, spellTwoPass rung 4)
@@ -14,6 +14,13 @@
  * score it as rung 1 — keeping the repo's ladder figure faithful to the paper's —
  * and so its source stays readable beside its siblings. Reachable only by an
  * in-repo path import (the eval harness, the viz).
+ *
+ * The claim "the complete speller in ~100 effective lines" belongs to the
+ * self-contained standalone in `examples/core-speller.ts`, not to this file:
+ * spread across `src/`, the same model leans on shared primitives (candidate
+ * enumeration, interval scoring) and carries library surface the two pillars
+ * don't need. The standalone inlines only the core path (zero imports) and is
+ * held byte-identical to this class by `test/examples/standalone.test.ts`.
  */
 
 import { enharmonicCandidatesFor } from './candidates.js';
