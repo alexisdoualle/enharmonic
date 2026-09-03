@@ -23,7 +23,7 @@
  * (batch / deterministic replay), else the injected `clock` (default Date.now).
  */
 
-import type { Letter, PitchClass } from './pitch.js';
+import { LETTER_BASE, type Letter, type PitchClass } from './pitch.js';
 import { rawIntervalBetween, lineOfFifths } from './interval.js';
 import { intervalScore } from './scoring.js';
 import type { NoteContext, ScoredCandidate, Substrate, SubstrateTrace } from './kernel.js';
@@ -44,7 +44,6 @@ export interface DecisionTrace {
 }
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
-const LETTER_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as const satisfies Record<Letter, number>;
 const SHARPEN_ORDER: readonly Letter[] = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 const FLATTEN_ORDER: readonly Letter[] = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
 const KEYSIG_SHARPS = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];

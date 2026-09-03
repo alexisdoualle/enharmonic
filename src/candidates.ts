@@ -13,13 +13,9 @@
  *   enharmonicCandidatesFor(8)  → [G#, Ab]          (only 2 within ±2 accidentals)
  */
 
-import type { Accidental, Letter, PitchClass } from './pitch.js';
+import { LETTER_BASE, type Accidental, type Letter, type PitchClass } from './pitch.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
-
-const LETTER_BASE = {
-    C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
-} as const satisfies Record<Letter, number>;
 
 export function enharmonicCandidatesFor(midi: number): PitchClass[] {
     const pc = ((midi % 12) + 12) % 12;

@@ -19,8 +19,9 @@ export interface PitchClass {
     readonly alter: Accidental;
 }
 
-/** Natural pitch class of each letter (C = 0). */
-const LETTER_BASE = {
+/** Natural pitch class of each letter (C = 0). The single source of truth; imported by
+ *  candidates.ts, base.ts and core.ts rather than re-declared. */
+export const LETTER_BASE = {
     C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
 } as const satisfies Record<Letter, number>;
 

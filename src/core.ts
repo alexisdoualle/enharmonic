@@ -27,7 +27,6 @@ import { enharmonicCandidatesFor } from './candidates.js';
 import { pitchClassValue, type Letter, type Pitch, type PitchClass } from './pitch.js';
 import { intervalScore } from './scoring.js';
 
-const LETTER_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as const satisfies Record<Letter, number>;
 const ALL_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
 
 export class CoreSpeller {
@@ -105,8 +104,7 @@ export class CoreSpeller {
         }
         for (const L of ALL_LETTERS) {
             const pc = this.resolved.get(L)!;
-            const pcVal = ((LETTER_BASE[pc.step] + pc.alter) % 12 + 12) % 12;
-            if (pcVal === targetPc) {
+            if (pitchClassValue(pc) === targetPc) {
                 const octave = Math.floor(midi / 12) - 1;
                 return { step: pc.step, alter: pc.alter, octave };
             }
