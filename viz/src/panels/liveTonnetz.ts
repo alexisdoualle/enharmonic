@@ -8,9 +8,11 @@ const LETTER_COLOR: Record<string, string> = {
 };
 const LOF: Record<string, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 const LOF_LETTERS = ['C', 'G', 'D', 'A', 'E', 'B', 'F'];
+const SCALE_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const WHITE_PC = new Set([0, 2, 4, 5, 7, 9, 11]);
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 const pcOf = (midi: number) => ((midi % 12) + 12) % 12;
+const spellingKey = (p: { step: string; alter: number }) => `${p.step}:${p.alter}`;
 const glyph = (alter: number) => alter === 0 ? '' : alter === 1 ? '♯' : alter === -1 ? '♭' : alter === 2 ? '𝄪' : '𝄫';
 const textOn = (hex: string) => {
     const n = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
@@ -84,9 +86,21 @@ function trianglePoints(cells: [number, number, number][]): string {
     return cells.map(c => { const [x, y] = pos(...c); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(' ');
 }
 
+function scaleBadges(spellings: { step: string; alter: number }[]): string {
+    const byLetter = new Map(spellings.map(p => [p.step, p]));
+    return SCALE_LETTERS.map(letter => {
+        const spelling = byLetter.get(letter);
+        const label = spelling ? labelAt(LOF[letter]! + 7 * spelling.alter) : letter;
+        const color = LETTER_COLOR[letter]!;
+        const empty = spelling ? '' : ' empty';
+        return `<div class="live-scale-cell" style="--scale-color:${color}"><button type="button" class="live-scale-adjust" data-step="${letter}" data-delta="1" aria-label="raise ${letter}">▲</button><span class="live-scale-badge${empty}" aria-label="${esc(label)}">${esc(label)}</span><button type="button" class="live-scale-adjust" data-step="${letter}" data-delta="-1" aria-label="lower ${letter}">▼</button></div>`;
+    }).join('');
+}
+
 function renderSvg(s: LiveState): string {
     const filled = new Set(s.filledCells);
     const held = new Set(s.heldPCs);
+    const heldSpellings = new Set(s.heldSpellings);
     const p: string[] = [`<svg class="live-tonnetz-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="live coiled Tonnetz">`,
         `<rect width="${W}" height="${H}" fill="#fff"/>`];
     for (let k = 0; k < 12; k++) {
@@ -116,7 +130,8 @@ function renderSvg(s: LiveState): string {
         const type = classifyTriad(pcs[0]!, pcs[1]!, pcs[2]!);
         if (type === 'unknown') continue;
         const color = triangleColor(type, notes, filled);
-        p.push(`<polygon points="${trianglePoints(cells)}" fill="${color}" fill-opacity="0.42" stroke="${color}" stroke-width="1.1" stroke-linejoin="round"/>`);
+        const sounding = cells.every(([x, y, z]) => heldSpellings.has(spellingKey(pitchAt(x + 4 * y + 7 * z))));
+        p.push(`<polygon points="${trianglePoints(cells)}" fill="${color}" fill-opacity="${sounding ? 0.78 : 0.42}" stroke="${color}" stroke-width="${sounding ? 2.1 : 1.1}" stroke-linejoin="round"/>`);
     }
     // The five coiled layers: three z=0 rows and the flat/sharp twins of the central row.
     const cells: [number, number, number][] = [];
@@ -143,8 +158,14 @@ function renderSvg(s: LiveState): string {
 
 export function initLiveTonnetz(host: HTMLElement): void {
     const model = new LiveSpeller();
-    host.innerHTML = `<div class="panel-title">live coiled Tonnetz <span class="live-help">MIDI / QWERTY keyboard · fills persist as the current scale</span></div><div class="live-toolbar"><span class="live-status"></span><span class="live-last"></span><button type="button" class="live-fullscreen">fullscreen</button><button type="button" class="live-reset">reset surface</button></div><div class="live-svg-host"></div>`;
+    host.innerHTML = `<div class="panel-title">live coiled Tonnetz <span class="live-help">MIDI / QWERTY keyboard · fills persist as the current scale</span></div><div class="live-scale" aria-label="current scale spelling"></div><div class="live-toolbar"><span class="live-status"></span><span class="live-last"></span><button type="button" class="live-fullscreen">fullscreen</button><button type="button" class="live-reset">reset surface</button></div><div class="live-svg-host"></div>`;
     const svgHost = host.querySelector('.live-svg-host') as HTMLElement;
+    const scale = host.querySelector('.live-scale') as HTMLElement;
+    scale.addEventListener('click', event => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.live-scale-adjust');
+        if (!button) return;
+        model.setScaleAlter(button.dataset.step!, Number(button.dataset.delta));
+    });
     const status = host.querySelector('.live-status') as HTMLElement;
     const last = host.querySelector('.live-last') as HTMLElement;
     const fullscreen = host.querySelector('.live-fullscreen') as HTMLButtonElement;
@@ -161,6 +182,7 @@ export function initLiveTonnetz(host: HTMLElement): void {
     document.addEventListener('fullscreenchange', syncFullscreenLabel);
     syncFullscreenLabel();
     model.subscribe(s => {
+        scale.innerHTML = scaleBadges(s.scaleSpellings);
         svgHost.innerHTML = renderSvg(s);
         status.textContent = s.midiStatus;
         last.textContent = s.lastSpelling ? `last: ${s.lastSpelling.step}${glyph(s.lastSpelling.alter)} · pc ${pcOf(s.lastMidi!)}` : 'strike a note';

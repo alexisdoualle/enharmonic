@@ -5,6 +5,8 @@ import './tonnetz3d/types.js';
 export interface LiveState {
     heldMidi: number[];
     heldPCs: number[];
+    heldSpellings: string[];
+    scaleSpellings: ScaleSpelling[];
     filledCells: string[];
     lastMidi: number | null;
     lastSpelling: Pitch | null;
@@ -17,12 +19,15 @@ const pcOf = (midi: number) => ((midi % 12) + 12) % 12;
 const spellingKey = (p: { step: string; alter: number }) => `${p.step}:${p.alter}`;
 const fifthsOf = (p: { step: string; alter: number }) => ({ F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 }[p.step]! + 7 * p.alter);
 const cellKey = (x: number, y: number, z: number) => `${x}:${y}:${z}`;
+const SCALE_STEPS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+type ScaleSpelling = { step: string; alter: number };
 
 /** Live bridge: raw MIDI enters here, the shipped Speller supplies the spelling. */
 export class LiveSpeller {
     private speller = new Speller();
     private held = new Map<number, Pitch>();
     private selectedSpellings = new Map<string, Pitch>();
+    private manualScale: ScaleSpelling[] | null = null;
     private filledCells = new Set<string>();
     private listeners = new Set<Listener>();
     private midiStatus = 'computer keyboard ready';
@@ -34,9 +39,12 @@ export class LiveSpeller {
     }
 
     state(): LiveState {
+        const resolved = this.currentScale();
         return {
             heldMidi: [...this.held.keys()].sort((a, b) => a - b),
             heldPCs: [...new Set([...this.held.keys()].map(pcOf))].sort((a, b) => a - b),
+            heldSpellings: [...new Set([...this.held.values()].map(spellingKey))],
+            scaleSpellings: resolved.map(({ step, alter }) => ({ step, alter })),
             filledCells: [...this.filledCells],
             lastMidi: this.lastMidi,
             lastSpelling: this.lastSpelling,
@@ -49,9 +57,36 @@ export class LiveSpeller {
 
     private emit() { const s = this.state(); this.listeners.forEach(listener => listener(s)); }
 
+    private currentScale(): ScaleSpelling[] {
+        return this.manualScale?.map(p => ({ ...p }))
+            ?? (this.speller.getResolvedScale() ?? []).map(({ step, alter }) => ({ step, alter }));
+    }
+
+    /** Manually pin one letter of the current seven-letter surface, within double accidentals. */
+    setScaleAlter(step: string, delta: number): void {
+        const current = this.currentScale().length
+            ? this.currentScale()
+            : SCALE_STEPS.map(step => ({ step, alter: 0 }));
+        const old = current.find(p => p.step === step);
+        if (!old) return;
+        const alter = Math.max(-2, Math.min(2, old.alter + delta));
+        if (alter === old.alter) return;
+        const next = current.map(p => p.step === step ? { step: p.step, alter } : { ...p });
+        this.manualScale = next;
+        this.selectedSpellings.delete(spellingKey(old));
+        this.selectedSpellings.set(spellingKey({ step, alter }), { step, alter, octave: 4 });
+        for (const [midi, spelling] of this.held) {
+            if (spelling.step === step && spelling.alter === old.alter) {
+                this.held.set(midi, { ...spelling, alter });
+            }
+        }
+        this.syncSurface();
+        this.emit();
+    }
+
     /** Project the selected spellings onto the currently resolved seven-letter surface. */
     private syncSurface(): void {
-        const resolved = this.speller.getResolvedScale();
+        const resolved = this.currentScale();
         const allowed = resolved ? new Set(resolved.map(spellingKey)) : null;
         const active = [...this.selectedSpellings.entries()]
             .filter(([key]) => !allowed || allowed.has(key));
@@ -114,6 +149,7 @@ export class LiveSpeller {
         this.speller = new Speller();
         this.held.clear();
         this.selectedSpellings.clear();
+        this.manualScale = null;
         this.filledCells.clear();
         this.lastMidi = null;
         this.lastSpelling = null;

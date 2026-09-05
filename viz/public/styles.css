@@ -82,6 +82,12 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 /* live coiled Tonnetz: MIDI pc spokes plus persistent speller-selected spellings */
 .live-tonnetz { display: flex; flex-direction: column; min-height: 520px; background: #fff; color: #222; border-color: #d6d6d6; }
 .live-help { font-size: 10px; text-transform: none; letter-spacing: 0; margin-left: 8px; color: #777; }
+.live-scale { display: flex; gap: 4px; margin: 0 0 5px; }
+.live-scale-cell { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 1px; }
+.live-scale-adjust { height: 11px; padding: 0; border: 0; background: transparent; color: #999; cursor: pointer; font-size: 7px; line-height: 10px; }
+.live-scale-adjust:hover { color: var(--scale-color, #555); background: #f2f2f2; }
+.live-scale-badge { flex: 1 1 0; min-width: 0; padding: 3px 2px; border: 1px solid var(--scale-color); border-radius: 4px; color: var(--scale-color); text-align: center; font-size: 12px; font-weight: 700; line-height: 1.1; }
+.live-scale-badge.empty { border-color: #c9c9c9; color: #aaa; font-weight: 500; }
 .live-toolbar { display: flex; align-items: center; gap: 12px; min-height: 26px; margin-bottom: 5px; color: #777; font-size: 11px; }
 .live-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-last { margin-left: auto; color: #333; }
@@ -91,6 +97,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 .live-tonnetz-svg { display: block; width: 100%; height: 100%; }
 .live-tonnetz:fullscreen { width: 100vw; height: 100vh; min-height: 0; border: 0; border-radius: 0; padding: 18px 24px 24px; }
 .live-tonnetz:fullscreen .live-svg-host { min-height: 0; }
+body.live-only { background: #fff; }
+#live-page { height: 100vh; padding: 18px; }
+.live-only .live-tonnetz { width: 100%; height: 100%; min-height: 0; }
 
 /* spiral of fifths — the card stretches to the row height (set by the taller scoring column), so make it
    a flex column and center the spiral+legend group in the space below the title/controls. The svg must be

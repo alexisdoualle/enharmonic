@@ -32,7 +32,10 @@ const NEIGHBOUR_STEP: DiatonicBaseSubstrateOptions = {
 };
 const SOUNDING_TIEBREAK: DiatonicBaseSubstrateOptions = {
     soundingTiebreak: true,
-    stWindow: 'coonset',
+    // TODO: Re-run the full corpus scoring before finalizing this as the permanent default. Initial drift
+    // after switching from 'coonset' to 'recent': chopin_prelude_op28_no15/rt moved 2 wrong → flipped
+    // (wrong 14→12, flipped 414→416); bach_jesu_meine_freude/rt moved 7 correct → wrong (wrong 7→14).
+    stWindow: 'recent',
     stEpsilon: 0,
 };
 const ANCHOR_DEFAULTS: DiatonicBaseSubstrateOptions = {
