@@ -5,10 +5,10 @@ import {
     SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, type AppState,
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
-import { renderStateTable } from './panels/stateTable.js';
 import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
+import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { label } from './format.js';
@@ -76,7 +76,6 @@ function render() {
         range: state.spiralRange, center: state.spiralCenter,
         streaming: state.mode !== 'tp', onChange: setSpiral,
     });
-    renderStateTable($('stateTable'), snap);
     if (state.replay) {
         renderStaff(state.replay, state.step);
         renderPianoRoll(state.replay, state.step);
@@ -89,6 +88,7 @@ function render() {
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked — click to seek. */
 function renderStrip() {
+    return;
     const strip = $('strip');
     if (strip.childElementCount !== (state.replay?.snapshots.length ?? 0)) {
         strip.innerHTML = '';
@@ -300,6 +300,7 @@ async function pickFixture(id: string, step = 0) {
 
 function wire() {
     initPianoRoll(seek);
+    initLiveTonnetz($('live-tonnetz'));
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
