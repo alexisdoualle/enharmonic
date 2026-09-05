@@ -60,6 +60,22 @@ export function intervalScore(
     return total;
 }
 
+/** Total interval score against a recency buffer. Unlike {@link intervalScore}, this deliberately
+ * scores each committed spelling as an individual vote: repeated letters are not collapsed into a
+ * seven-slot map. This is the onset-count-based tie buffer used by the original lab speller. */
+export function intervalBufferScore(
+    candidate: PitchClass,
+    buffer: readonly PitchClass[],
+): number {
+    let total = 0;
+    for (const pc of buffer) {
+        if (pc.step === candidate.step) continue;
+        const { quality, number } = rawIntervalBetween(candidate, pc);
+        total += scoreFor(quality, number);
+    }
+    return total;
+}
+
 /**
  * relativeAccDist.
  *
