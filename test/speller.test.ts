@@ -45,15 +45,6 @@ suite('Speller smoke', () => {
         const scale = s.getResolvedScale();
         assert(scale !== null && scale.length === 7, 'expected a 7-letter surface');
     });
-
-    test('onset recency buffer keeps harmonic-major A♭ after C D E F G', () => {
-        const s = new Speller({ clock: () => 0 });
-        for (const [i, midi] of [60, 62, 64, 65, 67, 68].entries()) {
-            s.noteOn(midi, { t: i * 1000 });
-            if (midi !== 68) s.noteOff(midi);
-        }
-        assertEq(tok(s.getSpelling(68)), 'Ab');
-    });
 });
 
 suite('curated fixtures', () => {

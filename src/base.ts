@@ -25,7 +25,7 @@
 
 import { LETTER_BASE, type Letter, type PitchClass } from './pitch.js';
 import { rawIntervalBetween, lineOfFifths } from './interval.js';
-import { intervalBufferScore, intervalScore } from './scoring.js';
+import { intervalScore } from './scoring.js';
 import type { NoteContext, ScoredCandidate, Substrate, SubstrateTrace } from './kernel.js';
 
 /** Which post-score mechanism (if any) moved the pick off the frame's argmax, for the viz decision trace. */
@@ -365,14 +365,11 @@ export interface DiatonicBaseSubstrateOptions {
     soundingTiebreak?: boolean;
     /** Max base-score gap for the top-2 candidates to count as tied (default 0 = exact; try 1). */
     stEpsilon?: number;
-    /** Recency window definition (default 'onsets'):
+    /** Recency window definition (default 'recent'):
      *  - 'coonset' : co-onset committed notes only (same t);
      *  - 'recent'  : co-onset + notes struck within {@link stWindowMs};
-     *  - 'last3'   : co-onset + the last 3 committed notes (any time);
-     *  - 'onsets'  : the last {@link stBufferN} distinct committed spellings (any time). */
-    stWindow?: 'coonset' | 'recent' | 'last3' | 'onsets';
-    /** Number of distinct committed spellings in the onset-count tie buffer. Default 5. */
-    stBufferN?: number;
+     *  - 'last3'   : co-onset + the last 3 committed notes (any time). */
+    stWindow?: 'coonset' | 'recent' | 'last3';
     /** Time window (ms) for stWindow='recent'. Default 400. */
     stWindowMs?: number;
     /** VIZ-ONLY (default off): record a {@link DecisionTrace} on every commit (base scores + look-ahead /
@@ -425,8 +422,7 @@ export class DiatonicBaseSubstrate implements Substrate {
     private readonly neighbourVerticalGate: boolean;
     private readonly soundingTiebreak: boolean;
     private readonly stEpsilon: number;
-    private readonly stWindow: 'coonset' | 'recent' | 'last3' | 'onsets';
-    private readonly stBufferN: number;
+    private readonly stWindow: 'coonset' | 'recent' | 'last3';
     private readonly stWindowMs: number;
     private readonly trace: boolean;
     /** VIZ-ONLY: the most recent commit's decision record (null until the first traced commit). */
@@ -474,8 +470,7 @@ export class DiatonicBaseSubstrate implements Substrate {
         this.neighbourVerticalGate = opts.neighbourVerticalGate ?? false;
         this.soundingTiebreak = opts.soundingTiebreak ?? false;
         this.stEpsilon = opts.stEpsilon ?? 0;
-        this.stWindow = opts.stWindow ?? 'onsets';
-        this.stBufferN = Math.max(1, opts.stBufferN ?? 5);
+        this.stWindow = opts.stWindow ?? 'recent';
         this.stWindowMs = opts.stWindowMs ?? 400;
         this.trace = opts.trace ?? false;
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
@@ -759,14 +754,6 @@ export class DiatonicBaseSubstrate implements Substrate {
         // The tied pair, in CANDIDATE order (scored[] is enharmonicCandidatesFor order).
         const lo = Math.min(i0, i1), hi = Math.max(i0, i1);
         const tied = [scored[lo]!.c, scored[hi]!.c];
-        if (this.stWindow === 'onsets') {
-            const buffer = this.onsetBuffer();
-            if (buffer.length === 0) return tied[0]!;
-            let bestC = tied[0]!, bestS = intervalBufferScore(tied[0]!, buffer);
-            const s1 = intervalBufferScore(tied[1]!, buffer);
-            if (s1 > bestS) bestC = tied[1]!;
-            return bestC;
-        }
         const recent = this.recencyScale(ctx.t ?? this.clock());
         if (recent.size === 0) return tied[0]!;                                        // abstain → candidate order
         // Re-score against the recency window; strict '>' keeps candidate order on a tie (dim7 case).
@@ -774,20 +761,6 @@ export class DiatonicBaseSubstrate implements Substrate {
         const s1 = intervalScore(tied[1]!, recent);
         if (s1 > bestS) bestC = tied[1]!;
         return bestC;
-    }
-
-    /** Last {@link stBufferN} DISTINCT committed spellings, most-recent first. */
-    private onsetBuffer(): PitchClass[] {
-        const seen = new Set<string>();
-        const out: PitchClass[] = [];
-        for (let i = this.noteHistory.length - 1; i >= 0 && out.length < this.stBufferN; i--) {
-            const h = this.noteHistory[i]!;
-            const key = `${h.step}:${h.alter}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            out.push({ step: h.step, alter: h.alter as PitchClass['alter'] });
-        }
-        return out;
     }
 
     /** The recency window as a letter→spelling scale, from committed struck notes (co-onset always;

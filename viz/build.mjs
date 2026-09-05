@@ -31,15 +31,6 @@ const buildOpts = {
     sourcemap: true,
     logLevel: 'info',
 };
-const liveBuildOpts = {
-    entryPoints: [join(here, 'src/livePage.ts')],
-    outfile: join(OUT, 'live.js'),
-    bundle: true,
-    format: 'esm',
-    target: 'es2022',
-    sourcemap: true,
-    logLevel: 'info',
-};
 
 /** Copy the static shell (index.html, styles.css) and the fixture corpus into viz-dist/. */
 async function copyAssets() {
@@ -64,12 +55,10 @@ export async function build({ watch = false } = {}) {
     await copyAssets();
     if (watch) {
         const ctx = await esbuild.context(buildOpts);
-        const liveCtx = await esbuild.context(liveBuildOpts);
-        await Promise.all([ctx.watch(), liveCtx.watch()]);
-        console.log('[viz] esbuild watching — saves rebuild app.js and live.js (hard-refresh the browser).');
+        await ctx.watch();
+        console.log('[viz] esbuild watching — saves rebuild app.js (hard-refresh the browser).');
     } else {
         await esbuild.build(buildOpts);
-        await esbuild.build(liveBuildOpts);
     }
 }
 
