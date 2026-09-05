@@ -32,10 +32,11 @@ const NEIGHBOUR_STEP: DiatonicBaseSubstrateOptions = {
 };
 const SOUNDING_TIEBREAK: DiatonicBaseSubstrateOptions = {
     soundingTiebreak: true,
-    // TODO: Re-run the full corpus scoring before finalizing this as the permanent default. Initial drift
-    // after switching from 'coonset' to 'recent': chopin_prelude_op28_no15/rt moved 2 wrong → flipped
-    // (wrong 14→12, flipped 414→416); bach_jesu_meine_freude/rt moved 7 correct → wrong (wrong 7→14).
-    stWindow: 'recent',
+    // TODO: Re-run the full corpus scoring before finalizing this as the permanent default. The previous
+    // time-window experiment (400 ms) drifted chopin_prelude_op28_no15/rt by 2 wrong → flipped and
+    // bach_jesu_meine_freude/rt by 7 correct → wrong; this restores the original onset-count mechanism.
+    stWindow: 'onsets',
+    stBufferN: 5,
     stEpsilon: 0,
 };
 const ANCHOR_DEFAULTS: DiatonicBaseSubstrateOptions = {
