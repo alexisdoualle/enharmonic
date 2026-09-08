@@ -199,13 +199,13 @@ function renderVisible(): void {
     }
 }
 
-// Contiguous runs of the frame's signed line-of-fifths tonic (skipping onsets where it's unset —
-// e.g. every onset in batch two-pass mode, which has no streaming frame at all).
+// Contiguous runs of the frame key: the streaming spiral's signed tonic when available, otherwise
+// the two-pass resolver's canonical spelling of the selected directional frame.
 function frameSegments(replay: Replay): { lof: number; t0: number; t1: number }[] {
     const segs: { lof: number; t0: number; t1: number }[] = [];
     let cur: number | null = null, segStart = 0;
     for (const snap of replay.snapshots) {
-        const lof = snap.frameLofTonic;
+        const lof = snap.frameLofTonic ?? snap.frameKeyLof;
         if (lof == null) continue;
         if (cur === null) { cur = lof; segStart = snap.t; }
         else if (lof !== cur) { segs.push({ lof: cur, t0: segStart, t1: snap.t }); cur = lof; segStart = snap.t; }
@@ -225,7 +225,7 @@ function buildKeyLane(replay: Replay, host: SVGSVGElement, width: number, laneTo
     const segs = frameSegments(replay);
     if (segs.length === 0) {
         host.appendChild(svgEl('rect', { x: PAD, y: laneTop, width: width - PAD * 2, height: LANE_H, fill: '#1b1f27' }));
-        text(PAD + 6, laneTop + LANE_H / 2 + 4, 'batch two-pass — no streaming frame', '#6b7280');
+        text(PAD + 6, laneTop + LANE_H / 2 + 4, 'no frame key', '#6b7280');
         return;
     }
     for (const seg of segs) {

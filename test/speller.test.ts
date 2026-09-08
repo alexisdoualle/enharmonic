@@ -7,6 +7,7 @@
 
 import { assert, assertEq, suite, test } from './framework.js';
 import { Speller, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { spellTwoPassTraced } from '../src/two-pass.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
 const tok = (sp: Pitch | null): string =>
@@ -44,6 +45,15 @@ suite('Speller smoke', () => {
         s.noteOn(60, { t: 0 });
         const scale = s.getResolvedScale();
         assert(scale !== null && scale.length === 7, 'expected a 7-letter surface');
+    });
+
+    test('two-pass trace is output-identical to the production resolver', () => {
+        const notes = onNotes(loadEvents('mozart_k545'));
+        const production = spellTwoPass(notes);
+        const traced = spellTwoPassTraced(notes);
+        assertEq(JSON.stringify(traced.spellings), JSON.stringify(production));
+        assertEq(traced.notes.length, notes.length);
+        assert(traced.notes.every(n => n.forward.frameKeyLof != null && n.backward.frameKeyLof != null), 'expected canonical keys for both passes');
     });
 
     test('onset recency buffer keeps harmonic-major A♭ after C D E F G', () => {

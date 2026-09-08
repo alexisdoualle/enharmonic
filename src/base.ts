@@ -901,6 +901,9 @@ export class DiatonicBaseSubstrate implements Substrate {
             // the bare diatonic base collection, before keep-alive/sounding overlays (null until the first frame)
             frame: this.lastBase ? LETTERS.map(L => ({ ...this.lastBase!.get(L)! })) : undefined,
             frameLofTonic: this.spiral && this.frameLofTonic != null ? this.frameLofTonic : undefined,
+            // Non-spiral callers still have a conventional key spelling for the same collection; this
+            // is display-only and must not be confused with the spiral's continuity anchor above.
+            frameKeyLof: this.baseCur != null ? KEYSIG_SHARPS[this.baseCur]! : undefined,
         };
     }
 

@@ -9,7 +9,7 @@
  * shipped no-keys presets the benchmark scores.
  */
 import type { Pitch, PitchClass } from '../../src/index.js';
-import { spellTwoPass } from '../../src/index.js';
+import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
 import { SpellerKernel } from '../../src/kernel.js';
 import { DiatonicBaseSubstrate, type DecisionTrace } from '../../src/base.js';
 import { DIATONIC_ANCHOR_OPTS, DIATONIC_ANCHOR_LA_OPTS } from '../../src/speller.js';
@@ -41,8 +41,10 @@ export interface Snapshot {
     resolvedScale: PitchClass[] | null;   // the 7-letter surface (frame + keep-alive + sounding)
     frame: PitchClass[] | null;           // the bare diatonic base collection, before keep-alive/sounding overlays
     frameLofTonic: number | undefined;    // signed line-of-fifths tonic (spiral); distinguishes C♯ from D♭
+    frameKeyLof: number | undefined;      // canonical frame-key spelling when the spiral is off
     sounding: Sounding[];            // notes ringing at this onset (incl. this one)
     decision: DecisionTrace | null;  // per-candidate scores + deltas + override (streaming rungs; null in batch)
+    twoPass: TwoPassNoteTrace | null; // forward/backward evidence + offline reconciliation (batch only)
     tier: Tier;
 }
 
@@ -120,6 +122,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
 
     // Batch two-pass (rung 4): the shipped offline speller decides the whole piece at once.
     let tpOut: (Pitch | null)[] | null = null;
+    let tpTrace: TwoPassTrace | null = null;
     if (mode === 'tp') {
         const notes: { midi: number; tOn: number; tOff: number }[] = [];
         const open = new Map<number, number[]>();
@@ -131,7 +134,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 const q = open.get(e.midi!); if (q && q.length) notes[q.shift()!]!.tOff = e.t_ms;
             }
         }
-        tpOut = spellTwoPass(notes) as (Pitch | null)[];
+        tpTrace = spellTwoPassTraced(notes);
+        tpOut = tpTrace.spellings as (Pitch | null)[];
     }
 
     // Build the substrate directly from the shipped preset options + the record-only viz trace, keeping
@@ -175,9 +179,17 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         let resolvedScale: PitchClass[] | null = null;
         let frame: PitchClass[] | null = null;
         let frameLofTonic: number | undefined;
+        let frameKeyLof: number | undefined;
         let decision: DecisionTrace | null = null;
+        const twoPass = mode === 'tp' ? tpTrace!.notes[idx]! : null;
         if (mode === 'tp') {
             committed = tpOut![idx] ?? null;
+            const selectedPass = twoPass![twoPass!.selected];
+            resolvedScale = selectedPass.resolvedScale;
+            frame = selectedPass.frame;
+            frameLofTonic = selectedPass.frameLofTonic;
+            frameKeyLof = selectedPass.frameKeyLof;
+            decision = selectedPass.decision;
         } else {
             kernel.noteOn(e.midi!, { t: e.t_ms, resolveDir: dirs.get(i) ?? 0 });
             committed = kernel.getSpelling(e.midi!);
@@ -185,6 +197,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             resolvedScale = snap?.resolvedScale ? snap.resolvedScale.map(p => ({ ...p })) : null;
             frame = snap?.frame ? snap.frame.map(p => ({ ...p })) : null;
             frameLofTonic = snap?.frameLofTonic;
+            frameKeyLof = snap?.frameKeyLof;
             decision = base.decision();
         }
         if (committed) sounding.set(e.midi!, committed);
@@ -192,7 +205,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         snapshots.push({
             onIndex: idx, midi: e.midi!, t: e.t_ms, committed,
             expected: exp ? { step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'], octave } : null,
-            resolvedScale, frame, frameLofTonic, decision,
+            resolvedScale, frame, frameLofTonic, frameKeyLof, decision, twoPass,
             sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch })).sort((a, b) => a.midi - b.midi),
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
         });

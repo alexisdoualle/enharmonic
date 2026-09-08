@@ -61,6 +61,9 @@ export interface SubstrateTrace {
      *  positions a mod-12 relative-major pc cannot tell apart) — backs the two-pass section-flip.
      *  Undefined when spiral off. */
     readonly frameLofTonic?: number | undefined;
+    /** Canonical signed line-of-fifths spelling of the frame's relative-major key. Unlike
+     * {@link frameLofTonic}, this is also available when spiral continuity is off. */
+    readonly frameKeyLof?: number | undefined;
 }
 
 /** A frame state model. Owns the resolved-scale memory; the kernel only orchestrates. */

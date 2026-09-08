@@ -19,7 +19,7 @@
  */
 import type { Letter, PitchClass } from './pitch.js';
 import { SpellerKernel } from './kernel.js';
-import { DiatonicBaseSubstrate } from './base.js';
+import { DiatonicBaseSubstrate, type DecisionTrace } from './base.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -50,6 +50,36 @@ export interface TwoPassOptions {
     sectionFlip?: boolean;
 }
 
+/** Read-only diagnostics for one directional streaming pass.  This is intentionally separate from
+ * the public two-pass output: production callers receive only spellings from {@link spellTwoPass}. */
+export interface TwoPassPassTrace {
+    spelling: PitchClass | null;
+    frame: PitchClass[] | null;
+    resolvedScale: PitchClass[] | null;
+    frameLofTonic: number | undefined;
+    frameKeyLof: number | undefined;
+    decision: DecisionTrace | null;
+}
+
+/** How the offline resolver chose a spelling after comparing its forward and backward passes. */
+export interface TwoPassNoteTrace {
+    forward: TwoPassPassTrace;
+    backward: TwoPassPassTrace;
+    agrees: boolean;
+    selected: 'forward' | 'backward';
+    phase: 'agreement' | 'cold-start' | 'interior' | 'trailing' | 'never-converged';
+    forwardWolf: number | undefined;
+    backwardWolf: number | undefined;
+}
+
+/** Diagnostic result from {@link spellTwoPassTraced}; never returned by the production API. */
+export interface TwoPassTrace {
+    spellings: (PitchClass | null)[];
+    notes: TwoPassNoteTrace[];
+    firstStable: number | null;
+    lastStable: number | null;
+}
+
 const LETTER_LOF: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 const LOF_TO_LETTER: Record<number, Letter> = { 0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F' };
 const lof = (p: PitchClass): number => LETTER_LOF[p.step] + 7 * p.alter;
@@ -78,7 +108,13 @@ function dirsFor(order: { midi: number; idx: number }[], n: number): number[] {
 /** Stream the notes through a fresh base speller, reading each note's spelling at its note-OFF.
  *  `reverse` mirrors every interval about the timeline, so the speller runs back-to-front. When
  *  `captureFrame` is set, also records each note's frame LoF-tonic (spiral bases only) for section-flip. */
-function streamPass(notes: readonly TwoPassNote[], reverse: boolean, make: () => SpellerKernel, captureFrame = false): { pred: (PitchClass | null)[]; ft: (number | undefined)[] } {
+type CapturedPass = { pred: (PitchClass | null)[]; ft: (number | undefined)[]; trace?: TwoPassPassTrace[] };
+type TraceKernel = { kernel: SpellerKernel; decision: () => DecisionTrace | null | undefined };
+
+function streamPass(
+    notes: readonly TwoPassNote[], reverse: boolean, make: () => SpellerKernel, captureFrame = false,
+    makeTraceKernel?: () => TraceKernel,
+): CapturedPass {
     const n = notes.length;
     let T = 0; for (const no of notes) if (no.tOff > T) T = no.tOff;
     const evs: { t: number; on: boolean; midi: number; idx: number }[] = [];
@@ -90,9 +126,11 @@ function streamPass(notes: readonly TwoPassNote[], reverse: boolean, make: () =>
     });
     evs.sort((a, b) => a.t - b.t || (a.on === b.on ? 0 : a.on ? -1 : 1) || a.midi - b.midi);
     const dirs = dirsFor(evs.filter(e => e.on).map(e => ({ midi: e.midi, idx: e.idx })), n);
-    const k = make();
+    const traceKernel = makeTraceKernel?.();
+    const k = traceKernel?.kernel ?? make();
     const pred: (PitchClass | null)[] = new Array(n).fill(null);
     const ft: (number | undefined)[] = new Array(n).fill(undefined);
+    const trace = traceKernel ? new Array<TwoPassPassTrace>(n) : undefined;
     const pend = new Map<number, number[]>();
     for (const e of evs) {
         if (e.on) {
@@ -102,11 +140,26 @@ function streamPass(notes: readonly TwoPassNote[], reverse: boolean, make: () =>
         } else {
             const sp = k.getSpelling(e.midi);
             const q = pend.get(e.midi);
-            if (q && q.length) { const idx = q.shift()!; pred[idx] = sp ? { step: sp.step, alter: sp.alter } : null; if (captureFrame) ft[idx] = k.snapshot?.()?.frameLofTonic; }
+            if (q && q.length) {
+                const idx = q.shift()!;
+                pred[idx] = sp ? { step: sp.step, alter: sp.alter } : null;
+                const snap = (captureFrame || trace) ? k.snapshot?.() : undefined;
+                if (captureFrame) ft[idx] = snap?.frameLofTonic;
+                if (trace) {
+                    trace[idx] = {
+                        spelling: pred[idx]!,
+                        frame: snap?.frame?.map(p => ({ ...p })) ?? null,
+                        resolvedScale: snap?.resolvedScale?.map(p => ({ ...p })) ?? null,
+                        frameLofTonic: snap?.frameLofTonic,
+                        frameKeyLof: snap?.frameKeyLof,
+                        decision: traceKernel!.decision() ?? null,
+                    };
+                }
+            }
             k.noteOff(e.midi);
         }
     }
-    return { pred, ft };
+    return trace ? { pred, ft, trace } : { pred, ft };
 }
 
 /**
@@ -161,30 +214,45 @@ function sectionFlipPass(spellings: (PitchClass | null)[], ft: (number | undefin
     return out;
 }
 
+function defaultBase(opts: TwoPassOptions): DiatonicBaseSubstrate {
+    return new DiatonicBaseSubstrate({
+        neighbourStep: true, neighbourRunGate: 2, neighbourStepWeight: 2, neighbourVerticalGate: true,
+        lookAheadVerticalGate: true, parallelThirdGate: true, baseWindowMs: 16000,
+        spiral: opts.sectionFlip ?? false, preferRelMinorLT: false, lookAheadCoherenceGate: false,
+        keepAlive: true, lookAhead: true, lookAheadMode: 'letter', keepAliveEvict: 'oldest',
+    });
+}
+
+function defaultTraceKernel(opts: TwoPassOptions): TraceKernel {
+    const base = defaultBase(opts);
+    return { kernel: new SpellerKernel(base), decision: () => base.decision() };
+}
+
 /**
  * Spell a whole piece with the two-pass batch resolver. `notes` are in playing order (bass-first within
  * a chord, as the fixtures store them). Returns one spelling per note, in the same order.
  */
-export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): (PitchClass | null)[] {
+function spellTwoPassCore(notes: readonly TwoPassNote[], opts: TwoPassOptions, traced: boolean): TwoPassTrace {
     // Section-flip needs the spiral frame's LoF-tonic trace, so it forces a spiral base by default.
     // Rung 4 (default, no section-flip) stays spiral-OFF: the two-pass's own forward+backward+resolve is a
     // better offline side-fixer than the spiral (measured wash-to-worse). `preferRelMinorLT` and
     // `lookAheadCoherenceGate` are pinned OFF for the same reason: they're streaming helpers that regress
     // on the two-pass (the backward pass already fixes these).
-    const make = opts.make ?? (() => new SpellerKernel(new DiatonicBaseSubstrate({
-        neighbourStep: true, neighbourRunGate: 2, neighbourStepWeight: 2, neighbourVerticalGate: true,
-        lookAheadVerticalGate: true, parallelThirdGate: true, baseWindowMs: 16000,
-        spiral: opts.sectionFlip ?? false, preferRelMinorLT: false, lookAheadCoherenceGate: false,
-        keepAlive: true, lookAhead: true, lookAheadMode: 'letter', keepAliveEvict: 'oldest',
-    })));
+    const make = opts.make ?? (() => new SpellerKernel(defaultBase(opts)));
+    // A caller-supplied kernel has no standard way to expose the substrate's private decision record;
+    // retain its snapshots but leave that field null rather than guessing at a score explanation.
+    const makeTraceKernel = traced
+        ? (opts.make ? () => ({ kernel: opts.make!(), decision: () => null }) : () => defaultTraceKernel(opts))
+        : undefined;
     const hw = opts.hw ?? 16;
     const rstab = opts.rstab ?? 4;
     const n = notes.length;
-    if (n === 0) return [];
+    if (n === 0) return { spellings: [], notes: [], firstStable: null, lastStable: null };
 
-    const fp = streamPass(notes, false, make, opts.sectionFlip);
+    const fp = streamPass(notes, false, make, opts.sectionFlip, makeTraceKernel);
     const fwd = fp.pred;
-    const bwd = streamPass(notes, true, make).pred;
+    const bp = streamPass(notes, true, make, false, makeTraceKernel);
+    const bwd = bp.pred;
 
     const agree = fwd.map((f, i) => same(f, bwd[i]!));
     // contiguous disagreement-run length, and agreement-run length (the latter bounds the cold regions).
@@ -211,9 +279,24 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
         opts.sectionFlip ? sectionFlipPass(result, fp.ft, notes, { jump: 4, minLen: 24, margin: 0 }) : result;
 
     const out: (PitchClass | null)[] = fwd.slice();
-    if (lastStable < 0) return finish(out);   // never converged → trust the forward (streaming) pass
+    // The production wrapper never creates the diagnostic arrays. Its resolver work and output remain
+    // the same; only the traced entry point pays to retain reconciliation evidence.
+    const selected = traced ? new Array<'forward' | 'backward'>(n).fill('forward') : undefined;
+    const phase = traced ? agree.map<TwoPassNoteTrace['phase']>(x => x ? 'agreement' : 'trailing') : undefined;
+    const forwardWolf = traced ? new Array<number | undefined>(n).fill(undefined) : undefined;
+    const backwardWolf = traced ? new Array<number | undefined>(n).fill(undefined) : undefined;
+    const result = (spellings: (PitchClass | null)[]): TwoPassTrace => traced
+        ? tracedResult(spellings, fp.trace, bp.trace, agree, selected!, phase!, forwardWolf!, backwardWolf!, firstStable, lastStable)
+        : { spellings, notes: [], firstStable: null, lastStable: null };
+    if (lastStable < 0) {
+        if (traced) phase!.fill('never-converged'); // never converged → trust the forward (streaming) pass
+        return result(finish(out));
+    }
     // forward COLD before the first stable agreement → use backward (warm).
-    for (let i = 0; i < firstStable; i++) if (!agree[i]) out[i] = bwd[i]!;
+    for (let i = 0; i < firstStable; i++) if (!agree[i]) {
+        out[i] = bwd[i]!;
+        if (traced) { selected![i] = 'backward'; phase![i] = 'cold-start'; }
+    }
     // warm interior → monotonic change-point per disagreement zone.
     for (let i = firstStable; i <= lastStable;) {
         if (agree[i]) { i++; continue; }
@@ -225,9 +308,44 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
             for (let j = k; j < e; j++) c += wolf(bwd[j]!, j);
             if (c < bestCost - 1e-9) { bestCost = c; bestK = k; }
         }
-        for (let j = i; j < e; j++) out[j] = j < bestK ? fwd[j]! : bwd[j]!;
+        for (let j = i; j < e; j++) {
+            out[j] = j < bestK ? fwd[j]! : bwd[j]!;
+            if (traced) {
+                forwardWolf![j] = wolf(fwd[j]!, j);
+                backwardWolf![j] = wolf(bwd[j]!, j);
+                selected![j] = j < bestK ? 'forward' : 'backward';
+                phase![j] = 'interior';
+            }
+        }
         i = e;
     }
     // trailing (after the last stable agreement): backward COLD → keep forward (already in `out`).
-    return finish(out);
+    return result(finish(out));
+}
+
+function tracedResult(
+    spellings: (PitchClass | null)[], forward: TwoPassPassTrace[] | undefined, backward: TwoPassPassTrace[] | undefined,
+    agrees: boolean[], selected: ('forward' | 'backward')[], phase: TwoPassNoteTrace['phase'][],
+    forwardWolf: (number | undefined)[], backwardWolf: (number | undefined)[], firstStable: number, lastStable: number,
+): TwoPassTrace {
+    const blank = (): TwoPassPassTrace => ({ spelling: null, frame: null, resolvedScale: null, frameLofTonic: undefined, frameKeyLof: undefined, decision: null });
+    return {
+        spellings,
+        notes: spellings.map((_, i) => ({
+            forward: forward?.[i] ?? blank(), backward: backward?.[i] ?? blank(), agrees: agrees[i]!,
+            selected: selected[i]!, phase: phase[i]!, forwardWolf: forwardWolf[i], backwardWolf: backwardWolf[i],
+        })),
+        firstStable: firstStable < spellings.length ? firstStable : null,
+        lastStable: lastStable >= 0 ? lastStable : null,
+    };
+}
+
+/** Production entry point: returns only final spellings, with no diagnostic API or trace allocation. */
+export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): (PitchClass | null)[] {
+    return spellTwoPassCore(notes, opts, false).spellings;
+}
+
+/** Diagnostic-only entry point for the visualiser. It shares the exact production resolver. */
+export function spellTwoPassTraced(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): TwoPassTrace {
+    return spellTwoPassCore(notes, opts, true);
 }

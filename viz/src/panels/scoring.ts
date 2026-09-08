@@ -44,7 +44,11 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     title.textContent = 'scoring — why this spelling';
     host.appendChild(title);
     if (!snap) { host.appendChild(dim('—')); return; }
-    if (!snap.decision) { host.appendChild(dim('batch two-pass — whole-piece decision, no per-onset scoring trace')); return; }
+    if (snap.twoPass) host.appendChild(twoPassSummary(snap.twoPass));
+    if (!snap.decision) {
+        host.appendChild(dim(snap.twoPass ? 'selected pass has no per-candidate trace' : 'no per-candidate scoring trace'));
+        return;
+    }
 
     const dec = snap.decision;
     const frameByLetter = new Map(dec.frame.map(p => [p.step, p]));
@@ -115,6 +119,9 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
 
     // decision note: what actually chose the pick
     const notes: string[] = [];
+    if (snap.twoPass) {
+        notes.push(`selected ${snap.twoPass.selected} pass — its candidate table is shown below`);
+    }
     if (dec.override !== 'none') {
         notes.push(OVERRIDE_TEXT[dec.override] ?? dec.override);
     } else if (baseWin !== totalWin) {
@@ -127,6 +134,18 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     nd.className = 'decision-note';
     nd.innerHTML = notes.map(n => `<div>${n}</div>`).join('');
     host.appendChild(nd);
+}
+
+/** Offline reconciliation, kept distinct from the selected streaming pass's candidate table. */
+function twoPassSummary(trace: NonNullable<Snapshot['twoPass']>): HTMLElement {
+    const d = document.createElement('div');
+    d.className = 'decision-note';
+    const name = (p: typeof trace.forward.spelling) => label(p);
+    const wolf = (direction: 'forward' | 'backward', n: number | undefined) =>
+        n == null ? '' : ` · ${direction} wolf ${n.toFixed(2)}`;
+    d.innerHTML = `<div><b>two-pass ${trace.phase}</b> · forward ${name(trace.forward.spelling)} · backward ${name(trace.backward.spelling)}</div>`
+        + `<div>resolved ${trace.selected}${trace.agrees ? ' (agree)' : ''}${wolf('forward', trace.forwardWolf)}${wolf('backward', trace.backwardWolf)}</div>`;
+    return d;
 }
 
 function dim(text: string): HTMLElement {

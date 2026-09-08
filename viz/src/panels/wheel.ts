@@ -60,7 +60,9 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
     const W = 256, CC = W / 2;
     const lo = CENTER - DEPTH, hi = CENTER + DEPTH;                 // e.g. [−5 … +7] = D♭ … C♯ at 6/+1
-    const active = snap?.frameLofTonic ?? null;                     // signed live tonic (null in batch mode)
+    // Non-spiral two-pass frames use their canonical key spelling; it is a display position, not a
+    // continuity anchor like the streaming spiral's signed tonic.
+    const active = snap?.frameLofTonic ?? snap?.frameKeyLof ?? null;
     // The committed note's own line-of-fifths position, marked on its cell when it lands in range.
     const noteLof = snap?.committed ? fifths(snap.committed) : null;
     const collection = active != null ? new Set(range(active - 1, active + 5)) : new Set<number>();
@@ -118,7 +120,8 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
         const leg = document.createElement('div');
         leg.className = 'wheel-legend';
         if (active != null) {
-            leg.innerHTML = `live key <b>${keyName(active)} major</b> · collection ${keyName(active - 1)}…${keyName(active + 5)}`
+            const keyKind = snap.frameLofTonic != null ? 'live key' : 'frame key';
+            leg.innerHTML = `${keyKind} <b>${keyName(active)} major</b> · collection ${keyName(active - 1)}…${keyName(active + 5)}`
                 + (noteLof != null && noteLof >= lo && noteLof <= hi ? ` · <span class="note-dot-key"></span> ${label(snap.committed)}` : '');
         } else {
             leg.textContent = 'batch two-pass — whole-piece decision, no streaming frame';
