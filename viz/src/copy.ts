@@ -43,6 +43,7 @@ function header(s: AppState): string[] {
             ? '  (shipped default)'
             : `  (what-if; shipped default is ±${SPIRAL_RANGE_DEFAULT}, ${sgn(SPIRAL_CENTER_DEFAULT)})`),
     ];
+    if (s.sideOverrides.length) out.push(`side markers: ${s.sideOverrides.map(o => `onset ${o.from + 1} → ${o.comma > 0 ? 'sharp' : o.comma < 0 ? 'flat' : 'auto'}`).join(', ')}`);
     if (r) {
         const t = r.tally, pc = (x: number) => (t.total ? (100 * x / t.total).toFixed(1) : '0.0');
         out.push(`tally:   ${pc(t.correct + t.flipped)}% correct (exact: ${pc(t.correct)}%, flipped: ${pc(t.flipped)}%)`

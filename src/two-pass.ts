@@ -17,15 +17,20 @@
  * On the 65-fixture corpus this lifts diatonic anchor+LA from tonal 97.69% to ~98.3% (wrong −25%),
  * reducing flips AND genuine errors. Batch/offline only — the streaming path is unaffected.
  */
-import type { Letter, PitchClass } from './pitch.js';
+import { pitchClassValue, type Letter, type PitchClass } from './pitch.js';
 import { SpellerKernel } from './kernel.js';
 import { DiatonicBaseSubstrate, type DecisionTrace } from './base.js';
+import { LocalKeyReader, readableKeyLof, spelledKeyLof, type LocalKey } from './local-key.js';
 
 export interface TwoPassNote {
     readonly midi: number;
     readonly tOn: number;
     readonly tOff: number;
 }
+
+/** An explicit editorial enharmonic orientation from this global onset index onward.
+ * `comma` is relative: +1 favors one comma sharper, −1 flatter, 0 returns to automatic spelling. */
+export interface TwoPassSideOverride { readonly from: number; readonly comma: number; }
 
 export interface TwoPassOptions {
     /** Base streaming speller to run in both directions (default: diatonic anchor + letter look-ahead). */
@@ -48,16 +53,25 @@ export interface TwoPassOptions {
      *  kept as an opt-in that validates the theory ("dug too deep in one direction → flip the section"),
      *  not a shipped mechanism. See memory `spiral-is-central-frame-model`. */
     sectionFlip?: boolean;
+    /** Use persistent local-side evidence for section handoffs and readability-limit sections. Default true;
+     * pass `false` to reproduce the original forward/backward-only resolver. Offline only. */
+    sideMemory?: boolean;
+    /** Explicit editorial side markers. They are applied inside both directional passes, never as a
+     * post-hoc rewrite; callers may place a `comma: 0` marker to release back to automatic spelling. */
+    sideOverrides?: readonly TwoPassSideOverride[];
 }
 
 /** Read-only diagnostics for one directional streaming pass.  This is intentionally separate from
  * the public two-pass output: production callers receive only spellings from {@link spellTwoPass}. */
 export interface TwoPassPassTrace {
     spelling: PitchClass | null;
+    /** Editorial side marker active when this onset entered this directional pass. */
+    forcedSide: number;
     frame: PitchClass[] | null;
     resolvedScale: PitchClass[] | null;
     frameLofTonic: number | undefined;
     frameKeyLof: number | undefined;
+    localKey: LocalKey | null;
     decision: DecisionTrace | null;
 }
 
@@ -108,12 +122,12 @@ function dirsFor(order: { midi: number; idx: number }[], n: number): number[] {
 /** Stream the notes through a fresh base speller, reading each note's spelling at its note-OFF.
  *  `reverse` mirrors every interval about the timeline, so the speller runs back-to-front. When
  *  `captureFrame` is set, also records each note's frame LoF-tonic (spiral bases only) for section-flip. */
-type CapturedPass = { pred: (PitchClass | null)[]; ft: (number | undefined)[]; trace?: TwoPassPassTrace[] };
+type CapturedPass = { pred: (PitchClass | null)[]; ft: (number | undefined)[]; keys?: (LocalKey | null)[]; trace?: TwoPassPassTrace[] };
 type TraceKernel = { kernel: SpellerKernel; decision: () => DecisionTrace | null | undefined };
 
 function streamPass(
     notes: readonly TwoPassNote[], reverse: boolean, make: () => SpellerKernel, captureFrame = false,
-    makeTraceKernel?: () => TraceKernel,
+    makeTraceKernel?: () => TraceKernel, captureKeys = false, sideAt?: readonly number[],
 ): CapturedPass {
     const n = notes.length;
     let T = 0; for (const no of notes) if (no.tOff > T) T = no.tOff;
@@ -131,9 +145,12 @@ function streamPass(
     const pred: (PitchClass | null)[] = new Array(n).fill(null);
     const ft: (number | undefined)[] = new Array(n).fill(undefined);
     const trace = traceKernel ? new Array<TwoPassPassTrace>(n) : undefined;
+    const keys = captureKeys ? new Array<LocalKey | null>(n).fill(null) : undefined;
+    const keyReader = captureKeys ? new LocalKeyReader() : null;
     const pend = new Map<number, number[]>();
     for (const e of evs) {
         if (e.on) {
+            if (sideAt) k.setForcedSide(sideAt[e.idx] ?? 0);
             k.noteOn(e.midi, { t: e.t, resolveDir: dirs[e.idx] ?? 0 });
             if (!pend.has(e.midi)) pend.set(e.midi, []);
             pend.get(e.midi)!.push(e.idx);
@@ -143,15 +160,19 @@ function streamPass(
             if (q && q.length) {
                 const idx = q.shift()!;
                 pred[idx] = sp ? { step: sp.step, alter: sp.alter } : null;
-                const snap = (captureFrame || trace) ? k.snapshot?.() : undefined;
+                const snap = (captureFrame || trace || keyReader) ? k.snapshot?.() : undefined;
+                const localKey = keyReader?.observe(snap?.resolvedScale ?? []) ?? null;
+                if (keys) keys[idx] = localKey;
                 if (captureFrame) ft[idx] = snap?.frameLofTonic;
                 if (trace) {
                     trace[idx] = {
                         spelling: pred[idx]!,
+                        forcedSide: sideAt?.[idx] ?? 0,
                         frame: snap?.frame?.map(p => ({ ...p })) ?? null,
                         resolvedScale: snap?.resolvedScale?.map(p => ({ ...p })) ?? null,
                         frameLofTonic: snap?.frameLofTonic,
                         frameKeyLof: snap?.frameKeyLof,
+                        localKey,
                         decision: traceKernel!.decision() ?? null,
                     };
                 }
@@ -159,7 +180,7 @@ function streamPass(
             k.noteOff(e.midi);
         }
     }
-    return trace ? { pred, ft, trace } : { pred, ft };
+    return trace ? (keys ? { pred, ft, keys, trace } : { pred, ft, trace }) : (keys ? { pred, ft, keys } : { pred, ft });
 }
 
 /**
@@ -214,6 +235,99 @@ function sectionFlipPass(spellings: (PitchClass | null)[], ft: (number | undefin
     return out;
 }
 
+/**
+ * A deliberately narrow extension of the disagreement resolver for the case
+ * where both passes make the *same* over-the-limit choice.  A C♯-major region,
+ * for example, can be internally flawless in both directions even when the
+ * surrounding notation has established the D♭ side.  There is then no change
+ * point for the ordinary resolver to move.
+ *
+ * We treat only a long run whose local mean LoF is beyond the readable ±6
+ * boundary as eligible.  The alternate spelling must lower accidental load,
+ * and recent altered-note evidence must not already have established the same
+ * side.  That last condition is the memory: an honestly prepared C♯ major is
+ * retained; an isolated, expensive C♯-major spelling after neutral/flat
+ * notation may return to D♭.  This remains opt-in and intentionally does not
+ * try to infer a key from a single chromatic chord.  Within an accepted
+ * region, a pitch already carrying the target scale's spelling is retained;
+ * this lets a real C♮ survive inside D♭ major without making double
+ * accidentals globally illegal.
+ */
+function sideMemoryLimitPass(spellings: (PitchClass | null)[], localKeys: readonly (LocalKey | null)[]): (PitchClass | null)[] {
+    const n = spellings.length;
+    const out = spellings.slice();
+    const radius = 12, limit = 6, minLen = 64, memory = 192;
+    const meanLof = (i: number): number => {
+        let sum = 0, count = 0;
+        for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
+            const p = spellings[j]; if (!p) continue;
+            sum += lof(p); count++;
+        }
+        return count ? sum / count : 0;
+    };
+    const atLimit = spellings.map((_p, i) => meanLof(i));
+    const neutralKey = (i: number): boolean => {
+        const key = localKeys[i];
+        // A confidently named local key is stronger evidence than raw
+        // accidental economy.  Its absence (or a C/A-minor collection) leaves
+        // this specific "at the limit" decision open to the remembered side.
+        return !key || key.confidence === 'hold' || key.confidence === 'weak' || spelledKeyLof(key) === 0;
+    };
+    for (let i = 0; i < n;) {
+        if (Math.abs(atLimit[i]!) < limit || !neutralKey(i)) { i++; continue; }
+        let e = i + 1;
+        const sign = Math.sign(atLimit[i]!);
+        while (e < n && Math.sign(atLimit[e]!) === sign && Math.abs(atLimit[e]!) >= limit && neutralKey(e)) e++;
+        if (e - i >= minLen) {
+            // Decayed evidence from *altered* notes only. Naturals say nothing
+            // about an enharmonic side; old sharps/flats progressively forget.
+            let held = 0;
+            for (let j = Math.max(0, i - memory); j < i; j++) {
+                const p = out[j]; if (!p || p.alter === 0) continue;
+                held += Math.sign(p.alter) * (j - (i - memory) + 1) / memory;
+            }
+            const shift = sign > 0 ? -12 : 12;
+            // Infer the target scale spelling per pitch class from the
+            // prospective, shifted region.  A dominant spelling is enough:
+            // these are long coherent sections, not a single chord.  This is
+            // a scale-slot mask, not an accidental-count veto.
+            const targetVotes = new Map<number, Map<string, { pitch: PitchClass; count: number }>>();
+            for (let j = i; j < e; j++) {
+                const p = out[j]; if (!p) continue;
+                const alt = spellFromLof(lof(p) + shift);
+                const pc = pitchClassValue(alt), name = `${alt.step}/${alt.alter}`;
+                const byName = targetVotes.get(pc) ?? new Map<string, { pitch: PitchClass; count: number }>();
+                const vote = byName.get(name);
+                if (vote) vote.count++; else byName.set(name, { pitch: alt, count: 1 });
+                targetVotes.set(pc, byName);
+            }
+            const targetFor = (p: PitchClass): PitchClass | null => {
+                const votes = targetVotes.get(pitchClassValue(p));
+                if (!votes) return null;
+                let best: { pitch: PitchClass; count: number } | null = null;
+                for (const vote of votes.values()) if (!best || vote.count > best.count) best = vote;
+                return best?.pitch ?? null;
+            };
+            const alreadyTarget = (p: PitchClass) => same(p, targetFor(p));
+            let current = 0, alternate = 0;
+            for (let j = i; j < e; j++) {
+                const p = out[j]; if (!p) continue;
+                current += Math.abs(p.alter);
+                alternate += Math.abs(alreadyTarget(p) ? p.alter : spellFromLof(lof(p) + shift).alter);
+            }
+            // A positive held value means an established sharp side (and vice
+            // versa).  Do not overwrite it merely because its key is costly.
+            const alreadyHeld = Math.sign(held) === sign && Math.abs(held) >= 1;
+            if (!alreadyHeld && alternate + 1 < current)
+                for (let j = i; j < e; j++) {
+                    const p = out[j]; if (p && !alreadyTarget(p)) out[j] = spellFromLof(lof(p) + shift);
+                }
+        }
+        i = e;
+    }
+    return out;
+}
+
 function defaultBase(opts: TwoPassOptions): DiatonicBaseSubstrate {
     return new DiatonicBaseSubstrate({
         neighbourStep: true, neighbourRunGate: 2, neighbourStepWeight: 2, neighbourVerticalGate: true,
@@ -247,11 +361,25 @@ function spellTwoPassCore(notes: readonly TwoPassNote[], opts: TwoPassOptions, t
     const hw = opts.hw ?? 16;
     const rstab = opts.rstab ?? 4;
     const n = notes.length;
+    // This is now the normal offline resolver.  Retain an explicit false for
+    // regression/audit work and callers that require the historical output.
+    const sideMemory = opts.sideMemory !== false;
+    const sideAt = new Array<number>(n).fill(0);
+    // Sweep once: markers are a small sorted map, never a post-hoc respelling pass.
+    const markers = [...(opts.sideOverrides ?? [])]
+        .filter(ov => Number.isInteger(ov.from) && ov.from >= 0 && ov.from < n && Number.isFinite(ov.comma))
+        .sort((a, b) => a.from - b.from);
+    let marker = 0, forced = 0;
+    for (let i = 0; i < n; i++) {
+        while (marker < markers.length && markers[marker]!.from === i) forced = Math.trunc(markers[marker++]!.comma);
+        sideAt[i] = forced;
+    }
     if (n === 0) return { spellings: [], notes: [], firstStable: null, lastStable: null };
 
-    const fp = streamPass(notes, false, make, opts.sectionFlip, makeTraceKernel);
+    const captureKeys = traced || sideMemory;
+    const fp = streamPass(notes, false, make, opts.sectionFlip, makeTraceKernel, captureKeys, sideAt);
     const fwd = fp.pred;
-    const bp = streamPass(notes, true, make, false, makeTraceKernel);
+    const bp = streamPass(notes, true, make, false, makeTraceKernel, captureKeys, sideAt);
     const bwd = bp.pred;
 
     const agree = fwd.map((f, i) => same(f, bwd[i]!));
@@ -275,8 +403,10 @@ function spellTwoPassCore(notes: readonly TwoPassNote[], opts: TwoPassOptions, t
     };
 
     // Apply the optional section-flip post-pass (spiral base only) at whichever exit we take.
-    const finish = (result: (PitchClass | null)[]): (PitchClass | null)[] =>
-        opts.sectionFlip ? sectionFlipPass(result, fp.ft, notes, { jump: 4, minLen: 24, margin: 0 }) : result;
+    const finish = (result: (PitchClass | null)[]): (PitchClass | null)[] => {
+        const sectioned = opts.sectionFlip ? sectionFlipPass(result, fp.ft, notes, { jump: 4, minLen: 24, margin: 0 }) : result;
+        return sideMemory && fp.keys ? sideMemoryLimitPass(sectioned, fp.keys) : sectioned;
+    };
 
     const out: (PitchClass | null)[] = fwd.slice();
     // The production wrapper never creates the diagnostic arrays. Its resolver work and output remain
@@ -302,18 +432,44 @@ function spellTwoPassCore(notes: readonly TwoPassNote[], opts: TwoPassOptions, t
         if (agree[i]) { i++; continue; }
         let e = i; while (e <= lastStable && !agree[e]) e++;
         let bestK = i, bestCost = Number.POSITIVE_INFINITY;
+        const costs: number[] = [];
         for (let k = i; k <= e; k++) {
             let c = 0;
             for (let j = i; j < k; j++) c += wolf(fwd[j]!, j);
             for (let j = k; j < e; j++) c += wolf(bwd[j]!, j);
+            costs[k - i] = c;
             if (c < bestCost - 1e-9) { bestCost = c; bestK = k; }
         }
+        let chosenK = bestK;
+        // Memory is for a section-scale ambiguity, not a short chromatic
+        // excursion.  The minimum also keeps stitched-book seam blips from
+        // acquiring a retrospective side preference.
+        if (sideMemory && e - i >= 128 && fp.keys && bp.keys) {
+            // Recover the established side from the preceding reliable run. A local key's MODE may change
+            // freely inside that side (C♯m → C♯), but only an opposite readable collection can authorise
+            // a section flip. Equal wolf-cost plateaus are the only places this experiment may intervene.
+            let held = 0;
+            for (let p = i - 1; p >= 0; p--) if (agree[p] && fp.keys[p]) { held = Math.sign(readableKeyLof(fp.keys[p]!)); break; }
+            if (held !== 0) {
+                const preferred: 'forward' | 'backward' = held < 0 ? 'forward' : 'backward';
+                const candidates = (side: 'forward' | 'backward') => {
+                    const keys = side === 'forward' ? fp.keys! : bp.keys!;
+                    const out: number[] = [];
+                    for (let k = i; k < e; k++) {
+                        const key = keys[k];
+                        if (key && Math.sign(readableKeyLof(key)) === -held && costs[k - i]! <= bestCost + 1e-9) out.push(k);
+                    }
+                    return out;
+                };
+                chosenK = candidates(preferred)[0] ?? candidates(preferred === 'forward' ? 'backward' : 'forward')[0] ?? bestK;
+            }
+        }
         for (let j = i; j < e; j++) {
-            out[j] = j < bestK ? fwd[j]! : bwd[j]!;
+            out[j] = j < chosenK ? fwd[j]! : bwd[j]!;
             if (traced) {
                 forwardWolf![j] = wolf(fwd[j]!, j);
                 backwardWolf![j] = wolf(bwd[j]!, j);
-                selected![j] = j < bestK ? 'forward' : 'backward';
+                selected![j] = j < chosenK ? 'forward' : 'backward';
                 phase![j] = 'interior';
             }
         }
@@ -328,7 +484,7 @@ function tracedResult(
     agrees: boolean[], selected: ('forward' | 'backward')[], phase: TwoPassNoteTrace['phase'][],
     forwardWolf: (number | undefined)[], backwardWolf: (number | undefined)[], firstStable: number, lastStable: number,
 ): TwoPassTrace {
-    const blank = (): TwoPassPassTrace => ({ spelling: null, frame: null, resolvedScale: null, frameLofTonic: undefined, frameKeyLof: undefined, decision: null });
+    const blank = (): TwoPassPassTrace => ({ spelling: null, forcedSide: 0, frame: null, resolvedScale: null, frameLofTonic: undefined, frameKeyLof: undefined, localKey: null, decision: null });
     return {
         spellings,
         notes: spellings.map((_, i) => ({

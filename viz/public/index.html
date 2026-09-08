@@ -27,6 +27,7 @@
     <input type="range" id="scrub" min="0" max="0" value="0" />
     <button id="next" title="next onset (→)">›</button>
     <span id="pos" class="pos">0 / 0</span>
+    <span class="ctl side-ctl" title="editorial enharmonic side from the current onset; S sharp, F flat, A auto, X clear">side <button id="side-sharp" title="favor sharp side from here">♯</button><button id="side-flat" title="favor flat side from here">♭</button><button id="side-auto" title="return to auto from here">auto</button><button id="side-clear" title="clear all markers">×</button><span id="side-state" class="pos"></span></span>
     <label class="ctl" title="play audio (Web Audio EP synth)"><input type="checkbox" id="sound" checked /> 🔊</label>
     <label class="ctl" title="playback speed (logarithmic; centre = 1×)">tempo
       <input type="range" id="tempo" min="-1" max="1" step="0.01" value="0" />
@@ -52,7 +53,7 @@
   <footer>
     Streams the real shipped speller (<code>src/</code>) note by note — <b>correct</b> / <b>flipped</b>
     (right pitch, coherent enharmonic side) / <b>wrong</b>. Keys: ← → step, Home / End jump,
-    <b>⌘/Ctrl+C</b> copy this onset (settings + state + scoring) for pasting to an agent,
+    <b>S/F/A/X</b> mark sharp/flat/auto/clear in two-pass, <b>⌘/Ctrl+C</b> copy this onset (settings + state + scoring) for pasting to an agent,
     <b>⌘/Ctrl+⇧+C</b> copy the whole run.
   </footer>
 

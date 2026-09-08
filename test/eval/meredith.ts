@@ -28,6 +28,10 @@ import { scoreTiers } from './score.js';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
+// Two-pass side memory is the shipped offline default.  Keep an explicit
+// baseline switch for auditing its exact-match tradeoffs.
+const sideMemory = !process.argv.includes('--no-side-memory');
+const counts = process.argv.includes('--counts');
 
 const STEP: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 interface Note { onset: number; dur: number; step: string; alter: number; midi: number; }
@@ -75,7 +79,7 @@ type Mode = 'core' | 'rt' | 'la' | 'tp';
 
 function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     if (mode === 'tp') {
-        return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset, tOff: n.onset + n.dur }))) as (Pitch | null)[];
+        return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset, tOff: n.onset + n.dur })), { sideMemory }) as (Pitch | null)[];
     }
     const s: StreamingSpeller = mode === 'core' ? new CoreSpeller() : new Speller(mode === 'la' ? { lookAhead: true } : {});
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
@@ -133,12 +137,16 @@ for (const f of files) {
 const committedOf = (a: { correct: number; flipped: number; wrong: number }) => a.correct + a.flipped + a.wrong;
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
 const absTotal = MODES.reduce((s, { key }) => s + agg[key].unread, 0);
-console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
+console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — two-pass ${sideMemory ? 'side memory' : 'forward/backward baseline'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
 console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'tonal%'.padStart(7)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const { key, label } of MODES) {
     const a = agg[key];
     const n = committedOf(a);
     console.log(`  ${label.padEnd(12)} ${pct(a.correct, n)}% ${pct(a.correct + a.flipped, n)}% ${pct(a.flipped, n)}% ${pct(a.wrong, n)}%`);
+}
+if (counts) {
+    const a = agg.tp;
+    console.log(`  two-pass counts: exact ${a.correct}, flipped ${a.flipped}, wrong ${a.wrong}, unread ${a.unread}`);
 }
 console.log(`  exact = strict composer match (ps13 metric); tonal = exact + coherent flip.`);
 

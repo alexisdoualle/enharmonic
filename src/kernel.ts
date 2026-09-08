@@ -89,6 +89,8 @@ export interface Substrate {
     noteOff(midi: number): void;
     /** Optional instrumentation: current surface + frame internals, read-only, sampled between notes. */
     snapshot?(): SubstrateTrace;
+    /** Optional editorial enharmonic orientation hint. Zero releases the hint. */
+    setForcedSide?(comma: number): void;
 }
 
 /** Ranks a candidate spelling against the current frame. Higher wins. */
@@ -126,6 +128,11 @@ export class SpellerKernel {
 
     reset(scale: readonly PitchClass[], hard = false): void {
         this.substrate.reset(scale, hard);
+    }
+
+    /** Set an explicit editorial enharmonic-side hint when the substrate supports it. */
+    setForcedSide(comma: number): void {
+        this.substrate.setForcedSide?.(comma);
     }
 
     getSpelling(midi: number): Pitch | null {

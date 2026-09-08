@@ -32,6 +32,10 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
 #transport .ctl { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; white-space: nowrap; }
 #transport .ctl input[type=range] { width: 96px; accent-color: var(--accent); }
 #transport .ctl .pos { min-width: 34px; text-align: left; }
+#transport .side-ctl { gap: 3px; }
+#transport .side-ctl button { width: auto; min-width: 27px; padding: 0 6px; }
+#transport .side-ctl button.active { background: var(--tonic); border-color: var(--accent); }
+#transport .side-ctl #side-state { min-width: 52px; margin-left: 3px; }
 
 .strip { display: flex; gap: 2px; padding: 6px 16px 12px; overflow-x: auto; }
 .strip-cell { flex: 0 0 8px; height: 22px; border: 0; border-radius: 2px; padding: 0; cursor: pointer; opacity: .8; }

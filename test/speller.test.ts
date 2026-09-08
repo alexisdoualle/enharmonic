@@ -56,6 +56,13 @@ suite('Speller smoke', () => {
         assert(traced.notes.every(n => n.forward.frameKeyLof != null && n.backward.frameKeyLof != null), 'expected canonical keys for both passes');
     });
 
+    test('two-pass side markers apply and release identically in both directional passes', () => {
+        const notes = onNotes(loadEvents('mozart_k545')).slice(0, 12);
+        const traced = spellTwoPassTraced(notes, { sideOverrides: [{ from: 2, comma: 1 }, { from: 7, comma: 0 }] });
+        const sides = traced.notes.map(n => [n.forward.forcedSide, n.backward.forcedSide]);
+        assertEq(sides, [0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0].map(x => [x, x]));
+    });
+
     test('onset recency buffer keeps harmonic-major A♭ after C D E F G', () => {
         const s = new Speller({ clock: () => 0 });
         for (const [i, midi] of [60, 62, 64, 65, 67, 68].entries()) {

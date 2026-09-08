@@ -440,6 +440,8 @@ export class DiatonicBaseSubstrate implements Substrate {
     private frameLofAnchor: number | null = null;
     /** SPIRAL mode: still deciding the cold-start orientation (fewer than 3 distinct pcs since reset). */
     private superposed = true;
+    /** Editorial comma orientation. It shifts only the rendered spelling; collection detection stays auto. */
+    private forcedSide = 0;
 
     constructor(opts: DiatonicBaseSubstrateOptions = {}) {
         this.clock = opts.clock ?? (() => Date.now());
@@ -494,6 +496,8 @@ export class DiatonicBaseSubstrate implements Substrate {
         if (this.keepAlive && prevWindow !== null && this.baseCur !== prevWindow) this.kept.clear();
 
         // 3. Rebuild the surface = frame, (keep-alive), then sounding overlay.
+        // The frame does not erase chromatic evidence; it prevents unrelated past chromatic
+        // commitments from remaining permanent voters after the raw-PC context has moved on.
         if (frame !== null) {
             for (const [L, pc] of frame) this.resolved.set(L, { step: pc.step, alter: pc.alter });
             if (this.keepAlive) {
@@ -847,6 +851,7 @@ export class DiatonicBaseSubstrate implements Substrate {
         this.frameLofTonic = null;
         this.frameLofAnchor = null;
         this.superposed = true;
+        this.forcedSide = 0;
         this.pinReleaseCount = 0;
         this.noteHistory = [];
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
@@ -906,6 +911,9 @@ export class DiatonicBaseSubstrate implements Substrate {
             frameKeyLof: this.baseCur != null ? KEYSIG_SHARPS[this.baseCur]! : undefined,
         };
     }
+
+    /** Favor a signed enharmonic side without pinning the raw-pitch-class collection finder. */
+    setForcedSide(comma: number): void { this.forcedSide = Math.trunc(comma); }
 
     /** VIZ-ONLY: the most recent commit's {@link DecisionTrace}, or null when `trace` is off / no commit yet. */
     decision(): DecisionTrace | null { return this.lastDecision; }
@@ -972,6 +980,9 @@ export class DiatonicBaseSubstrate implements Substrate {
         // SPIRAL frame: render the chosen collection from a signed LoF tonic by continuity + writable
         // cold start (the line-of-fifths model). The finder above is untouched; only the side changes.
         if (this.spiral && (this.suppliedKey === null || this.suppliedHard)) return this.spiralScale(relMajorPc);
+        // One editorial comma is twelve fifths.  This is a relative orientation, not an absolute
+        // sharp/flat command: the automatic collection finder remains in charge.
+        if (this.forcedSide !== 0) return majorScaleForSharps(KEYSIG_SHARPS[relMajorPc]! + this.forcedSide * 12);
         return majorScaleForTonic(relMajorPc);
     }
 

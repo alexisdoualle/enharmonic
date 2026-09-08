@@ -1,8 +1,9 @@
 /** Entry point: load a fixture, drive the real shipped speller, and step through it. */
-import { buildReplay, type Mode, type RawEvent, type Expected, type Replay } from './replay.js';
+import { buildReplay, withSectionAutoResets, type Mode, type RawEvent, type Expected, type Replay } from './replay.js';
 import {
     initialState, clampStep, current, clampRange, clampCenter,
-    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, type AppState,
+    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT,
+    sideOverridesFromSearch, writeSideOverrides, stepFromSearch, type AppState,
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderStateTable } from './panels/stateTable.js';
@@ -42,10 +43,23 @@ let rawExpected: Expected[] = [];
 function recompute() {
     if (!state.fixtureId) return;
     state.replay = buildReplay(state.mode, rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter });
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter }, state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
     render();
+}
+
+/** The stitched-score viz stays one stream, but a movement boundary always releases an editorial side
+ * hint. A manual marker at that exact onset takes precedence over the automatic `auto` marker. */
+function effectiveSideOverrides() {
+    return withSectionAutoResets(rawExpected, state.sideOverrides);
+}
+
+function setSideOverride(comma: number) {
+    state.sideOverrides = state.sideOverrides.filter(o => o.from !== state.step);
+    state.sideOverrides.push({ from: state.step, comma });
+    state.sideOverrides.sort((a, b) => a.from - b.from);
+    recompute(); syncUrl();
 }
 
 /** Change the spiral what-if params (from the wheel steppers), rebuild, and persist to the URL. */
@@ -85,6 +99,17 @@ function render() {
     $('scrub').setAttribute('max', String(Math.max(0, (state.replay?.snapshots.length ?? 1) - 1)));
     ($('scrub') as HTMLInputElement).value = String(state.step);
     $('pos').textContent = `${state.step + 1} / ${state.replay?.snapshots.length ?? 0}`;
+    const active = effectiveSideOverrides().filter(o => o.from <= state.step).at(-1);
+    const manual = state.sideOverrides.filter(o => o.from <= state.step).at(-1);
+    const symbol = active?.comma === 1 ? '♯' : active?.comma === -1 ? '♭' : 'auto';
+    const stateEl = $('side-state');
+    stateEl.textContent = `@${active?.from ?? 0} ${symbol}`;
+    stateEl.title = manual
+        ? `manual marker at onset ${manual.from + 1}: ${manual.comma > 0 ? 'sharp' : manual.comma < 0 ? 'flat' : 'automatic'}`
+        : active ? `automatic release at onset ${active.from + 1} (stitched-score boundary)` : 'automatic spelling';
+    for (const [id, comma] of [['side-sharp', 1], ['side-flat', -1], ['side-auto', 0]] as const) {
+        $(id).classList.toggle('active', active?.comma === comma);
+    }
 }
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked — click to seek. */
@@ -280,16 +305,19 @@ function syncUrl() {
     const u = new URL(location.href);
     u.searchParams.set('fixture', state.fixtureId);
     u.searchParams.set('mode', state.mode);
-    u.searchParams.set('step', String(state.step));
+    u.searchParams.set('step', String(state.step + 1));
     // spiral what-if params: omit when at the shipped default so a plain view keeps a clean URL
     if (state.spiralRange !== SPIRAL_RANGE_DEFAULT) u.searchParams.set('sr', String(state.spiralRange));
     else u.searchParams.delete('sr');
     if (state.spiralCenter !== SPIRAL_CENTER_DEFAULT) u.searchParams.set('sc', String(state.spiralCenter));
     else u.searchParams.delete('sc');
+    u.searchParams.delete('so');
+    writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', u);
 }
 
-async function pickFixture(id: string, step = 0) {
+async function pickFixture(id: string, step = 0, preserveMarkers = false) {
+    if (state.fixtureId !== id && !preserveMarkers) state.sideOverrides = [];
     state.fixtureId = id;
     const f = await loadFixture(id);
     rawEvents = f.events; rawExpected = f.expected;
@@ -316,6 +344,10 @@ function wire() {
     });
     $('prev').addEventListener('click', () => seek(state.step - 1, true));
     $('next').addEventListener('click', () => seek(state.step + 1, true));
+    $('side-sharp').addEventListener('click', () => setSideOverride(1));
+    $('side-flat').addEventListener('click', () => setSideOverride(-1));
+    $('side-auto').addEventListener('click', () => setSideOverride(0));
+    $('side-clear').addEventListener('click', () => { state.sideOverrides = []; recompute(); syncUrl(); });
     $('play').addEventListener('click', () => togglePlay());
     $<HTMLInputElement>('sound').addEventListener('change', e => {
         soundOn = (e.target as HTMLInputElement).checked;
@@ -345,6 +377,10 @@ function wire() {
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
         else if (ev.key === 'End') { ev.preventDefault(); seek((state.replay?.snapshots.length ?? 1) - 1); }
+        else if (state.mode === 'tp' && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); setSideOverride(1); }
+        else if (state.mode === 'tp' && (ev.key === 'f' || ev.key === 'F')) { ev.preventDefault(); setSideOverride(-1); }
+        else if (state.mode === 'tp' && (ev.key === 'a' || ev.key === 'A')) { ev.preventDefault(); setSideOverride(0); }
+        else if (state.mode === 'tp' && (ev.key === 'x' || ev.key === 'X')) { ev.preventDefault(); state.sideOverrides = []; recompute(); syncUrl(); }
     });
 }
 
@@ -361,11 +397,12 @@ async function boot() {
     if (urlMode === 'rt' || urlMode === 'la' || urlMode === 'tp') state.mode = urlMode;
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
+    state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;
     const id = (urlFixture && ids.includes(urlFixture)) ? urlFixture : ids[0];
     if (id) {
         $<HTMLSelectElement>('fixture').value = id;
-        await pickFixture(id, urlStep && /^\d+$/.test(urlStep) ? Number(urlStep) : 0);
+        await pickFixture(id, stepFromSearch(urlStep), true);
     }
 }
 

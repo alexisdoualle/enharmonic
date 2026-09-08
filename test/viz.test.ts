@@ -17,7 +17,8 @@ import { join } from 'node:path';
 import { assertEq, suite, test } from './framework.js';
 import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
-import { buildReplay, type RawEvent } from '../viz/src/replay.js';
+import { buildReplay, withSectionAutoResets, type RawEvent } from '../viz/src/replay.js';
+import { sideOverridesFromSearch, stepFromSearch, writeSideOverrides } from '../viz/src/state.js';
 
 // The viz replays only the shipped spellers (rungs 2–4); rung 1 (`core`) has no viz path.
 const MODES: Exclude<Mode, 'core'>[] = ['rt', 'la', 'tp'];
@@ -42,4 +43,32 @@ suite('viz ↔ bench parity', () => {
             });
         }
     }
+});
+
+suite('viz side markers', () => {
+    test('a stitched score releases a marker when its measure number restarts', () => {
+        const expected = [
+            { step: 'C', alter: 0, measure: 4 }, { step: 'D', alter: 0, measure: 5 },
+            { step: 'C', alter: 0, measure: 1 }, { step: 'D', alter: 0, measure: 2 },
+        ];
+        assertEq(withSectionAutoResets(expected, [{ from: 1, comma: 1 }]), [{ from: 1, comma: 1 }, { from: 2, comma: 0 }]);
+    });
+
+    test('a manual marker at a stitched boundary takes precedence over auto release', () => {
+        const expected = [{ step: 'C', alter: 0, measure: 2 }, { step: 'C', alter: 0, measure: 1 }];
+        assertEq(withSectionAutoResets(expected, [{ from: 1, comma: -1 }]), [{ from: 1, comma: -1 }]);
+    });
+
+    test('URL markers are 1-based grouped lists', () => {
+        const p = new URLSearchParams();
+        writeSideOverrides(p, [
+            { from: 3303, comma: 1 }, { from: 13854, comma: -1 }, { from: 10, comma: 0 },
+        ]);
+        assertEq(p.toString(), 'sharp=3304&flat=13855&auto=11');
+        assertEq(sideOverridesFromSearch(p), [
+            { from: 10, comma: 0 }, { from: 3303, comma: 1 }, { from: 13854, comma: -1 },
+        ]);
+        assertEq(stepFromSearch('13855'), 13854);
+        assertEq(stepFromSearch(null), 0);
+    });
 });

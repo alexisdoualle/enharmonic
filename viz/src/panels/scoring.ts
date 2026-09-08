@@ -141,9 +141,11 @@ function twoPassSummary(trace: NonNullable<Snapshot['twoPass']>): HTMLElement {
     const d = document.createElement('div');
     d.className = 'decision-note';
     const name = (p: typeof trace.forward.spelling) => label(p);
+    const key = (k: typeof trace.forward.localKey) => !k ? '—' : `${k.step}${k.alter > 0 ? '♯'.repeat(k.alter) : k.alter < 0 ? '♭'.repeat(-k.alter) : ''}${k.minor ? 'm' : ''}`;
     const wolf = (direction: 'forward' | 'backward', n: number | undefined) =>
         n == null ? '' : ` · ${direction} wolf ${n.toFixed(2)}`;
     d.innerHTML = `<div><b>two-pass ${trace.phase}</b> · forward ${name(trace.forward.spelling)} · backward ${name(trace.backward.spelling)}</div>`
+        + `<div>local key: forward ${key(trace.forward.localKey)} · backward ${key(trace.backward.localKey)}</div>`
         + `<div>resolved ${trace.selected}${trace.agrees ? ' (agree)' : ''}${wolf('forward', trace.forwardWolf)}${wolf('backward', trace.backwardWolf)}</div>`;
     return d;
 }

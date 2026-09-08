@@ -33,6 +33,7 @@
     "bench:update": "tsx test/eval/run.ts --update",
     "meredith:fetch": "bash scripts/fetch-meredith.sh",
     "meredith": "tsx test/eval/meredith.ts",
+    "wtc1:marker": "tsx test/eval/wtc1-marker.ts",
     "viz": "node viz/serve.mjs",
     "viz:build": "node viz/build.mjs"
   },

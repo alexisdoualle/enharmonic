@@ -14,6 +14,7 @@ import { SpellerKernel } from '../../src/kernel.js';
 import { DiatonicBaseSubstrate, type DecisionTrace } from '../../src/base.js';
 import { DIATONIC_ANCHOR_OPTS, DIATONIC_ANCHOR_LA_OPTS } from '../../src/speller.js';
 import { classifyOnsets } from '../../test/eval/score.js';
+import type { TwoPassSideOverride } from '../../src/two-pass.js';
 
 export type Mode = 'rt' | 'la' | 'tp';
 export type Tier = 'correct' | 'flipped' | 'wrong' | 'unread';
@@ -77,6 +78,17 @@ export interface Replay {
  *  them). Defaults reproduce the shipped preset (range 6, centre +1). */
 export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; }
 
+/** Add `auto` releases where a stitched fixture's measure number restarts. These are a viz-session
+ * convenience, not hidden production policy: library callers supply their own releases. */
+export function withSectionAutoResets(expected: readonly Expected[], overrides: readonly TwoPassSideOverride[]): TwoPassSideOverride[] {
+    const byFrom = new Map(overrides.map(o => [o.from, o.comma]));
+    for (let i = 1; i < expected.length; i++) {
+        const prev = expected[i - 1], cur = expected[i];
+        if (typeof prev?.measure === 'number' && typeof cur?.measure === 'number' && cur.measure < prev.measure && !byFrom.has(i)) byFrom.set(i, 0);
+    }
+    return [...byFrom.entries()].sort((a, b) => a[0] - b[0]).map(([from, comma]) => ({ from, comma }));
+}
+
 const LETTER_FIFTHS: Record<string, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 const LOF_TO_LETTER = ['C', 'G', 'D', 'A', 'E', 'B', 'F'] as const;   // by ((p % 7)+7)%7
 /** Signed line-of-fifths index of a spelling (C=0, G=1, F=−1, F♯=6, C♯=7, B♭=−2 …). */
@@ -113,7 +125,7 @@ function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
 
 /** Build a replay for one fixture in the given latency mode. `spiral` overrides the streaming
  *  substrate's spiral depth/centre (rt/la); the shipped default is range 6, centre +1. */
-export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[], spiral: SpiralOpts = {}): Replay {
+export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[], spiral: SpiralOpts = {}, twoPassSideMemory = true, sideOverrides: readonly TwoPassSideOverride[] = []): Replay {
     const snapshots: Snapshot[] = [];
     const respells: RespellEvent[] = [];
     // Effective spiral params: the substrate floors range at 6, so mirror that for the wheel drawing.
@@ -134,7 +146,9 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 const q = open.get(e.midi!); if (q && q.length) notes[q.shift()!]!.tOff = e.t_ms;
             }
         }
-        tpTrace = spellTwoPassTraced(notes);
+        // Match the shipped offline resolver.  The explicit false remains useful
+        // for visual audits against the historical forward/backward baseline.
+        tpTrace = spellTwoPassTraced(notes, { sideMemory: twoPassSideMemory, sideOverrides });
         tpOut = tpTrace.spellings as (Pitch | null)[];
     }
 
