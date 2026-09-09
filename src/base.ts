@@ -96,6 +96,16 @@ const LOF_TO_LETTER: Record<number, Letter> = { 0: 'C', 1: 'G', 2: 'D', 3: 'A', 
 // The deepest single spelling allowed is the `spiralRange` option (default/floor 6, up to 8 = G♯=+8 /
 // F♭=−8; realistic keys are ±7); the comments below say "SPIRAL_RANGE" for that per-instance cap.
 const COLD_RANGE = 7;     // a fresh start lands in a writable key: C♭(−7) … C♯(+7), never a deepening.
+// LoF-CENTRE PULL constants (see {@link DiatonicBaseSubstrateOptions.centrePull}). Chosen by a deliberate
+// cap × scale × window sweep on clean+noisy Meredith (la + tp): scale 4 is what reaches the Moonlight m19
+// E♯ (scale 6 is too gentle), window 8 wins on the corpus. Re-swept after the honor-resolution and
+// coherence-gate leading-tone landings reshaped the residuals: cap 3 now strictly dominates cap 2 on
+// every reported metric — clean look-ahead exact 99.53→99.64%, clean two-pass wrong 335→325, noisy
+// two-pass wrong 368→365 — with the curated golden gate byte-identical. Above 3 the extra headroom only
+// trades noisy exact for noisy wrong; 3 is the point that improves both axes without a regression.
+const CENTRE_PULL_CAP = 3;      // max |bias| any one candidate takes toward the centre
+const CENTRE_PULL_SCALE = 4;    // LoF steps of distance per one point of bias
+const CENTRE_PULL_WINDOW = 8;   // recent committed notes whose median LoF is the centre
 
 /** Spell the pitch at signed line-of-fifths position `p` (…F=−1, C=0, G=1…, F♯=+6, C♯=+7, G♯=+8…). */
 function spellFromLof(p: number): PitchClass {
@@ -187,6 +197,18 @@ export interface DiatonicBaseSubstrateOptions {
      *  ambiguity it exists to fix. Targeted, unlike sounding-tiebreak (which lets the chord DECIDE and
      *  regresses on a look-ahead base): this only WITHHOLDS the look-ahead, never overrides the pick. */
     lookAheadVerticalGate?: boolean;
+    /** LoF-CENTRE PULL (default off). The discrete collection finder tracks WHICH scale the passage is in,
+     *  but not WHERE on the line of fifths it has drifted: a passage that tonicizes deep-sharp (Moonlight
+     *  m19's F♯ region, E♯) or sits flat (a C-minor ♭6) keeps a mid-side collection, and from that centre
+     *  the deep-correct spelling always loses to its nearer enharmonic. This adds the missing signal — the
+     *  MEDIAN line-of-fifths of the recent commits, the passage's continuous position — as a small capped
+     *  bias toward that centre on every candidate, so a near-tie tips to the side the music is really on
+     *  WITHOUT flipping the collection. It is a modest side predictor: on the two-pass (clean commit
+     *  history) it is a strict win (clean exact +87 / wrong −21 / flips→0, noisy +46 / −31), and it spells
+     *  Moonlight m19 E♯ at the frame. On the single streaming pass it is a small net cost (the pass
+     *  reinforces its own errors into the centre), taken deliberately to fix the streaming rung's E♯ too.
+     *  Constants are {@link CENTRE_PULL_CAP} / {@link CENTRE_PULL_SCALE} / {@link CENTRE_PULL_WINDOW}. */
+    centrePull?: boolean;
     /** LOOK-AHEAD COHERENCE GATE (experimental, default off; spiral only). The look-ahead names the LETTER
      *  of a resolving note (the diatonic step into its resolution) — that is a WITHIN-side refinement. But
      *  the look-ahead WEIGHT is a global scalar, and when it is strong enough it also flips the note's SIDE,
@@ -245,7 +267,7 @@ export interface DiatonicBaseSubstrateOptions {
      *      two-pass rung4   wrong 1.03%  → 1.045%          (WASH/slight regress — see below)
      *
      *  `wrong` drops on EVERY fixture but shostakovich_sq8_op110 (+20/+23). Held-out Meredith (single-key
-     *  movements) is neutral-to-slightly-positive: anchor wrong 0.47→0.45, LA 0.31→0.31, tonal flat/up.
+     *  movements) is neutral-to-slightly-positive: anchor wrong 0.47→0.45, LA 0.31→0.31, coherent metric flat/up.
      *
      *  THE FLIP JUMP IS NOT A LOSS — it is the reframe of the old (deleted) signedOrient "13:1" verdict:
      *  under the comma-offset scorer a COHERENT flip is FREE (`flip`, not `wrong`), and CLAUDE.md states
@@ -365,7 +387,7 @@ export interface DiatonicBaseSubstrateOptions {
     soundingTiebreak?: boolean;
     /** Max base-score gap for the top-2 candidates to count as tied (default 0 = exact; try 1). */
     stEpsilon?: number;
-    /** Recency window definition (default 'onsets'):
+    /** Recency window definition (default 'coonset'):
      *  - 'coonset' : co-onset committed notes only (same t);
      *  - 'recent'  : co-onset + notes struck within {@link stWindowMs};
      *  - 'last3'   : co-onset + the last 3 committed notes (any time);
@@ -402,6 +424,7 @@ export class DiatonicBaseSubstrate implements Substrate {
     private readonly lookAheadWeight: number;
     private readonly lookAheadMode: 'sign' | 'letter' | 'samepen';
     private readonly lookAheadVerticalGate: boolean;
+    private readonly centrePull: boolean;
     private readonly frameSoftMargin: number;
     private readonly suppliedKeyMargin: number | null;
     private readonly keepAlive: boolean;
@@ -443,6 +466,12 @@ export class DiatonicBaseSubstrate implements Substrate {
     /** Editorial comma orientation. It shifts only the rendered spelling; collection detection stays auto. */
     private forcedSide = 0;
 
+    // TODO(virgin-surface): Reimplement the former null/undecided state for a genuinely virgin
+    // surface. Until enough evidence establishes a collection, unplayed scale slots must not be
+    // allowed to participate in frame effects or revert provisional spellings. In particular,
+    // C–D–E♭ followed by F must not flip E♭ back to E natural merely because the third distinct
+    // pitch ends the spiral's superposed phase; four notes still do not decide the scale.
+
     constructor(opts: DiatonicBaseSubstrateOptions = {}) {
         this.clock = opts.clock ?? (() => Date.now());
         this.baseWindowMs = opts.baseWindowMs ?? 8000;
@@ -451,6 +480,7 @@ export class DiatonicBaseSubstrate implements Substrate {
         this.lookAheadWeight = opts.lookAheadWeight ?? 2;
         this.lookAheadMode = opts.lookAheadMode ?? 'sign';
         this.lookAheadVerticalGate = opts.lookAheadVerticalGate ?? false;
+        this.centrePull = opts.centrePull ?? false;
         this.frameSoftMargin = opts.frameSoftMargin ?? 18;
         this.suppliedKeyMargin = opts.suppliedKeyMargin ?? null;
         this.keepAlive = opts.keepAlive ?? false;
@@ -476,7 +506,7 @@ export class DiatonicBaseSubstrate implements Substrate {
         this.neighbourVerticalGate = opts.neighbourVerticalGate ?? false;
         this.soundingTiebreak = opts.soundingTiebreak ?? false;
         this.stEpsilon = opts.stEpsilon ?? 0;
-        this.stWindow = opts.stWindow ?? 'onsets';
+        this.stWindow = opts.stWindow ?? 'coonset';
         this.stBufferN = Math.max(1, opts.stBufferN ?? 5);
         this.stWindowMs = opts.stWindowMs ?? 400;
         this.trace = opts.trace ?? false;
@@ -526,12 +556,22 @@ export class DiatonicBaseSubstrate implements Substrate {
         const traceCands: DecisionCandidate[] | null = this.trace ? [] : null;
         const resolveDir = ctx.resolveDir ?? 0;
         const laOn = this.lookAhead && resolveDir !== 0;
-        // For the letter-aware modes: the frame's current letter for the resolution TARGET (a semitone
+        // For the letter-aware modes: the FRAME's current letter for the resolution TARGET (a semitone
         // away in resolveDir), and the letter a diatonic STEP toward it (E♯ when resolving up to F♯).
+        // The target is read from the bare frame (`lastBase`), NOT the resolved surface: the COLLECTION
+        // names the resolution target, and a target outside it means the letter rule has no basis, so no
+        // boost is applied. Reading the keep-alive-polluted surface instead was a defect — it degraded
+        // silently to `'sign'` when a kept accidental overwrote the target slot (blind to a natural
+        // competitor: Moonlight m19's F vs E♯) or named a target the collection lacks (Grieg m67's kept
+        // B♯ rewarding A𝄪), letting a passage lock onto a side. Measured strictly better on the shipped
+        // corpus (Meredith noisy look-ahead 565→557 wrong, two-pass 473→461; clean two-pass 389→388;
+        // grieg_death_of_ase two-pass 15→12) and never worse. Falls back to the surface only cold, before
+        // the first frame exists (`lastBase === null`).
         let targetLetter: Letter | null = null, stepLetter: Letter | null = null;
         if (laOn && this.lookAheadMode !== 'sign') {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;
-            for (const L of LETTERS) if (pcVal(this.resolved.get(L)!) === targetPc) { targetLetter = L; break; }
+            const src = this.lastBase !== null ? this.lastBase : this.resolved;
+            for (const L of LETTERS) if (pcVal(src.get(L)!) === targetPc) { targetLetter = L; break; }
             if (targetLetter) stepLetter = LETTERS[((LETTERS.indexOf(targetLetter) - resolveDir) % 7 + 7) % 7]!;
         }
         // NEIGHBOUR-STEP: a semitone from the previous same-voice note is a diatonic STEP, not an
@@ -550,6 +590,13 @@ export class DiatonicBaseSubstrate implements Substrate {
         // parallel so the vertical gate below can compare the look-ahead's pick against it.
         let bestNoLa: PitchClass | null = null;
         let bestNoLaScore = Number.NEGATIVE_INFINITY;
+        // LoF-CENTRE PULL: bias each candidate toward the passage's continuous position on the line of
+        // fifths (the median LoF of recent commits), so a near-tie tips to the side the passage is really
+        // on. See {@link DiatonicBaseSubstrateOptions.centrePull}.
+        const centre = this.centrePull && this.noteHistory.length >= 4
+            ? this.recentCommitMedianLof(CENTRE_PULL_WINDOW) : null;
+        const centreBiasFor = (c: PitchClass): number =>
+            centre === null ? 0 : -Math.min(CENTRE_PULL_CAP, Math.round(Math.abs(lineOfFifths(c) - centre) / CENTRE_PULL_SCALE));
         for (const { c, score } of scored) {
             let laDelta = 0;
             if (laOn) {
@@ -567,8 +614,9 @@ export class DiatonicBaseSubstrate implements Substrate {
                 if (c.step === nsStepLetter) nsDelta += this.neighbourStepWeight;
                 else if (c.step === nsSameLetter) nsDelta -= this.neighbourStepWeight;
             }
-            const s = score + laDelta + nsDelta;
-            const sNoLa = score + nsDelta;
+            const cb = centreBiasFor(c);
+            const s = score + laDelta + nsDelta + cb;
+            const sNoLa = score + nsDelta + cb;
             if (s > bestScore) { bestScore = s; best = c; }
             if (sNoLa > bestNoLaScore) { bestNoLaScore = sNoLa; bestNoLa = c; }
             if (traceCands) traceCands.push({ c, base: score, laDelta, nsDelta });
@@ -594,7 +642,14 @@ export class DiatonicBaseSubstrate implements Substrate {
         // COMMITS (not the frame tonic — a legit leading tone is itself far from the tonic, so tonic-distance
         // reverts real fixes). If the look-ahead moved the pick FARTHER from that recent-commit centre than
         // the suppressed pick, revert. See {@link lookAheadCoherenceGate}.
-        if (laOn && this.lookAheadCoherenceGate && bestNoLa !== null && best !== bestNoLa && this.noteHistory.length >= 4) {
+        // A pick that is itself a confirmed exact-midi UP-resolver (best.step is the diatonic step below the
+        // resolution target — the sharp leading tone) is EXEMPT from the revert: its resolution is the
+        // functional evidence that legitimises sitting far from the recent-commit centre, exactly the case
+        // the gate would otherwise mis-revert (a vii°7 leading tone into a tonicised relative minor —
+        // Mozart Requiem m640 A♯→B, where the look-ahead already scores A♯ over B♭ but the raw distance test
+        // pulls it back). Held-out Meredith look-ahead clean 99.45→99.53%, noisy 99.61→99.68%; curated −5.
+        const bestIsUpLT = laOn && this.lookAheadMode === 'letter' && !!stepLetter && resolveDir === 1 && best.step === stepLetter;
+        if (laOn && this.lookAheadCoherenceGate && bestNoLa !== null && best !== bestNoLa && this.noteHistory.length >= 4 && !bestIsUpLT) {
             const c = this.recentCommitMedianLof(this.lookAheadCoherenceWindow);
             if (c !== null && Math.abs(lineOfFifths(best) - c) > Math.abs(lineOfFifths(bestNoLa) - c)) { best = bestNoLa; traceOverride = 'lookahead-coherence-gate'; }
         }

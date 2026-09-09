@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
@@ -17,6 +17,12 @@ const drive = (s: Speller, events: ReturnType<typeof loadEvents>): string[] =>
     driveSpellings(s, events).map(tok);
 
 suite('Speller smoke', () => {
+    test('resolveStep exposes octave-agnostic look-ahead direction', () => {
+        assertEq(resolveStep(65, 30), 1);     // E♯4 → F♯1
+        assertEq(resolveStep(30, 65), -1);    // F♯1 → E♯4
+        assertEq(resolveStep(60, 62), 0);
+    });
+
     test('C major triad spells C E G', () => {
         const s = new Speller();
         s.noteOn(60, { t: 0 });
@@ -63,13 +69,13 @@ suite('Speller smoke', () => {
         assertEq(sides, [0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0].map(x => [x, x]));
     });
 
-    test('onset recency buffer keeps harmonic-major A♭ after C D E F G', () => {
+    test('co-onset tiebreak keeps G♯ after C D E F G', () => {
         const s = new Speller({ clock: () => 0 });
         for (const [i, midi] of [60, 62, 64, 65, 67, 68].entries()) {
             s.noteOn(midi, { t: i * 1000 });
             if (midi !== 68) s.noteOff(midi);
         }
-        assertEq(tok(s.getSpelling(68)), 'Ab');
+        assertEq(tok(s.getSpelling(68)), 'G#');
     });
 });
 

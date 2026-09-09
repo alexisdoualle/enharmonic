@@ -43,8 +43,9 @@ function scoreFor(quality: number, number: number): number {
 }
 
 /**
- * Total interval score for a candidate against the resolved scale, skipping
- * the candidate's own letter slot (which it would replace if chosen).
+ * Total interval score against the other scale letters. The candidate replaces
+ * its own slot, so scoring that relationship would add a self-loyalty term,
+ * not evidence from the surrounding sonority.
  * Higher = better fit.
  */
 export function intervalScore(

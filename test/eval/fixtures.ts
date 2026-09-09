@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
 import { Speller, spellTwoPass } from '../../src/index.js';
-import type { NoteContext } from '../../src/kernel.js';
+import { resolveStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
 /** The streaming surface `drive` needs — satisfied by both the shipped `Speller` and the
@@ -55,8 +55,9 @@ export function loadExpected(id: string): Expected[] {
 /**
  * Drive a streaming Speller over an event list, returning one spelling per `on`
  * event in onset order. Read-back happens at `noteOff` (a note's final committed
- * spelling). For look-ahead mode, `resolveDir` is derived from the next ±1-semitone
- * onset within `horizon` upcoming onsets — the small forward buffer a real caller feeds.
+ * spelling). For look-ahead mode, `resolveDir` is derived from the next onset a
+ * semitone away in ANY octave within `horizon` upcoming onsets — the small forward
+ * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored.
  */
 export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
     const out: (Pitch | null)[] = [];
@@ -70,8 +71,8 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
                     const fwd = events[j]!;
                     if (fwd.type !== 'on') continue;
                     seen++;
-                    if (fwd.midi === e.midi + 1) { dir = 1; break; }
-                    if (fwd.midi === e.midi - 1) { dir = -1; break; }
+                    dir = resolveStep(e.midi, fwd.midi);
+                    if (dir !== 0) break;
                 }
             }
             s.noteOn(e.midi, { t: e.t, resolveDir: dir });

@@ -14,7 +14,7 @@
  *     wolf-cost counts |ΔLoF| ≥ 7 intervals (dim4/aug2 — a misspelling tell) against the reliable
  *     bracketing agreement notes (±hw, 1/distance weighted).
  *
- * On the 65-fixture corpus this lifts diatonic anchor+LA from tonal 97.69% to ~98.3% (wrong −25%),
+ * On the 65-fixture corpus this lifts diatonic anchor+LA from 97.69% coherent to ~98.3% (wrong −25%),
  * reducing flips AND genuine errors. Batch/offline only — the streaming path is unaffected.
  */
 import { pitchClassValue, type Letter, type PitchClass } from './pitch.js';
@@ -35,6 +35,12 @@ export interface TwoPassSideOverride { readonly from: number; readonly comma: nu
 export interface TwoPassOptions {
     /** Base streaming speller to run in both directions (default: diatonic anchor + letter look-ahead). */
     make?: () => SpellerKernel;
+    /** Offline collection-finder context window, in ms of playing time (default 16000). Bounded so the base
+     * tracks LOCAL key regions — the safe default for modulating music. Pass `Infinity` for whole-piece
+     * context (tempo-invariant, best on single-region material like the Meredith movements; unsafe on a piece
+     * that modulates across an enharmonic boundary — it flips the whole piece to one side). Ignored if `make`
+     * supplies the base directly. */
+    baseWindowMs?: number;
     /** Coherence-window radius (onsets) for the wolf-cost. Default 16. */
     hw?: number;
     /** Min agreement-run length that counts as "stable" (bounds each pass's cold region). Default 4. */
@@ -56,6 +62,36 @@ export interface TwoPassOptions {
     /** Use persistent local-side evidence for section handoffs and readability-limit sections. Default true;
      * pass `false` to reproduce the original forward/backward-only resolver. Offline only. */
     sideMemory?: boolean;
+    /** HONOR-RESOLUTION (default true): after the forward/backward merge, keep a note's forward-pass spelling
+     * where the forward pass found a real resolution (a confirmed exact-midi UP-resolver — a sharp leading
+     * tone) that the wolf-cost merge flattened, GUARDED by the sounding chord so the sharpening stays
+     * coherent. Held-out Meredith clean wrong 367→335 (exact 99.81→99.83%), noisy 99.70→99.73%, flips flat;
+     * curated −2. Pass `false` to reproduce the plain merge. Offline only. */
+    honorResolution?: boolean;
+    /** FUNCTIONAL-DIM7 (default true): extend {@link honorResolution} to the one vertical case its wolf-count
+     * guard wrongly blocks — a leading tone that up-resolves inside a FULL sounding diminished-seventh but forms
+     * wolves because the merge spelled the rest of the stack flat. When all four notes of the fully-diminished
+     * seventh containing the note are struck at its onset, the sonority is unambiguously a vii°7 and the
+     * up-resolving member is its leading tone, so the sharper forward spelling is honoured even though the flat
+     * stack-mates make it look wolfish. Requires the FULL four-note stack (a 3-note subset is enharmonically
+     * ambiguous — E–G–B♭ can root on E, so B♭ not A♯), which is what keeps this at 0 breaks. Offline only. */
+    functionalDim7Resolution?: boolean;
+    /** OCTAVE-DOUBLE RESOLVE (default true): in {@link honorResolution}'s vertical-wolf guard, exempt a co-onset
+     * note of the SAME pitch class (an octave doubling). A doubled up-resolving leading tone (G♯4+G♯5) otherwise
+     * self-blocks: each octave still reads the other as flat, so |ΔLoF|=12 counts as a wolf and neither can flip.
+     * Same-pc partners are the same sounding pitch, not a vertical clash. Meredith clean wrong 318→301 (exact
+     * 99.838→99.846%), noisy 306→298; curated bench unchanged. Pass `false` to reproduce the self-blocking guard.
+     * Offline only. */
+    octaveDoubleResolve?: boolean;
+    /** DIM7 BACKWARD RESOLVE (default true): inside a FULL sounding dim7, honor the sharper of the forward AND
+     * backward directional picks for an up-resolving note — BUT only when the note is NOT a passing tone in a
+     * monotonic chromatic run (detected by legato release→onset handoff: a semitone-below note leads in, a
+     * semitone-above note leads out). A vii°7 leading tone the backward pass spelled sharp but the merge flattened
+     * is recovered (Beethoven Sym1/ii i1840 A♭→G♯); a dim7 note that is a run passing tone (Haydn Sym102/ii
+     * D–E♭–E–F) is left flat. Meredith clean wrong 301→300, noisy unchanged; curated bench unchanged. The
+     * run-exclusion is deliberately NARROW — it does NOT generalise (composers DO sharpen rising chromatic runs, so
+     * gating the main forward honorResolution the same way costs +37). Pass `false` to disable. Offline only. */
+    dim7BackwardResolve?: boolean;
     /** Explicit editorial side markers. They are applied inside both directional passes, never as a
      * post-hoc rewrite; callers may place a `comma: 0` marker to release back to automatic spelling. */
     sideOverrides?: readonly TwoPassSideOverride[];
@@ -105,7 +141,10 @@ const spellFromLof = (p: number): PitchClass => {
 const same = (a: PitchClass | null, b: PitchClass | null): boolean =>
     a !== null && b !== null && a.step === b.step && a.alter === b.alter;
 
-/** Look-ahead resolveDir (±1 semitone within horizon 16) over a playing-order midi sequence. */
+/** Look-ahead resolveDir (±1 semitone within horizon 16) over a playing-order midi sequence.
+ *  Deliberately EXACT-midi, unlike the streaming drivers' octave-agnostic `resolveStep` scan: the
+ *  backward pass already reaches an octave-displaced resolution, and the pitch-class scan measured a
+ *  net loss here on the clean Meredith corpus (exact 99.75% → 99.73%). */
 function dirsFor(order: { midi: number; idx: number }[], n: number): number[] {
     const out = new Array<number>(n).fill(0);
     for (let a = 0; a < order.length; a++) {
@@ -122,7 +161,7 @@ function dirsFor(order: { midi: number; idx: number }[], n: number): number[] {
 /** Stream the notes through a fresh base speller, reading each note's spelling at its note-OFF.
  *  `reverse` mirrors every interval about the timeline, so the speller runs back-to-front. When
  *  `captureFrame` is set, also records each note's frame LoF-tonic (spiral bases only) for section-flip. */
-type CapturedPass = { pred: (PitchClass | null)[]; ft: (number | undefined)[]; keys?: (LocalKey | null)[]; trace?: TwoPassPassTrace[] };
+type CapturedPass = { pred: (PitchClass | null)[]; ft: (number | undefined)[]; keys?: (LocalKey | null)[]; trace?: TwoPassPassTrace[]; dirs: number[] };
 type TraceKernel = { kernel: SpellerKernel; decision: () => DecisionTrace | null | undefined };
 
 function streamPass(
@@ -180,7 +219,7 @@ function streamPass(
             k.noteOff(e.midi);
         }
     }
-    return trace ? (keys ? { pred, ft, keys, trace } : { pred, ft, trace }) : (keys ? { pred, ft, keys } : { pred, ft });
+    return trace ? (keys ? { pred, ft, keys, trace, dirs } : { pred, ft, trace, dirs }) : (keys ? { pred, ft, keys, dirs } : { pred, ft, dirs });
 }
 
 /**
@@ -331,7 +370,14 @@ function sideMemoryLimitPass(spellings: (PitchClass | null)[], localKeys: readon
 function defaultBase(opts: TwoPassOptions): DiatonicBaseSubstrate {
     return new DiatonicBaseSubstrate({
         neighbourStep: true, neighbourRunGate: 2, neighbourStepWeight: 2, neighbourVerticalGate: true,
-        lookAheadVerticalGate: true, parallelThirdGate: true, baseWindowMs: 16000,
+        // OFFLINE CONTEXT WINDOW ({@link TwoPassOptions.baseWindowMs}). How much of the piece the collection-
+        // finder sees at once. The DEFAULT (16 s) is bounded so it tracks LOCAL key regions — a modulating
+        // piece (Chopin's Raindrop: D♭ major → C♯ minor → D♭ major) is spelled region-by-region, 0 flips.
+        // A caller with genuinely single-region material (e.g. the Meredith benchmark movements) can pass
+        // `Infinity` for whole-piece context, which never evicts a frame pitch-class and is tempo-invariant.
+        // Whole-piece is NOT a safe default: it merges a modulating piece's regions into one collection, which
+        // cannot spell both a flat-major and a sharp-minor section (it flips the whole piece to one side).
+        lookAheadVerticalGate: true, parallelThirdGate: true, baseWindowMs: opts.baseWindowMs ?? 16000, centrePull: true,
         spiral: opts.sectionFlip ?? false, preferRelMinorLT: false, lookAheadCoherenceGate: false,
         keepAlive: true, lookAhead: true, lookAheadMode: 'letter', keepAliveEvict: 'oldest',
     });
@@ -402,8 +448,72 @@ function spellTwoPassCore(notes: readonly TwoPassNote[], opts: TwoPassOptions, t
         return w;
     };
 
+    // HONOR-RESOLUTION: the forward/backward merge reconciles the SIDE by wolf-cost, which can discard a note
+    // the forward pass spelled from a real resolution (Requiem 14619: forward found A♯, the merge flattened it
+    // to B♭). A confirmed exact-midi up-resolver (fp.dirs === 1 → a sharp leading tone) is dispositive: keep
+    // the forward pick where it is sharper — GUARDED by the sounding chord so we only sharpen coherently.
+    const resolveHonor = opts.honorResolution ?? true;
+    const funcDim7 = opts.functionalDim7Resolution ?? true;
+    // Co-onset index: notes struck at the same time (the sounding chord) for the vertical guard.
+    const sameOnset = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) { const k = notes[i]!.tOn; (sameOnset.get(k) ?? sameOnset.set(k, []).get(k)!).push(i); }
+    // Pitch-class set struck at each onset (the sounding sonority), for the functional-chord guard.
+    const onsetPcs = new Map<number, Set<number>>();
+    for (const [t, idxs] of sameOnset) onsetPcs.set(t, new Set(idxs.map(j => ((notes[j]!.midi % 12) + 12) % 12)));
+    // A full fully-diminished seventh (all four minor-third-stacked pcs) sounds at note i's onset AND includes it.
+    const inFullDim7 = (i: number): boolean => {
+        const pcs = onsetPcs.get(notes[i]!.tOn)!; const L = ((notes[i]!.midi % 12) + 12) % 12;
+        return pcs.has(L) && pcs.has((L + 3) % 12) && pcs.has((L + 6) % 12) && pcs.has((L + 9) % 12);
+    };
+    const honorResolution = (result: (PitchClass | null)[]): (PitchClass | null)[] => {
+        if (!resolveHonor) return result;
+        const o = result.slice();
+        // vertical wolves a candidate forms with the OTHER notes struck at this onset (|ΔLoF| ≥ 7), measured
+        // against the CURRENT merged chord (coherence-safe reference — the merged output, not the raw pass).
+        const octDbl = opts.octaveDoubleResolve ?? true;
+        const vWolf = (cand: PitchClass, i: number): number => {
+            let w = 0; for (const j of sameOnset.get(notes[i]!.tOn)!) { const p = o[j]; if (j === i || !p) continue;
+                // An octave doubling of the same pitch class is not a vertical clash with itself: two spellings
+                // of one sounding pc (G♯4 + G♯5/A♭5) read as |ΔLoF|=12 and would self-block a doubled leading
+                // tone (neither octave can flip first). Skip same-pc co-onset partners so the doubling resolves.
+                if (octDbl && (((notes[j]!.midi % 12) + 12) % 12) === (((notes[i]!.midi % 12) + 12) % 12)) continue;
+                if (Math.abs(lof(cand) - lof(p)) >= 7) w++; }
+            return w;
+        };
+        const dim7Bwd = opts.dim7BackwardResolve ?? true;
+        // A note is a passing tone (not a leading tone) if it sits mid-way in a monotonic chromatic run: a note
+        // a semitone BELOW it sounds shortly before AND a note a semitone ABOVE it shortly after (register-exact,
+        // crossing voices — the run the ear hears, not the voice label). ~2s window at the bench clock.
+        const inChromaticRun = (i: number): boolean => {
+            const m = notes[i]!.midi, on = notes[i]!.tOn, off = notes[i]!.tOff, GAP = 1500;
+            let below = false, above = false;   // a legato chromatic run hands off release→onset (may overlap)
+            for (let j = 0; j < n; j++) {
+                if (j === i) continue;
+                // a note a semitone below that leads INTO this note (starts earlier, ends around this onset)
+                if (notes[j]!.midi === m - 1 && notes[j]!.tOn < on && notes[j]!.tOff >= on - GAP) below = true;
+                // a note a semitone above that this note leads INTO (starts after, around this release)
+                if (notes[j]!.midi === m + 1 && notes[j]!.tOn > on && notes[j]!.tOn <= off + GAP) above = true;
+            }
+            return below && above;
+        };
+        for (let i = 0; i < n; i++) {
+            const cur = o[i];
+            // Inside a full dim7, the resolving spelling can be in either pass; but a chromatic-run passing tone is
+            // NOT a leading tone (Haydn Eb in D-Eb-E-F), so exclude it from the backward reach.
+            const f = (dim7Bwd && inFullDim7(i) && !inChromaticRun(i) && bwd[i] && (!fwd[i] || lof(bwd[i]!) > lof(fwd[i]!))) ? bwd[i] : fwd[i];
+            // Resolution DECIDES, the SOUNDING CHORD GUARDS: honor the sharper resolving spelling only if it
+            // forms no more vertical wolves with its co-onset notes than the merged pick, so a dim7 leading
+            // tone whose stack-mates are already sharp stands (A♯–C♯–E–G) while a forced sharp that would
+            // break a coherent flat chord (Raindrop D♭ major) is rejected. A full sounding dim7 (funcDim7)
+            // OVERRIDES the wolf guard: the sonority is functionally a vii°7 and the up-resolver is its leading
+            // tone, so the wolves are the merge's flat stack-spelling, not evidence against the sharpening.
+            if (fp.dirs[i] === 1 && cur && f && lof(f) > lof(cur) && (vWolf(f, i) <= vWolf(cur, i) || (funcDim7 && inFullDim7(i)))) o[i] = f;
+        }
+        return o;
+    };
     // Apply the optional section-flip post-pass (spiral base only) at whichever exit we take.
-    const finish = (result: (PitchClass | null)[]): (PitchClass | null)[] => {
+    const finish = (resultIn: (PitchClass | null)[]): (PitchClass | null)[] => {
+        const result = honorResolution(resultIn);
         const sectioned = opts.sectionFlip ? sectionFlipPass(result, fp.ft, notes, { jump: 4, minLen: 24, margin: 0 }) : result;
         return sideMemory && fp.keys ? sideMemoryLimitPass(sectioned, fp.keys) : sectioned;
     };

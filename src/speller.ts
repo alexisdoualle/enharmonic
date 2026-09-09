@@ -22,6 +22,12 @@ export interface SpellerOptions {
      * what comes next instead of committing blind. Default `false` (pure real-time).
      */
     lookAhead?: boolean;
+    /** Frame memory window, in ms of playing time (default 16000). How much PAST the causal collection-finder
+     * remembers. Bounded is the live-safe default — a continuous real-time stream has no clean piece breaks, and
+     * a modulating piece needs local tracking. A single-piece batch caller (e.g. a benchmark of one-key-per-piece
+     * scores) may pass a large value or `Infinity` for whole-piece past context; it stays fully causal (no
+     * future peek — that is the look-ahead's job), just with unbounded memory. */
+    baseWindowMs?: number;
 }
 
 const NEIGHBOUR_STEP: DiatonicBaseSubstrateOptions = {
@@ -32,11 +38,9 @@ const NEIGHBOUR_STEP: DiatonicBaseSubstrateOptions = {
 };
 const SOUNDING_TIEBREAK: DiatonicBaseSubstrateOptions = {
     soundingTiebreak: true,
-    // TODO: Re-run the full corpus scoring before finalizing this as the permanent default. The previous
-    // time-window experiment (400 ms) drifted chopin_prelude_op28_no15/rt by 2 wrong → flipped and
-    // bach_jesu_meine_freude/rt by 7 correct → wrong; this restores the original onset-count mechanism.
-    stWindow: 'onsets',
-    stBufferN: 5,
+    // Meredith 8x25000 favors the same-onset window: exact 99.43% clean / 99.33% noisy, versus
+    // 99.36% / 99.22% for the five-distinct-onset history. It also avoids the curated Bach regression.
+    stWindow: 'coonset',
     stEpsilon: 0,
 };
 const ANCHOR_DEFAULTS: DiatonicBaseSubstrateOptions = {
@@ -58,7 +62,7 @@ export const DIATONIC_ANCHOR_OPTS: DiatonicBaseSubstrateOptions = {
 };
 export const DIATONIC_ANCHOR_LA_OPTS: DiatonicBaseSubstrateOptions = {
     ...NEIGHBOUR_STEP, lookAheadVerticalGate: true, lookAheadCoherenceGate: true,
-    spiral: true, parallelThirdGate: true, ...ANCHOR_DEFAULTS,
+    spiral: true, parallelThirdGate: true, centrePull: true, ...ANCHOR_DEFAULTS,
     keepAlive: true, lookAhead: true, lookAheadMode: 'letter', keepAliveEvict: 'oldest',
 };
 
@@ -108,7 +112,9 @@ export class Speller {
 
     constructor(opts: SpellerOptions = {}) {
         this.lookAhead = opts.lookAhead ?? false;
-        const base = opts.clock !== undefined ? { clock: opts.clock } : {};
+        const base: DiatonicBaseSubstrateOptions = {};
+        if (opts.clock !== undefined) base.clock = opts.clock;
+        if (opts.baseWindowMs !== undefined) base.baseWindowMs = opts.baseWindowMs;
         this.kernel = this.lookAhead
             ? createDiatonicAnchorLA(base)
             : createDiatonicAnchor(base);

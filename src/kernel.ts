@@ -39,6 +39,21 @@ export interface NoteContext {
     readonly flipSide?: number;
 }
 
+/**
+ * Semitone step from `from` to `to` IGNORING the octave: +1 up, −1 down, 0 otherwise — the test a
+ * look-ahead driver applies over its forward buffer to fill {@link NoteContext.resolveDir}.
+ *
+ * A resolution is a semitone on the LINE, and the voice that answers it need not be in the same
+ * octave: Moonlight m19's E♯4 resolves to an F♯ two octaves down in the bass, and an exact-midi
+ * scan sees nothing there. Ignoring the octave costs nothing measurable in false positives — on the
+ * clean Meredith corpus the look-ahead rung gains 15 exact notes (wrong 657 → 642), and on the
+ * curated `chopin_prelude_op28_no15` two `wrong` notes become coherent flips.
+ */
+export function resolveStep(from: number, to: number): number {
+    const iv = (((to - from) % 12) + 12) % 12;
+    return iv === 1 ? 1 : iv === 11 ? -1 : 0;
+}
+
 /** A candidate spelling paired with its frame score, in `enharmonicCandidatesFor` order. */
 export interface ScoredCandidate {
     readonly c: PitchClass;

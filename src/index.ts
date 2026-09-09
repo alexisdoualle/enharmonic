@@ -9,6 +9,7 @@
 
 export { Speller } from './speller.js';
 export type { SpellerOptions } from './speller.js';
+export { resolveStep } from './kernel.js';
 export type { NoteContext } from './kernel.js';
 
 export { spellTwoPass } from './two-pass.js';
