@@ -71,3 +71,10 @@ export function writeSideOverrides(p: URLSearchParams, markers: readonly SideOve
         else p.delete(key);
     }
 }
+
+/** `URLSearchParams` form-encodes commas to `%2C`, which makes the onset lists unreadable. A comma is
+ *  a legal query character, so restore it — the parser decodes both spellings identically. */
+export function readableSearch(p: URLSearchParams): string {
+    const q = p.toString().replace(/%2C/g, ',');
+    return q ? `?${q}` : '';
+}

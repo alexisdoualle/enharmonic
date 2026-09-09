@@ -47,7 +47,10 @@
   "author": "Alexis Doualle",
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "@types/three": "^0.170.0",
     "esbuild": "^0.25.12",
+    "meantonal": "^0.11.0",
+    "three": "^0.170.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vexflow": "^4.2.5"

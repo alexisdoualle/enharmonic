@@ -5,8 +5,8 @@
  * distinction the spiral frame reasons about — C♯(+7) and D♭(−5) are DIFFERENT positions, not one
  * wheel node. The live key (the kernel's signed line-of-fifths tonic) lights up; its collection is the
  * 7-fifth run around it. The band spans the shipped speller's reachable range [center−depth …
- * center+depth] = [−5 … +7], so the active turn is always on-screen. The two END cells are dashed —
- * the fold-back cap past which continuity would respell rather than dig deeper.
+ * center+depth] = [−5 … +7], so the active turn is always on-screen. One dashed red cell immediately
+ * beyond each end shows the fold-back limit, past which continuity would respell rather than dig deeper.
  *
  * Ported from the lab viz (`music/wheel.ts` renderSpiral), stripped of the research local-key overlay.
  * depth/center are pinned to the shipped DiatonicBaseSubstrate defaults (spiralRange 6, spiralCenter +1).
@@ -60,6 +60,8 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
     const W = 256, CC = W / 2;
     const lo = CENTER - DEPTH, hi = CENTER + DEPTH;                 // e.g. [−5 … +7] = D♭ … C♯ at 6/+1
+    const limitSlots = 1;
+    const drawLo = lo - limitSlots, drawHi = hi + limitSlots;
     // Non-spiral two-pass frames use their canonical key spelling; it is a display position, not a
     // continuity anchor like the streaming spiral's signed tonic.
     const active = snap?.frameLofTonic ?? snap?.frameKeyLof ?? null;
@@ -70,10 +72,12 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     const R_IN = 34, R_OUT = 118;
     // Radial gain per fifth; a full 12-fifth turn adds one band-thickness (TH) so turns nest flush like
     // tree rings, and the whole spiral keeps the same footprint regardless of depth.
-    const delta = (R_OUT - R_IN) / (2 * DEPTH + 12);
+    // Include the limit slots at either end in the footprint too, so they remain visible rather
+    // than spilling past the outer rim at shallow ranges.
+    const delta = (R_OUT - R_IN) / (2 * DEPTH + 15);
     const TH = 12 * delta;
     const ang = (t: number) => (-90 + t * 30) * Math.PI / 180;     // cell-centre angle
-    const rad = (t: number) => R_IN + TH / 2 + (t - lo) * delta;   // cell centreline radius (continuous in t)
+    const rad = (t: number) => R_IN + TH / 2 + (t - drawLo) * delta; // cell centreline radius (continuous in t)
     const pt = (a: number, r: number) => [CC + r * Math.cos(a), CC + r * Math.sin(a)] as const;
     // A ribbon segment for the cell spanning params t0..t1: out along the spiral, back along the inner
     // edge. Edges follow the continuous spiral so adjacent cells share boundary points exactly (seamless).
@@ -85,23 +89,23 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
         return d + 'Z';
     };
 
-    const svg = svgEl('svg', { xmlns: SVGNS, viewBox: `0 0 ${W} ${W}`, width: '100%', height: 'auto', class: 'spiral' });
+    const svg = svgEl('svg', { xmlns: SVGNS, viewBox: `0 0 ${W} ${W}`, width: '100%', class: 'spiral' });
     const fs = Math.max(7, Math.min(11, TH * 0.3));
 
-    for (let t = lo; t <= hi; t++) {
+    for (let t = drawLo; t <= drawHi; t++) {
         const isActive = active != null && t === active;
         const inColl = collection.has(t);
-        const isEnd = t === lo || t === hi;
-        const fill = isActive ? colorForFifth(t, 42) : inColl ? '#28324a' : (((t % 2) + 2) % 2 ? '#212630' : '#1b212b');
-        const stroke = isActive ? '#fff' : isEnd ? '#6b7280' : '#2b313c';
+        const isLimit = t < lo || t > hi;
+        const fill = isLimit ? '#25191d' : isActive ? colorForFifth(t, 42) : inColl ? '#28324a' : (((t % 2) + 2) % 2 ? '#212630' : '#1b212b');
+        const stroke = isLimit ? '#e05252' : isActive ? '#fff' : '#2b313c';
         const path = svgEl('path', { d: ribbon(t - 0.5, t + 0.5), fill, stroke, 'stroke-width': isActive ? 2 : 0.8 });
-        if (isEnd && !isActive) path.setAttribute('stroke-dasharray', '3 2.5');
+        if (isLimit) path.setAttribute('stroke-dasharray', '3 2.5');
         svg.appendChild(path);
         const [lx, ly] = pt(ang(t), rad(t));
         svg.appendChild(svgEl('text', {
             x: lx.toFixed(1), y: ly.toFixed(1), 'text-anchor': 'middle', 'dominant-baseline': 'central',
             'font-size': fs.toFixed(1), 'font-weight': isActive ? 700 : 400,
-            fill: isActive ? '#fff' : isEnd ? '#9aa3af' : '#cfd6e0',
+            fill: isActive ? '#fff' : isLimit ? '#ef8a8a' : '#cfd6e0',
         }, keyName(t)));
         // Mark the committed note's own fifth-position with a dot on its cell (when in the drawn range).
         if (noteLof === t) svg.appendChild(svgEl('circle', { cx: lx.toFixed(1), cy: (ly + TH / 2 - 3).toFixed(1), r: 2.6, class: 'note-dot' }));

@@ -18,10 +18,10 @@ import { assertEq, suite, test } from './framework.js';
 import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
 import { buildReplay, withSectionAutoResets, type RawEvent } from '../viz/src/replay.js';
-import { sideOverridesFromSearch, stepFromSearch, writeSideOverrides } from '../viz/src/state.js';
+import { readableSearch, sideOverridesFromSearch, stepFromSearch, writeSideOverrides } from '../viz/src/state.js';
 
-// The viz replays only the shipped spellers (rungs 2–4); rung 1 (`core`) has no viz path.
-const MODES: Exclude<Mode, 'core'>[] = ['rt', 'la', 'tp'];
+// The viz replays every benchmark speller, including the pedagogical rung 1 (`core`).
+const MODES: Mode[] = ['core', 'rt', 'la', 'tp'];
 
 /** Raw events.json (on/off/respell) — what the viz consumes directly. */
 const loadRaw = (id: string): RawEvent[] =>
@@ -70,5 +70,15 @@ suite('viz side markers', () => {
         ]);
         assertEq(stepFromSearch('13855'), 13854);
         assertEq(stepFromSearch(null), 0);
+    });
+
+    test('multi-onset lists keep literal commas in the query', () => {
+        const p = new URLSearchParams({ fixture: 'bach_wtc2', mode: 'tp' });
+        writeSideOverrides(p, [{ from: 3304, comma: 1 }, { from: 4123, comma: 1 }, { from: 13855, comma: -1 }]);
+        assertEq(readableSearch(p), '?fixture=bach_wtc2&mode=tp&sharp=3305,4124&flat=13856');
+        // The reader accepts the literal form it just wrote.
+        assertEq(sideOverridesFromSearch(new URLSearchParams(readableSearch(p))), [
+            { from: 3304, comma: 1 }, { from: 4123, comma: 1 }, { from: 13855, comma: -1 },
+        ]);
     });
 });

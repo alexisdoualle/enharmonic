@@ -3,21 +3,23 @@ import { buildReplay, withSectionAutoResets, type Mode, type RawEvent, type Expe
 import {
     initialState, clampStep, current, clampRange, clampCenter,
     SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT,
-    sideOverridesFromSearch, writeSideOverrides, stepFromSearch, type AppState,
+    sideOverridesFromSearch, writeSideOverrides, readableSearch, stepFromSearch, type AppState,
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
-import { renderStateTable } from './panels/stateTable.js';
 import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
+import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { label } from './format.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
+let liveTonnetz: ReturnType<typeof initLiveTonnetz>;
 
 const MODE_NAME: Record<Mode, string> = {
+    core: '① Core speller',
     rt: '② real-time (diatonic anchor)',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
@@ -88,9 +90,9 @@ function render() {
     renderScoring($('scoring'), snap);
     renderWheel($('wheel'), snap, {
         range: state.spiralRange, center: state.spiralCenter,
-        streaming: state.mode !== 'tp', onChange: setSpiral,
+        streaming: state.mode === 'rt' || state.mode === 'la', onChange: setSpiral,
     });
-    renderStateTable($('stateTable'), snap);
+    liveTonnetz?.renderPlaybackSnapshot(snap);
     if (state.replay) {
         renderStaff(state.replay, state.step);
         renderPianoRoll(state.replay, state.step);
@@ -114,6 +116,7 @@ function render() {
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked — click to seek. */
 function renderStrip() {
+    return;
     const strip = $('strip');
     if (strip.childElementCount !== (state.replay?.snapshots.length ?? 0)) {
         strip.innerHTML = '';
@@ -311,9 +314,9 @@ function syncUrl() {
     else u.searchParams.delete('sr');
     if (state.spiralCenter !== SPIRAL_CENTER_DEFAULT) u.searchParams.set('sc', String(state.spiralCenter));
     else u.searchParams.delete('sc');
-    u.searchParams.delete('so');
+    u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
-    history.replaceState(null, '', u);
+    history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
 }
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
@@ -328,6 +331,7 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
 
 function wire() {
     initPianoRoll(seek);
+    liveTonnetz = initLiveTonnetz($('live-tonnetz'));
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
@@ -394,7 +398,7 @@ async function boot() {
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');
     const urlStep = p.get('step');
-    if (urlMode === 'rt' || urlMode === 'la' || urlMode === 'tp') state.mode = urlMode;
+    if (urlMode === 'core' || urlMode === 'rt' || urlMode === 'la' || urlMode === 'tp') state.mode = urlMode;
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
     state.sideOverrides = sideOverridesFromSearch(p);

@@ -95,7 +95,7 @@ function scoreFor(quality: number, number: number): number {
 function intervalScore(candidate: PitchClass, resolved: ReadonlyMap<Letter, PitchClass>): number {
     let total = 0;
     for (const [letter, pc] of resolved) {
-        if (letter === candidate.step) continue; // skip the slot this candidate would replace
+        if (letter === candidate.step) continue; // candidate replaces this slot
         const { quality, number } = intervalBetween(candidate, pc);
         total += scoreFor(quality, number);
     }

@@ -85,7 +85,7 @@ npm run meredith -- --noisy      # the noisy (human-MIDI-like) variant
 npm run meredith -- --check      # assert exact% >= published thresholds
 ```
 
-`exact` = strict composer-spelling match (ps13's metric); `tonal` = exact + coherent enharmonic flip.
+`exact` = strict composer-spelling match (ps13's metric); `coherent` = exact + contextually coherent enharmonic flip.
 
 ## License
 

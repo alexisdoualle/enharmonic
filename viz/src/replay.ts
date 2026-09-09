@@ -9,14 +9,14 @@
  * shipped no-keys presets the benchmark scores.
  */
 import type { Pitch, PitchClass } from '../../src/index.js';
-import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
-import { SpellerKernel } from '../../src/kernel.js';
+import { CoreSpeller } from '../../src/core.js';
+import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace, type TwoPassSideOverride } from '../../src/two-pass.js';
+import { SpellerKernel, resolveStep } from '../../src/kernel.js';
 import { DiatonicBaseSubstrate, type DecisionTrace } from '../../src/base.js';
 import { DIATONIC_ANCHOR_OPTS, DIATONIC_ANCHOR_LA_OPTS } from '../../src/speller.js';
 import { classifyOnsets } from '../../test/eval/score.js';
-import type { TwoPassSideOverride } from '../../src/two-pass.js';
 
-export type Mode = 'rt' | 'la' | 'tp';
+export type Mode = 'core' | 'rt' | 'la' | 'tp';
 export type Tier = 'correct' | 'flipped' | 'wrong' | 'unread';
 
 /** A raw fixture event (events.json); `respell` carries the key signature for ground-truth engraving. */
@@ -105,8 +105,8 @@ export function pcOf(p: { step: string; alter: number }): number {
     return ((fifths(p) * 7) % 12 + 12) % 12;
 }
 
-/** Onsets in event order, each with a resolution direction for look-ahead (next ±1 semitone within
- *  `horizon` upcoming onsets) — the small forward buffer a near-real-time caller feeds. */
+/** Onsets in event order, each with a resolution direction for look-ahead (next onset a semitone away
+ *  in any octave, within `horizon` upcoming onsets) — the forward buffer a near-real-time caller feeds. */
 function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
     const dir = new Map<number, number>();
     const ons = events.map((e, i) => ({ e, i })).filter(x => x.e.type === 'on');
@@ -114,8 +114,8 @@ function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
         const midi = ons[k]!.e.midi!;
         let d = 0;
         for (let j = k + 1; j < ons.length && j - k <= horizon; j++) {
-            if (ons[j]!.e.midi === midi + 1) { d = 1; break; }
-            if (ons[j]!.e.midi === midi - 1) { d = -1; break; }
+            d = resolveStep(midi, ons[j]!.e.midi!);
+            if (d !== 0) break;
         }
         dir.set(ons[k]!.i, d);
     }
@@ -152,6 +152,11 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         tpOut = tpTrace.spellings as (Pitch | null)[];
     }
 
+    // Core (rung 1) is a separate persistent, frameless speller. It has no spiral or decision trace,
+    // but its seven-slot resolved scale is useful to show in the same surface panel as the shipped
+    // streaming rungs.
+    const core = mode === 'core' ? new CoreSpeller() : null;
+
     // Build the substrate directly from the shipped preset options + the record-only viz trace, keeping
     // the base reference so we can read its per-onset decision. Identical config to `Speller`, so zero drift.
     const base = new DiatonicBaseSubstrate({ ...(mode === 'la' ? DIATONIC_ANCHOR_LA_OPTS : DIATONIC_ANCHOR_OPTS), spiralRange, spiralCenter, trace: true });
@@ -175,8 +180,10 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             // scored/coloured by its final spelling, and a doubled pitch-class the speller splits is
             // paired to onset slots the same FIFO way — so the viz tally matches the library's accuracy
             // metric exactly (caught by test/viz.test.ts on the chopin_15 m13 doubled C♭).
-            const final = mode !== 'tp' ? kernel.getSpelling(e.midi!) : null;
-            if (mode !== 'tp') kernel.noteOff(e.midi!);
+            const final = mode === 'core' ? core!.getSpelling(e.midi!)
+                : mode !== 'tp' ? kernel.getSpelling(e.midi!) : null;
+            if (mode === 'core') core!.noteOff(e.midi!);
+            else if (mode !== 'tp') kernel.noteOff(e.midi!);
             sounding.delete(e.midi!);
             const q = open.get(e.midi!);
             if (q && q.length) {
@@ -204,6 +211,11 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             frameLofTonic = selectedPass.frameLofTonic;
             frameKeyLof = selectedPass.frameKeyLof;
             decision = selectedPass.decision;
+        } else if (mode === 'core') {
+            core!.noteOn(e.midi!);
+            committed = core!.getSpelling(e.midi!);
+            resolvedScale = core!.getResolvedScale();
+            frame = resolvedScale.map(p => ({ ...p }));
         } else {
             kernel.noteOn(e.midi!, { t: e.t_ms, resolveDir: dirs.get(i) ?? 0 });
             committed = kernel.getSpelling(e.midi!);

@@ -21,10 +21,20 @@ const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '..');
 const OUT = join(REPO, 'viz-dist');
 const FIXTURES = join(REPO, 'fixtures');
+const LOCAL_FIXTURES = join(REPO, 'local-fixtures');
 
 const buildOpts = {
     entryPoints: [join(here, 'src/main.ts')],
     outfile: join(OUT, 'app.js'),
+    bundle: true,
+    format: 'esm',
+    target: 'es2022',
+    sourcemap: true,
+    logLevel: 'info',
+};
+const liveBuildOpts = {
+    entryPoints: [join(here, 'src/livePage.ts')],
+    outfile: join(OUT, 'live.js'),
     bundle: true,
     format: 'esm',
     target: 'es2022',
@@ -36,17 +46,26 @@ const buildOpts = {
 async function copyAssets() {
     await cp(join(here, 'public'), OUT, { recursive: true });
     const ids = [];
-    for (const e of await readdir(FIXTURES, { withFileTypes: true })) {
-        if (!e.isDirectory()) continue;
-        try {
-            await stat(join(FIXTURES, e.name, 'expected.json'));
-            await cp(join(FIXTURES, e.name), join(OUT, 'fixtures', e.name), { recursive: true });
-            ids.push(e.name);
-        } catch { /* not a fixture dir */ }
+    const copyFixtureRoot = async (root) => {
+        let entries;
+        try { entries = await readdir(root, { withFileTypes: true }); }
+        catch { return; } // optional local overlay may not exist
+        for (const e of entries) {
+            if (!e.isDirectory()) continue;
+            try {
+                await stat(join(root, e.name, 'expected.json'));
+                await cp(join(root, e.name), join(OUT, 'fixtures', e.name), { recursive: true });
+                ids.push(e.name);
+            } catch { /* not a fixture dir */ }
+        }
     }
+    await copyFixtureRoot(FIXTURES);
+    // Developer-only fixtures override a committed fixture with the same id. This keeps the
+    // overlay useful for trying revised ground truth without changing the shipped corpus.
+    await copyFixtureRoot(LOCAL_FIXTURES);
     ids.sort();
-    await writeFile(join(OUT, 'fixtures', 'manifest.json'), JSON.stringify(ids, null, 2));
-    console.log(`[viz] copied ${ids.length} fixtures + shell → viz-dist/`);
+    await writeFile(join(OUT, 'fixtures', 'manifest.json'), JSON.stringify([...new Set(ids)], null, 2));
+    console.log(`[viz] copied ${new Set(ids).size} fixtures + shell → viz-dist/`);
 }
 
 export async function build({ watch = false } = {}) {
@@ -55,10 +74,12 @@ export async function build({ watch = false } = {}) {
     await copyAssets();
     if (watch) {
         const ctx = await esbuild.context(buildOpts);
-        await ctx.watch();
-        console.log('[viz] esbuild watching — saves rebuild app.js (hard-refresh the browser).');
+        const liveCtx = await esbuild.context(liveBuildOpts);
+        await Promise.all([ctx.watch(), liveCtx.watch()]);
+        console.log('[viz] esbuild watching — saves rebuild app.js and live.js (hard-refresh the browser).');
     } else {
         await esbuild.build(buildOpts);
+        await esbuild.build(liveBuildOpts);
     }
 }
 

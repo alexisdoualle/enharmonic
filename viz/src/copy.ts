@@ -14,6 +14,7 @@ import { ascii } from './format.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const MODE_LONG: Record<Mode, string> = {
+    core: 'Core speller (rung 1)',
     rt: 'real-time (diatonic anchor)',
     la: 'real-time + look-ahead',
     tp: 'two-pass (offline batch)',

@@ -65,3 +65,17 @@ The clean repo has **no fixture-generation tooling** (kept zero-dep); fixtures a
    ```
 
 The viz enumerates `fixtures/` automatically — no viz-side registration needed.
+
+### Local-only viz fixtures
+
+For fixtures you want to inspect before committing them, copy a fixture directory under
+`local-fixtures/` at the repository root. That directory is gitignored, and the viz build merges it
+into the fixture manifest without requiring registration in `test/eval/fixtures.ts`:
+
+```sh
+cp -R ~/JavaScript/enharmonic-lab/fixtures/bach_wtc2 local-fixtures/
+npm run viz
+```
+
+Local fixtures with the same id as a committed fixture temporarily override it in the viz. The
+overlay is copied when the viz server starts; restart `npm run viz` after adding or changing files.

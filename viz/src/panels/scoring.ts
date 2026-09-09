@@ -8,6 +8,7 @@
  */
 import type { Snapshot } from '../replay.js';
 import type { DecisionCandidate } from '../../../src/base.js';
+import type { PitchClass } from '../../../src/index.js';
 import { rawIntervalBetween, intervalBetween, intervalLabel } from '../../../src/interval.js';
 import { label } from '../format.js';
 
@@ -44,9 +45,36 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     title.textContent = 'scoring — why this spelling';
     host.appendChild(title);
     if (!snap) { host.appendChild(dim('—')); return; }
+
+    // header: committed vs expected + tier
+    const head = document.createElement('div');
+    head.className = `note-line tier-${snap.tier}`;
+    head.innerHTML = `<span class="note-big">${label(snap.committed)}</span>`
+        + (snap.expected ? `<span class="note-exp">expected ${label(snap.expected)}</span>` : '')
+        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex}</span>`;
+    host.appendChild(head);
+
+    // The speller's surface, compact: the bare diatonic frame (collection) and the resolved surface it
+    // feeds (frame + keep-alive + sounding). A resolved cell that an overlay changed from the frame is
+    // marked. Two 7-cell rows — the state that the scoring below reasons against.
+    if (snap.frame || snap.resolvedScale) {
+        const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
+        const surfByLetter = new Map(snap.resolvedScale?.map(p => [p.step, p]) ?? []);
+        const surf = document.createElement('div');
+        surf.className = 'surface-block';
+        if (snap.frame) surf.appendChild(surfaceRow('frame', frameByLetter));
+        if (snap.resolvedScale) surf.appendChild(surfaceRow('surface', surfByLetter, frameByLetter));
+        host.appendChild(surf);
+    }
+
     if (snap.twoPass) host.appendChild(twoPassSummary(snap.twoPass));
+
     if (!snap.decision) {
-        host.appendChild(dim(snap.twoPass ? 'selected pass has no per-candidate trace' : 'no per-candidate scoring trace'));
+        host.appendChild(dim(
+            snap.twoPass ? 'selected pass has no per-candidate trace'
+            : snap.frame ? 'Core speller — no per-candidate scoring trace'
+            : 'batch two-pass — whole-piece decision, no per-onset scoring trace',
+        ));
         return;
     }
 
@@ -58,14 +86,6 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     const chosenKey = `${dec.chosen.step}:${dec.chosen.alter}`;
     const baseWin = dec.candidates.reduce((b, c) => (c.base > b.base ? c : b), dec.candidates[0]!);
     const totalWin = dec.candidates.reduce((b, c) => (total(c) > total(b) ? c : b), dec.candidates[0]!);
-
-    // header: committed vs expected + tier
-    const head = document.createElement('div');
-    head.className = `note-line tier-${snap.tier}`;
-    head.innerHTML = `<span class="note-big">${label(snap.committed)}</span>`
-        + (snap.expected ? `<span class="note-exp">expected ${label(snap.expected)}</span>` : '')
-        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex}</span>`;
-    host.appendChild(head);
 
     // table — fixed geometry: every column is always present and every onset draws MAX_CANDIDATES rows,
     // so the layout stays put while scrubbing.
@@ -134,6 +154,32 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     nd.className = 'decision-note';
     nd.innerHTML = notes.map(n => `<div>${n}</div>`).join('');
     host.appendChild(nd);
+}
+
+/** One labelled 7-cell letter row for a resolved map. When `diffFrom` is given, a cell whose spelling
+ *  differs from that reference (an overlay changed it) is marked `.overlaid`. */
+function surfaceRow(name: string, byLetter: Map<string, PitchClass>, diffFrom?: Map<string, PitchClass>): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'surface-row';
+    const lab = document.createElement('span');
+    lab.className = 'surface-row-label';
+    lab.textContent = name;
+    wrap.appendChild(lab);
+    const grid = document.createElement('div');
+    grid.className = 'surface';
+    for (const L of LETTERS) {
+        const p = byLetter.get(L);
+        const altered = p && p.alter !== 0;
+        const ref = diffFrom?.get(L);
+        const overlaid = !!(p && ref && (p.alter !== ref.alter || p.step !== ref.step));
+        const cell = document.createElement('div');
+        cell.className = `surf-cell${altered ? ' altered' : ''}${overlaid ? ' overlaid' : ''}`;
+        if (overlaid && ref) cell.title = `overlay: frame ${label(ref)} → ${label(p!)}`;
+        cell.innerHTML = `<span class="surf-spell">${p ? label(p) : '·'}</span>`;
+        grid.appendChild(cell);
+    }
+    wrap.appendChild(grid);
+    return wrap;
 }
 
 /** Offline reconciliation, kept distinct from the selected streaming pass's candidate table. */
