@@ -19,7 +19,9 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(here, '..');
-const OUT = join(REPO, 'viz-dist');
+const OUT = join(REPO, 'viz-dist');    // the deployed site root (landing page + CNAME live here)
+const VIZ = join(OUT, 'viz');          // the interactive app, served under /viz/
+const SITE = join(here, 'site');       // static landing page + CNAME, copied to the site root
 const FIXTURES = join(REPO, 'fixtures');
 const LOCAL_FIXTURES = join(REPO, 'local-fixtures');
 
@@ -28,7 +30,7 @@ const buildOpts = {
     // Code-splitting (outdir + splitting) so the 3D tonnetz panel's three.js only downloads as a
     // separate chunk when the user opens that view — it stays out of the app.js everyone loads. The
     // entry still emits as app.js (index.html references it); lazy chunks land under chunks/.
-    outdir: OUT,
+    outdir: VIZ,
     entryNames: 'app',
     chunkNames: 'chunks/[name]-[hash]',
     bundle: true,
@@ -40,7 +42,7 @@ const buildOpts = {
 };
 const liveBuildOpts = {
     entryPoints: [join(here, 'src/livePage.ts')],
-    outfile: join(OUT, 'live.js'),
+    outfile: join(VIZ, 'live.js'),
     bundle: true,
     format: 'esm',
     target: 'es2022',
@@ -48,9 +50,10 @@ const liveBuildOpts = {
     logLevel: 'info',
 };
 
-/** Copy the static shell (index.html, styles.css) and the fixture corpus into viz-dist/. */
+/** Assemble the site: the landing page + CNAME at the root, the app shell + fixture corpus under /viz/. */
 async function copyAssets() {
-    await cp(join(here, 'public'), OUT, { recursive: true });
+    await cp(SITE, OUT, { recursive: true });        // landing index.html + CNAME → site root
+    await cp(join(here, 'public'), VIZ, { recursive: true });   // app shell (index.html, styles.css) → /viz/
     const ids = [];
     const copyFixtureRoot = async (root) => {
         let entries;
@@ -60,7 +63,7 @@ async function copyAssets() {
             if (!e.isDirectory()) continue;
             try {
                 await stat(join(root, e.name, 'expected.json'));
-                await cp(join(root, e.name), join(OUT, 'fixtures', e.name), { recursive: true });
+                await cp(join(root, e.name), join(VIZ, 'fixtures', e.name), { recursive: true });
                 ids.push(e.name);
             } catch { /* not a fixture dir */ }
         }
@@ -70,13 +73,13 @@ async function copyAssets() {
     // overlay useful for trying revised ground truth without changing the shipped corpus.
     await copyFixtureRoot(LOCAL_FIXTURES);
     ids.sort();
-    await writeFile(join(OUT, 'fixtures', 'manifest.json'), JSON.stringify([...new Set(ids)], null, 2));
-    console.log(`[viz] copied ${new Set(ids).size} fixtures + shell → viz-dist/`);
+    await writeFile(join(VIZ, 'fixtures', 'manifest.json'), JSON.stringify([...new Set(ids)], null, 2));
+    console.log(`[viz] site → viz-dist/ (landing + CNAME); app + ${new Set(ids).size} fixtures → viz-dist/viz/`);
 }
 
 export async function build({ watch = false } = {}) {
     await rm(OUT, { recursive: true, force: true });
-    await mkdir(OUT, { recursive: true });
+    await mkdir(VIZ, { recursive: true });
     await copyAssets();
     if (watch) {
         const ctx = await esbuild.context(buildOpts);
