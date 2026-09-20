@@ -27,7 +27,7 @@ inflating `wrong`.
 
 Real live MIDI/audio input does not provide `(measure, beat)` keys. The live
 speller must remain timestamp/event driven and use only information available at
-that moment—currently the active frame, sounding notes, neighbour-step context,
+that moment—currently the active frame, sounding notes, recency-guard context,
 and (in `la`) a bounded look-ahead. Measure/beat keys must therefore never leak
 into the spelling decision.
 
@@ -53,16 +53,15 @@ same number as raw note accuracy.
 
 ## Shipped real-time (`rt`) mechanisms
 
-The `rt`/diatonic-anchor preset currently includes:
+The `rt` / `RT_PRESET` preset (`src/engine.ts`) currently includes:
 
-- spiral frame, depth 6, centre +1;
-- neighbour-step scoring (run gate 2, weight 2, vertical gate);
-- sounding tiebreak over the previous five onsets;
-- keep-alive frame entries, evicting the oldest;
-- relative-minor leading-tone preference;
-- 16-second base window.
+- recency guard: penalty 2 for a same-letter/different-accidental clash within 3 onsets;
+- spiral-CLAMP fold: centre +3, radius 7, debounce 8 onsets;
+- diatonic-anchor leash: side weight 1, side radius 6, anchor window 32 onsets.
 
-It does **not** include look-ahead. Look-ahead is the separate `la` mode.
+It does **not** include look-ahead. Look-ahead is the separate `la` mode (`LA_PRESET`), which widens
+the guard window to 7 onsets and adds letter-aware look-ahead, the double-accidental leash, the
+vertical guard, and collision repair, over the same spiral-CLAMP fold.
 
 ## Current parity warning
 

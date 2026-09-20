@@ -33,6 +33,9 @@
     "bench:update": "tsx test/eval/run.ts --update",
     "meredith:fetch": "bash scripts/fetch-meredith.sh",
     "meredith": "tsx test/eval/meredith.ts",
+    "scoreboard": "node tools/figures/scoreboard.mjs",
+    "scoreboard:guarded": "node tools/figures/scoreboard-guarded.mjs",
+    "lab-corpus": "tsx test/eval/lab-corpus.ts",
     "wtc1:marker": "tsx test/eval/wtc1-marker.ts",
     "viz": "node viz/serve.mjs",
     "viz:build": "node viz/build.mjs"

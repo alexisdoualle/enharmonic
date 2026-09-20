@@ -1,0 +1,80 @@
+{
+  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from enharmonic-lab (LEGACY repo, to be retired). These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here without the lab. Regenerate only if the corpus or a baseline tool changes.",
+  "corpus": "meredith-8x25000",
+  "variants": {
+    "clean": {
+      "chew_chen": {
+        "correct": 193692,
+        "flipped": 36,
+        "wrong": 2244,
+        "committed": 195972,
+        "total": 195972
+      },
+      "fixed_lof": {
+        "correct": 187213,
+        "flipped": 211,
+        "wrong": 8548,
+        "committed": 195972,
+        "total": 195972
+      },
+      "pkspell": {
+        "correct": 195637,
+        "flipped": 0,
+        "wrong": 335,
+        "committed": 195972,
+        "total": 195972
+      },
+      "ps13": {
+        "correct": 194564,
+        "flipped": 577,
+        "wrong": 831,
+        "committed": 195972,
+        "total": 195972
+      },
+      "temperley": {
+        "correct": 161508,
+        "flipped": 11686,
+        "wrong": 695,
+        "committed": 173889,
+        "total": 195972
+      }
+    },
+    "noisy": {
+      "chew_chen": {
+        "correct": 186969,
+        "flipped": 7128,
+        "wrong": 1875,
+        "committed": 195972,
+        "total": 195972
+      },
+      "fixed_lof": {
+        "correct": 187101,
+        "flipped": 436,
+        "wrong": 8435,
+        "committed": 195972,
+        "total": 195972
+      },
+      "pkspell": {
+        "correct": 195708,
+        "flipped": 0,
+        "wrong": 264,
+        "committed": 195972,
+        "total": 195972
+      },
+      "ps13": {
+        "correct": 194505,
+        "flipped": 655,
+        "wrong": 812,
+        "committed": 195972,
+        "total": 195972
+      },
+      "temperley": {
+        "correct": 10434,
+        "flipped": 1856,
+        "wrong": 418,
+        "committed": 12708,
+        "total": 195972
+      }
+    }
+  }
+}

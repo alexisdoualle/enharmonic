@@ -1,14 +1,14 @@
 /**
  * Viz ↔ bench parity guard.
  *
- * The viz drives its OWN kernel (`viz/src/replay.ts::buildReplay`) and used to carry its own private
+ * The viz drives its OWN engine (`viz/src/replay.ts::buildReplay`) and used to carry its own private
  * tier classifier, which silently drifted from the bench scorer — an isolated wrong-side note showed as
  * "flipped (coherent side)" in the app while the bench (correctly) never counted it as a flip
  * (WTC1 prelude onset 209). Nothing compared the two, so the drift hid.
  *
  * This test pins them together: for every curated fixture and latency mode, the viz replay's
  * {correct,flipped,wrong,unread} tally must equal the bench `scoreTiers` over the same fixture. It
- * catches BOTH a re-divergent classifier AND any drift between the viz's kernel path and the public
+ * catches BOTH a re-divergent classifier AND any drift between the viz's engine path and the public
  * `Speller`/`spellTwoPass` the bench uses.
  */
 

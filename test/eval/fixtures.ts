@@ -34,6 +34,7 @@ export const FIXTURES = [
     'chopin_prelude_op28_no15',
     'grieg_death_of_ase',
     'bach_jesu_meine_freude',
+    'debussy_clair_de_lune',
 ] as const;
 
 export type FixtureId = typeof FIXTURES[number];

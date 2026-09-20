@@ -17,7 +17,7 @@
  * like Fss/Bff occur). onset/dur are integer tatums. Parsed bass-first (onset asc, midi asc).
  */
 
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Speller, spellTwoPass, type Pitch } from '../../src/index.js';
@@ -29,10 +29,12 @@ import { scoreTiers } from './score.js';
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
-// Two-pass side memory is the shipped offline default.  Keep an explicit
-// baseline switch for auditing its exact-match tradeoffs.
-const sideMemory = !process.argv.includes('--no-side-memory');
 const counts = process.argv.includes('--counts');
+// `--json <path>` also writes the aggregate tiers as machine-readable JSON (consumed by the
+// scoreboard figure generator — tools/figures/three-tier.mjs). Keeps the scoreboard sourced from
+// THIS repo's shipped rungs, not a mirror of the legacy lab.
+const jsonArg = process.argv.indexOf('--json');
+const jsonPath = jsonArg >= 0 ? process.argv[jsonArg + 1] : null;
 
 const STEP: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 interface Note { onset: number; dur: number; step: string; alter: number; midi: number; }
@@ -65,15 +67,10 @@ function resolveDirs(notes: Note[]): number[] {
     return d;
 }
 
-// Meredith is a ONE-KEY-PER-PIECE corpus, and this is the assumption ps13 / PKSpell / Temperley were
-// evaluated under — they all process the WHOLE note sequence, not a real-time window. To compare on equal
-// terms we give EVERY rung whole-piece context here (`baseWindowMs: Infinity`): the collection-finder sees the
-// whole movement. This stays fully CAUSAL for the streaming rungs (1–3) — they never see the FUTURE, only the
-// full past; the ladder's real distinction is the look-ahead depth (rung 3) and the backward pass (rung 4),
-// not the memory window. The shipped `Speller` default and the dev corpus keep a BOUNDED 16 s window, which is
-// the honest configuration for LIVE/continuous input and for MODULATING pieces (see `two-pass.ts` baseWindowMs).
-// With whole-piece context the tatum→ms scale is immaterial (nothing evicts), but we keep a fixed musical
-// clock (1 tatum = a 16th at 120 BPM) so any residual time-based logic runs at a realistic tempo.
+// The engine is onset-based, so there is no memory window to configure: the streaming rungs stay fully
+// causal (never see the future), and the ladder's real distinction is the look-ahead depth (rung 3) and
+// the backward pass (rung 4). We map each tatum to a fixed musical clock (1 tatum = a 16th at 120 BPM)
+// only so co-struck notes (same onset) group into one chord via the `t` they share.
 const TATUM_MS = 125;
 
 /** Time-ordered events: at equal t, releases before strikes; strikes bass-first (midi asc). */
@@ -91,15 +88,10 @@ type Mode = 'core' | 'rt' | 'la' | 'tp';
 
 function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     if (mode === 'tp') {
-        // Meredith movements are single-region (one key per movement), so the OFFLINE two-pass is given
-        // whole-piece context (`baseWindowMs: Infinity`) — tempo-invariant, and the honest offline number.
-        // The shipped default is a bounded window (for modulating pieces); this opts into whole-piece here.
-        return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS })), { sideMemory, baseWindowMs: Number.POSITIVE_INFINITY }) as (Pitch | null)[];
+        return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) as (Pitch | null)[];
     }
-    // Whole-piece context for the streaming rungs too (single-region corpus; see the TATUM_MS note). Still
-    // causal — no future peek. `core` is frameless (no window).
     const s: StreamingSpeller = mode === 'core' ? new CoreSpeller()
-        : new Speller({ lookAhead: mode === 'la', baseWindowMs: Number.POSITIVE_INFINITY });
+        : new Speller({ lookAhead: mode === 'la' });
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
@@ -155,7 +147,7 @@ for (const f of files) {
 const committedOf = (a: { correct: number; flipped: number; wrong: number }) => a.correct + a.flipped + a.wrong;
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
 const absTotal = MODES.reduce((s, { key }) => s + agg[key].unread, 0);
-console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — two-pass ${sideMemory ? 'side memory' : 'forward/backward baseline'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
+console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
 console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'coherent%'.padStart(9)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const { key, label } of MODES) {
     const a = agg[key];
@@ -168,24 +160,32 @@ if (counts) {
 }
 console.log(`  exact = strict composer match (ps13 metric); coherent = exact + contextually coherent flip.`);
 
+// --- machine-readable emit for the scoreboard figure ---------------------------------------
+if (jsonPath) {
+    const payload = {
+        corpus: 'meredith-8x25000',
+        variant: noisy ? 'noisy' : 'clean',
+        notes: agg.rt.total,
+        generated: new Date().toISOString(),
+        // Each rung: raw tier counts. Percentages are derived by the consumer over `committed`
+        // (correct+flipped+wrong), matching the console output and the baseline snapshot.
+        rungs: Object.fromEntries(MODES.map(({ key }) => {
+            const a = agg[key];
+            return [key, { correct: a.correct, flipped: a.flipped, wrong: a.wrong, unread: a.unread, total: a.total, committed: committedOf(a) }];
+        })),
+    };
+    writeFileSync(jsonPath, JSON.stringify(payload, null, 2));
+    console.log(`  → wrote ${jsonPath}`);
+}
+
 // --- optional regression check (clean corpus published thresholds) -------------------------
 if (check && !noisy) {
     const laExact = 100 * agg.la.correct / committedOf(agg.la);
     const tpExact = 100 * agg.tp.correct / committedOf(agg.tp);
     const fails: string[] = [];
-    // The look-ahead floor moved 99.50 → 99.44 (centrePull) → 99.52 (coherence-gate LT exemption) → 99.63
-    // (centrePull cap 2→3). It is now 99.67, once every rung was given EXPLICIT whole-piece context on this
-    // one-key-per-piece corpus (the assumption ps13/PKSpell were evaluated under; see the TATUM_MS note). That
-    // is slightly above the old tatum=1ms accident (99.64) because the 3 movements longer than 16 s now also
-    // get whole-piece context instead of being windowed. Still causal — the look-ahead sees no future.
+    // Regression floors for the shipped engine on the clean corpus (measured look-ahead 99.70, two-pass
+    // 99.86), set a small margin below so a real regression trips but run-to-run noise does not.
     if (laExact < 99.66) fails.push(`look-ahead exact ${laExact.toFixed(2)}% < 99.66%`);
-    // Two-pass floor raised 99.70 → 99.82 once HONOR-RESOLUTION kept resolving leading tones the wolf-cost
-    // merge was flattening (clean wrong 367→335, exact 99.81→99.83 — ≈ the PKSpell neural bar) → 99.83 once the
-    // centrePull cap re-sweep to 3 dropped clean two-pass wrong 335→325 (past the bar) → 318 once the
-    // FUNCTIONAL-DIM7 honor-resolution extension let full-vii°7 leading tones survive the wolf guard (+7 exact,
-    // 0 break; noisy + curated neutral). The 318 is now computed with EXPLICIT whole-piece context (the harness
-    // passes `baseWindowMs: Infinity`, appropriate for these single-region movements), so it no longer depends
-    // on the tatum→ms scale. Floor kept at 99.83 (a safe ~10-note margin below the 318 = 99.835%).
     if (tpExact < 99.83) fails.push(`two-pass exact ${tpExact.toFixed(2)}% < 99.83%`);
     if (fails.length) { console.error('\n✗ ' + fails.join('\n✗ ')); process.exit(1); }
     console.log('\n✓ exact% at or above published thresholds.');

@@ -4,6 +4,7 @@ await import('./speller.test.js');
 await import('./liveTonnetz.test.js');
 await import('./viz.test.js');
 await import('./examples/standalone.test.js');
+await import('./chromatic-lines.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;

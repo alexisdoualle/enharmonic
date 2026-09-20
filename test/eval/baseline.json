@@ -13,9 +13,9 @@
       "total": 535
     },
     "la": {
-      "correct": 534,
+      "correct": 535,
       "flipped": 0,
-      "wrong": 1,
+      "wrong": 0,
       "total": 535
     },
     "tp": {
@@ -33,21 +33,21 @@
       "total": 1282
     },
     "rt": {
-      "correct": 1273,
+      "correct": 1279,
       "flipped": 0,
-      "wrong": 9,
+      "wrong": 3,
       "total": 1282
     },
     "la": {
-      "correct": 1274,
+      "correct": 1279,
       "flipped": 0,
-      "wrong": 8,
+      "wrong": 3,
       "total": 1282
     },
     "tp": {
-      "correct": 1275,
+      "correct": 1279,
       "flipped": 0,
-      "wrong": 7,
+      "wrong": 3,
       "total": 1282
     }
   },
@@ -59,21 +59,21 @@
       "total": 604
     },
     "rt": {
-      "correct": 586,
+      "correct": 574,
       "flipped": 0,
-      "wrong": 18,
+      "wrong": 30,
       "total": 604
     },
     "la": {
-      "correct": 586,
+      "correct": 572,
       "flipped": 0,
-      "wrong": 18,
+      "wrong": 32,
       "total": 604
     },
     "tp": {
-      "correct": 590,
+      "correct": 587,
       "flipped": 0,
-      "wrong": 14,
+      "wrong": 17,
       "total": 604
     }
   },
@@ -85,21 +85,21 @@
       "total": 1566
     },
     "rt": {
-      "correct": 1138,
-      "flipped": 414,
-      "wrong": 14,
+      "correct": 934,
+      "flipped": 619,
+      "wrong": 13,
       "total": 1566
     },
     "la": {
-      "correct": 1138,
-      "flipped": 417,
-      "wrong": 11,
+      "correct": 936,
+      "flipped": 617,
+      "wrong": 13,
       "total": 1566
     },
     "tp": {
-      "correct": 1557,
-      "flipped": 0,
-      "wrong": 9,
+      "correct": 1467,
+      "flipped": 88,
+      "wrong": 11,
       "total": 1566
     }
   },
@@ -111,21 +111,21 @@
       "total": 606
     },
     "rt": {
-      "correct": 587,
+      "correct": 588,
       "flipped": 0,
-      "wrong": 19,
+      "wrong": 18,
       "total": 606
     },
     "la": {
-      "correct": 590,
+      "correct": 604,
       "flipped": 0,
-      "wrong": 16,
+      "wrong": 2,
       "total": 606
     },
     "tp": {
-      "correct": 592,
+      "correct": 600,
       "flipped": 0,
-      "wrong": 14,
+      "wrong": 6,
       "total": 606
     }
   },
@@ -137,9 +137,9 @@
       "total": 7374
     },
     "rt": {
-      "correct": 7367,
+      "correct": 7365,
       "flipped": 0,
-      "wrong": 7,
+      "wrong": 9,
       "total": 7374
     },
     "la": {
@@ -153,6 +153,32 @@
       "flipped": 0,
       "wrong": 0,
       "total": 7374
+    }
+  },
+  "debussy_clair_de_lune": {
+    "core": {
+      "correct": 182,
+      "flipped": 1416,
+      "wrong": 25,
+      "total": 1623
+    },
+    "rt": {
+      "correct": 802,
+      "flipped": 796,
+      "wrong": 25,
+      "total": 1623
+    },
+    "la": {
+      "correct": 182,
+      "flipped": 1417,
+      "wrong": 24,
+      "total": 1623
+    },
+    "tp": {
+      "correct": 1317,
+      "flipped": 275,
+      "wrong": 31,
+      "total": 1623
     }
   }
 }
