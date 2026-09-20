@@ -217,7 +217,11 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             }
         }
         // The shipped offline resolver (forward + time-reversed backward, wolf-cost reconciled).
-        void twoPassSideMemory; void sideOverrides;   // accepted for signature compatibility; not consumed
+        // TODO: re-wire editorial side overrides. `sideOverrides` (the toolbar ♯/♭/auto markers) is
+        // accepted but NOT consumed here or in the streaming path below — the engine port dropped the
+        // old substrate's per-onset comma hook, so the markers currently don't change any spelling. The
+        // toolbar buttons are hidden (viz/public/index.html) until the SpellingEngine grows a side hook.
+        void twoPassSideMemory; void sideOverrides;
         tpTrace = spellTwoPassTraced(notes);
         tpOut = tpTrace.spellings as (Pitch | null)[];
     }
