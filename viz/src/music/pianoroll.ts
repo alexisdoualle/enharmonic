@@ -71,6 +71,7 @@ let maxW = 0;                                // widest note, so long-held notes 
 let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex — only the visible ones exist
 let rendered = new Set<number>();            // onIndices currently materialized in the DOM
 let pxPerMs = PX_PER_SEC / 1000;
+let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
 let scrollBound = false;
 // Autoscroll "follow": the playhead keeps itself in view while stepping, but a manual scroll
@@ -81,9 +82,12 @@ let follow = true;
 let expectedScrollLeft = -1;
 
 let builtWithKeyLanes = false;
+let builtMobile = false;
+// Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
+const isMobile = () => window.matchMedia('(max-width: 720px)').matches;
 export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false): void {
-    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes) {
-        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes;
+    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile) {
+        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile();
     }
     updatePlayhead(replay, step);
 }
@@ -93,9 +97,11 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     host.innerHTML = '';
     rects = []; rendered = new Set(); prevActive = [];
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
-    pxPerMs = PX_PER_SEC / 1000;
+    const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
+    pxPerMs = (PX_PER_SEC / 1000) * sc;
+    rowH = ROW_H * sc;
     const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs);
-    const noteH = (hi - lo + 1) * ROW_H;
+    const noteH = (hi - lo + 1) * rowH;
     const laneTop = PAD + noteH + LANE_GAP;                              // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.
     const localLaneTop = laneTop + LANE_H + CAPTION_H + LANE_GAP2;       // LOCAL collection (tonicizations)
@@ -111,7 +117,7 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     // faint row guides at octave Cs
     for (let m = lo; m <= hi; m++) {
         if (m % 12 !== 0) continue;
-        const y = PAD + (hi - m) * ROW_H + ROW_H / 2;
+        const y = PAD + (hi - m) * rowH + rowH / 2;
         svg.appendChild(svgEl('line', { x1: 0, x2: width, y1: y, y2: y, stroke: '#222833', 'stroke-width': 1 }));
     }
 
@@ -122,7 +128,7 @@ function build(replay: Replay, showKeyLanes: boolean): void {
         const w = Math.max(3, (note.offT - note.onT) * pxPerMs);
         if (w > maxW) maxW = w;
         layouts[note.onIndex] = {
-            x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * ROW_H,
+            x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * rowH,
             onIndex: note.onIndex, onT: note.onT, offT: note.offT, tier: note.tier, midi: note.midi,
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
         };
@@ -191,7 +197,7 @@ function makeRect(oi: number): void {
     const L = layouts[oi]!;
     const rect = document.createElementNS(SVGNS, 'rect') as SVGRectElement;
     rect.setAttribute('x', String(L.x)); rect.setAttribute('y', String(L.y));
-    rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(ROW_H - 1));
+    rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
     rect.setAttribute('fill', TIER_COLOR[L.tier]);
     rect.style.cursor = 'pointer';

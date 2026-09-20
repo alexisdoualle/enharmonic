@@ -131,7 +131,8 @@ export function initTonnetz(container: HTMLElement): void {
     // Pull the camera back from the scene's default framing so the whole lattice neighbourhood is in view
     // on load — the panel is smaller than the standalone app's full-window canvas, so the default sits too
     // close. The user can still orbit/scroll to taste; this only sets the initial distance.
-    scene.setCameraDistance(1.7);
+    // Pull further back on a phone-sized panel so the lattice neighbourhood fits the smaller viewport.
+    scene.setCameraDistance(window.matchMedia('(max-width: 720px)').matches ? 2.7 : 1.7);
     // The scene's default z-gap (0.1) is tiny next to the in-plane grid (~1.4), so the accidental layers
     // stack almost flat. Spread them to distinct depths — 0.8 matches the tonnetz app's default.
     scene.setZSpacing(0.8);

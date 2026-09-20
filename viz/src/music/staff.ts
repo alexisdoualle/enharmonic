@@ -185,12 +185,12 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
     // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates —
     // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
-    // Fit the engraving to BOTH the panel width and the (compact) band height, shrinking only, so a
-    // tall-ranged window is zoomed out to fit the band instead of being clipped at the bottom.
     // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
-    // band scrolls vertically to it, so tall-ranged windows are never clipped.
+    // band scrolls vertically to it (the SVG is cropped to content below), so nothing is clipped. On a
+    // narrow (phone) panel drop the floor so the window zooms out to fit the width instead of side-scrolling.
     const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
-    const zoom = Math.max(ZOOM_MIN, Math.min(1, widthZoom));
+    const floor = avail > 0 && avail < 640 ? 0.12 : ZOOM_MIN;
+    const zoom = Math.max(floor, Math.min(1, widthZoom));
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
