@@ -10,6 +10,7 @@ import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
+import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { label } from './format.js';
@@ -18,11 +19,12 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const state: AppState = { ...initialState };
 let liveTonnetz: ReturnType<typeof initLiveTonnetz>;
 
-// 3D tonnetz: a whole-panel swap for the right column (the coiled Tonnetz ⇄ the 3D lattice). The 3D
+// 3D tonnetz: a whole-panel swap for the right column (the 3D lattice ⇄ the coiled Tonnetz). The 3D
 // panel pulls in three.js, so `panels/tonnetz.js` is LAZY-loaded on first activation and its render loop
-// only spins up then. Toggled from the transport bar (#tonnetz3d), persisted per-browser.
+// only spins up then. Toggled from the small overlay button on each panel, persisted per-browser. Default
+// is the 3D lattice: only an explicit switch to 2D is stored as '0'.
 const TONNETZ3D_KEY = 'viz.tonnetz3d';
-let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) === '1'; } catch { return false; } })();
+let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) !== '0'; } catch { return true; } })();
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
@@ -31,7 +33,6 @@ let tonnetz3dLoading = false;
 function applyTonnetz3d() {
     $('live-tonnetz').style.display = tonnetz3dOn ? 'none' : '';
     $('tonnetz').style.display = tonnetz3dOn ? 'flex' : 'none';
-    $<HTMLInputElement>('tonnetz3d').checked = tonnetz3dOn;
     if (!tonnetz3dOn) return;
     if (tonnetz3d) { tonnetz3d.initTonnetz($('tonnetz-canvas')); return; }   // initTonnetz is a no-op once built
     if (tonnetz3dLoading) return;
@@ -54,6 +55,35 @@ function setTonnetz3d(on: boolean) {
     try { localStorage.setItem(TONNETZ3D_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
     applyTonnetz3d();
     render();
+}
+
+/** Append the corner overlay button that swaps this panel for the other tonnetz view. Its own panel
+ *  hides when inactive, so the visible panel always shows exactly one switch (to the other view). */
+function addViewSwitch(panelId: string, labelText: string, to3d: boolean) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'view-switch';
+    btn.textContent = labelText;
+    btn.title = to3d ? 'switch to the 3D tonnetz lattice (drag to orbit, scroll to zoom)'
+                     : 'switch to the coiled 2D tonnetz';
+    btn.addEventListener('click', () => setTonnetz3d(to3d));
+    $(panelId).appendChild(btn);
+}
+
+/** Top-toolbar MIDI button. Web MIDI is requested only on this explicit click (never on load); the
+ *  button then reflects the shared model's connection status. Hidden when the browser has no Web MIDI. */
+function wireMidiButton() {
+    const btn = $<HTMLButtonElement>('midi-enable');
+    if (!midiAvailable()) { btn.hidden = true; return; }
+    btn.addEventListener('click', () => {
+        btn.disabled = true;
+        btn.textContent = 'connecting…';
+        void connectMidi(liveTonnetz.model);
+    });
+    liveTonnetz.model.subscribe(s => {
+        if (/^MIDI:/.test(s.midiStatus) || /MIDI ready/.test(s.midiStatus)) { btn.textContent = '🎹 MIDI ✓'; btn.disabled = true; }
+        else if (/denied|unavailable/.test(s.midiStatus)) { btn.textContent = '🎹 MIDI'; btn.disabled = false; }
+    });
 }
 
 const MODE_NAME: Record<Mode, string> = {
@@ -143,8 +173,9 @@ function render() {
         control: state.mode === 'control',
         showKeyLanes: state.showKeyLanes, onChange: setSpiral,
     });
-    if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetz(snap);
-    else liveTonnetz?.renderPlaybackSnapshot(snap);
+    // Feed the shared live model always: the 2D panel subscribes, and so does the 3D panel (see the
+    // subscription in the boot block), so whichever view is on tracks both playback and live input.
+    liveTonnetz?.renderPlaybackSnapshot(snap);
     if (state.replay) {
         renderStaff(state.replay, state.step);
         renderPianoRoll(state.replay, state.step, state.showKeyLanes);
@@ -390,6 +421,13 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
 function wire() {
     initPianoRoll(seek);
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
+    // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and
+    // playback identically; it only paints while it is the visible view and its scene has been built.
+    liveTonnetz.model.subscribe(s => { if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetzLive(s); });
+    // Small overlay on each panel swaps to the other view (each button names the view it opens).
+    addViewSwitch('tonnetz', '2D coiled', false);
+    addViewSwitch('live-tonnetz', '3D lattice', true);
+    wireMidiButton();
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
@@ -423,7 +461,6 @@ function wire() {
         state.showKeyLanes = (e.target as HTMLInputElement).checked;
         render(); syncUrl();   // display-only: no recompute, just re-render the panels/lanes
     });
-    $<HTMLInputElement>('tonnetz3d').addEventListener('change', e => setTonnetz3d((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(posToRate(Number((e.target as HTMLInputElement).value))));
     const latencyEl = $<HTMLInputElement>('latency');
     latencyEl.value = String(audioOffsetMs);

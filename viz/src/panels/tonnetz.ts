@@ -13,6 +13,7 @@
  */
 import type { Snapshot } from '../replay.js';
 import { pcOf } from '../replay.js';
+import type { LiveState } from '../live.js';
 import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSceneV2.js';
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { extendedFifthsPos } from '../tonnetz3d/LatticeGeometry.js';
@@ -179,23 +180,37 @@ export function initTonnetz(container: HTMLElement): void {
 
 /** Retarget the lattice to one onset: the resolved surface becomes the scale, the ringing notes light
  *  their nodes at the library's committed spellings. Geometry only rebuilds when the surface respells. */
+/** Playback: retarget the lit nodes from a captured onset snapshot. */
 export function renderTonnetz(snap: Snapshot | null): void {
     if (!scene) return;
-
     // The resolved 7-letter surface (streaming rungs) is the harmonic frame; batch two-pass has none, so
     // fall back to C-major naturals — the notes still light at their committed spellings on that grid.
     const surface = snap?.resolvedScale && snap.resolvedScale.length === 7
         ? snap.resolvedScale.map(p => new PitchClass(p.step as LetterName, p.alter))
         : defaultScale();
+    applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))));
+}
+
+/** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard). */
+export function renderTonnetzLive(state: LiveState): void {
+    if (!scene) return;
+    const surface = state.scaleSpellings.length === 7
+        ? state.scaleSpellings.map(p => new PitchClass(p.step as LetterName, p.alter))
+        : defaultScale();
+    applyScene(surface, new Set(state.heldPCs));
+}
+
+/** Point the scene at a 7-letter surface and the pitch classes ringing on it, choosing the cheapest
+ *  scene update. The RAF loop turns the sounding set into full activation and decays everything else
+ *  toward the scale floor (see the accumulator above). */
+function applyScene(surface: PitchClass[], sounding: Set<number>): void {
+    if (!scene) return;
     const sig = scaleSig(surface);
     const scaleChanged = sig !== lastScaleSig;
     scale = surface;
     scalePCs = new Set(surface.map(p => ((p.midiValue % 12) + 12) % 12));
     lastScaleSig = sig;
-
-    // The notes ringing at this onset, spelled as the library committed them. The RAF loop turns these
-    // into full activation and decays everything else toward the scale floor (see the accumulator above).
-    soundingPCs = new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch)));
+    soundingPCs = sounding;
 
     // Choosing the scene update, mirroring the standalone app's syncScene3D (spellingOnly vs full rebuild):
     //   • surface PC-SET changed  → a genuinely new chord. The triangle SET must be recomputed, because the

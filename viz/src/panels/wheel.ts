@@ -18,7 +18,6 @@ import {
     SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX,
     SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX,
 } from '../state.js';
-import { label } from '../format.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -130,18 +129,6 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     host.appendChild(svg);
 
     if (snap) {
-        const leg = document.createElement('div');
-        leg.className = 'wheel-legend';
-        const noteDot = noteLof != null && noteLof >= lo && noteLof <= hi ? ` · <span class="note-dot-key"></span> ${label(snap.committed)}` : '';
-        if (opts.control) {
-            leg.innerHTML = `fixed-LoF window <b>${keyName(lo)}…${keyName(hi)}</b> · one spelling per pitch class, no context` + noteDot;
-        } else if (active != null) {
-            const keyKind = snap.frameLofTonic != null ? 'live key' : 'frame key';
-            leg.innerHTML = `${keyKind} <b>${keyName(active)} major / ${keyName(active + 3)} minor</b> · collection ${keyName(active - 1)}…${keyName(active + 5)}` + noteDot;
-        } else {
-            leg.textContent = 'batch two-pass — whole-piece decision, no streaming frame';
-        }
-        host.appendChild(leg);
         // Collection reads (display-only): the axis the mode-blind frame can't express — collection =
         // major + relative minor. LOCAL chases tonicizations; STABLE is the home key.
         if (opts.showKeyLanes && (snap.localColl || snap.stableColl)) {
