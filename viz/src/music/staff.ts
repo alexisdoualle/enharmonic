@@ -16,8 +16,9 @@ import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // measures shown
 const MEASURE_W = 260;
-const STAFF_H = 130;
-const ZOOM_MIN = 0.55;     // floor for fit-to-width: below this a very dense window scrolls instead
+const STAVE_Y = 12;        // stave top inside the engraving — small top margin for high ledger notes
+const STAFF_H = 118;       // engraving envelope; scaled to fit the band height so nothing is clipped
+const ZOOM_MIN = 0.4;      // floor for the fit zoom: below this a very dense window scrolls instead
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -84,7 +85,8 @@ export function renderStaff(replay: Replay, step: number): void {
     // Fit-to-width depends on the panel's inner width, so bucket it into the cache token — a window
     // resize that crosses a bucket busts the cache and re-fits (main wires a resize → render).
     const avail = host.clientWidth || 0;
-    const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}`;
+    const availH = host.clientHeight || 0;
+    const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}|${Math.round(availH / 20)}`;
     if (replay === builtForReplay && token === builtToken) return;
     builtForReplay = replay; builtToken = token;
 
@@ -184,7 +186,12 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
     // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates —
     // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
-    const zoom = avail > 0 ? Math.max(ZOOM_MIN, Math.min(1, (avail - 2) / totalW)) : 1;
+    // Fit the engraving to BOTH the panel width and the (compact) band height, shrinking only, so a
+    // tall-ranged window is zoomed out to fit the band instead of being clipped at the bottom.
+    const availH = host.clientHeight || STAFF_H;
+    const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
+    const heightZoom = availH > 0 ? availH / STAFF_H : 1;
+    const zoom = Math.max(ZOOM_MIN, Math.min(1, widthZoom, heightZoom));
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
@@ -193,7 +200,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     let x = 10;
     for (let mi = 0; mi < built.length; mi++) {
         const b = built[mi]!;
-        const stave = new Stave(x, 20, b.staveW);
+        const stave = new Stave(x, STAVE_Y, b.staveW);
         if (mi === 0) {
             stave.addClef(clef);
             if (b.keySpec !== 'C') stave.addKeySignature(b.keySpec);
