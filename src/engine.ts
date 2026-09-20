@@ -148,6 +148,11 @@ export interface EngineOptions {
     lookAhead?: boolean;
     /** LOOK-AHEAD reward/penalty magnitude. */
     lookAheadWeight?: number;
+    /** LEADING-TONE BOOST: extra look-ahead magnitude applied ONLY to an UP-resolution into a NATURAL
+     *  (diatonic) target — the genuine leading tone (A♯→B), where the frame slot the note resolves to is
+     *  unaltered. Leaves up-into-chromatic (C→C♯) and all down-resolutions at the base weight, so it flips
+     *  margin-1 leading tones without over-sharpening same-letter chromatic inflections (0 = off). */
+    leadingToneBoost?: number;
     /** DRIFT LEASH: penalty for a double-accidental (|alter| ≥ 2) spelling (0 = off). */
     doubleAccPenalty?: number;
     /** VERTICAL GUARD weight: penalty per misspelled third (dim4/aug2) a candidate forms with a
@@ -170,7 +175,14 @@ export const RT_PRESET: EngineOptions = {
 export const LA_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
-    lookAhead: true, lookAheadWeight: 2,
+    // lookAheadWeight stays 2; the extra pull comes from leadingToneBoost, GATED to up-resolutions into a
+    // natural target (a genuine leading tone A♯→B), so it doesn't over-sharpen same-letter chromatic
+    // inflections (C→C♯, C♯→C). A blunt weight-3 bump could not make that distinction and regressed the
+    // golden chorales (+5 each); the gate keeps those clean. Net: Meredith clean 563→557, noisy 567→554, and
+    // it recovers true leading tones (Moonlight A♯). One residual — E♭→E, a lowered borrowed degree rising to
+    // the natural 3rd, is unseparable from a leading tone without harmonic context (bach_wtc1 +2). See
+    // handoffs/HANDOFF_leading_tone_vs_chromatic.md.
+    lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
 };
 
@@ -180,6 +192,10 @@ export const LA_PRESET: EngineOptions = {
 export const TP_PASS_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'economy', foldWindow: 24, foldMargin: 7, foldMaxChroma: 0, foldDebounce: 8,
+    // lookAheadWeight stays 2 here (NOT 3 like the real-time LA tier): a stronger per-pass look-ahead makes
+    // both passes commit a side harder, shrinking the forward/backward disagreement the reconciliation needs
+    // — measured net-worse (clean 278→300, noisy 384→394). Same reason the passes use the economy fold, not
+    // the clamp: the two-pass's own reconciliation is the better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
 };
@@ -221,6 +237,7 @@ export class SpellingEngine {
     private readonly anchorWindow: number;
     private readonly lookAheadOn: boolean;
     private readonly lookAheadWeight: number;
+    private readonly leadingToneBoost: number;
     private readonly doubleAccPenalty: number;
     private readonly verticalWeight: number;
     private readonly collisionRepair: boolean;
@@ -268,6 +285,7 @@ export class SpellingEngine {
         this.anchorWindow = opts.anchorWindow ?? 32;
         this.lookAheadOn = opts.lookAhead ?? false;
         this.lookAheadWeight = opts.lookAheadWeight ?? 2;
+        this.leadingToneBoost = opts.leadingToneBoost ?? 0;
         this.doubleAccPenalty = opts.doubleAccPenalty ?? 0;
         this.verticalWeight = opts.verticalWeight ?? 0;
         this.collisionRepair = opts.collisionRepair ?? false;
@@ -300,7 +318,7 @@ export class SpellingEngine {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
         const laOn = this.lookAheadOn && resolveDir !== 0;
-        let laStep: Letter | null = null, laTarget: Letter | null = null;
+        let laStep: Letter | null = null, laTarget: Letter | null = null, laWeight = this.lookAheadWeight;
         if (laOn) {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;
             for (const L of LETTERS) {
@@ -308,6 +326,10 @@ export class SpellingEngine {
                 if (((LETTER_BASE[p.step] + p.alter) % 12 + 12) % 12 === targetPc) { laTarget = L; break; }
             }
             if (laTarget) laStep = LETTERS[(LETTERS.indexOf(laTarget) - resolveDir + 7) % 7]!;
+            // LEADING-TONE BOOST: only for an UP-resolution into a NATURAL (unaltered) target — a genuine
+            // leading tone (A♯→B). Up-into-chromatic (C→C♯) and down-resolutions keep the base weight, so
+            // the boost never over-sharpens a same-letter chromatic inflection of a degree.
+            if (laTarget && resolveDir === 1 && this.resolved.get(laTarget)!.alter === 0) laWeight += this.leadingToneBoost;
         }
 
         const scale = LETTERS.map(L => ({ ...this.resolved.get(L)! }));   // the surface scored against
@@ -324,7 +346,7 @@ export class SpellingEngine {
             const last = this.lastByLetter.get(c.step);
             const guarded = this.recencyGuard && last && last.alter !== c.alter && this.onset - last.onset <= this.guardWindow;
             const guardDelta = guarded ? -this.recencyGuard : 0;
-            const laDelta = laOn ? (c.step === laStep ? this.lookAheadWeight : c.step === laTarget ? -this.lookAheadWeight : 0) : 0;
+            const laDelta = laOn ? (c.step === laStep ? laWeight : c.step === laTarget ? -laWeight : 0) : 0;
             const daDelta = Math.abs(c.alter) >= 2 ? -this.doubleAccPenalty : 0;
             let misThirds = 0;
             if (this.verticalWeight > 0 && inPerfectTriad) for (const x of coSounding) if (isMisspelledThird(c, x)) misThirds++;
