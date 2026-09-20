@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>enharmonic — pitch spelling for MIDI</title>
+<meta name="description" content="A small, dependency-free library that recovers written pitch spelling (C♯ vs D♭) from a MIDI stream, from musical context alone." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --ink: #1c1b19;
+    --muted: #6c6860;
+    --accent: #345a7d;
+    --line: #e7e3dc;
+    --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16161a;
+      --ink: #e9e6e0;
+      --muted: #9c988f;
+      --accent: #93b6d8;
+      --line: #2a2a30;
+      --card: #1d1d22;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16161a; --ink: #e9e6e0; --muted: #9c988f; --accent: #93b6d8; --line: #2a2a30; --card: #1d1d22;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+    font-size: 19px;
+    line-height: 1.65;
+    font-optical-sizing: auto;
+  }
+  .wrap { max-width: 42rem; margin: 0 auto; padding: 0 24px; }
+  header { padding: 12vh 0 2.5rem; }
+  h1 {
+    font-weight: 500;
+    font-size: clamp(2.6rem, 7vw, 3.6rem);
+    letter-spacing: -0.02em;
+    margin: 0 0 .4rem;
+    line-height: 1.05;
+  }
+  .tagline { color: var(--muted); font-size: 1.15rem; margin: 0; font-style: italic; }
+  h2 {
+    font-weight: 600;
+    font-size: 1.02rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 2.8rem 0 .8rem;
+  }
+  p { margin: 0 0 1.1rem; }
+  main { padding-bottom: 4rem; }
+  .lead { font-size: 1.18rem; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  a:hover { border-bottom-color: var(--accent); }
+  .note { font-family: 'Newsreader', Georgia, serif; }
+  .glyph { font-variant-ligatures: none; }
+  mono, .mono, code { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; }
+  /* stat row */
+  .stats { display: flex; flex-wrap: wrap; gap: 1.5rem 2.5rem; margin: 1.4rem 0 0; padding: 1.2rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stat { }
+  .stat .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; }
+  .stat .l { display: block; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-top: .15rem; }
+  /* buttons */
+  .cta { display: flex; flex-wrap: wrap; gap: .8rem; margin: 2.4rem 0 0; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .7rem 1.3rem; border-radius: 7px; font-size: 1rem;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    border-bottom-width: 1px; /* override the link underline rule */
+  }
+  a.btn { border-bottom: 1px solid var(--line); }
+  a.btn:hover { border-color: var(--accent); }
+  a.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  :root[data-theme="dark"] a.btn.primary, :root:not([data-theme="light"]) a.btn.primary { color: #10151b; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) a.btn.primary { color: #10151b; } }
+  footer { color: var(--muted); font-size: .9rem; padding: 2.5rem 0 4rem; border-top: 1px solid var(--line); }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>enharmonic</h1>
+      <p class="tagline">Real-time enharmonic pitch spelling for MIDI.</p>
+    </header>
+
+    <main>
+      <p class="lead">A written score names each note with a letter and an accidental. A MIDI stream keeps
+      only the twelve pitch classes and throws that away: it cannot say whether note 61 is a
+      <span class="glyph">C♯</span> or a <span class="glyph">D♭</span>. The letter is not cosmetic — it tells
+      a reader the note's harmonic identity. This library recovers it from musical context alone.</p>
+
+      <h2>The idea</h2>
+      <p>A spelling can be wrong in two independent ways. The first is <em>coherence</em>: inside an F‑minor
+      chord, note 68 is <span class="glyph">A♭</span>, not <span class="glyph">G♯</span>, because
+      <span class="glyph">G♯</span> would make an augmented second where the ear hears a minor third. The
+      second is the <em>comma</em>, or side: a passage in <span class="glyph">C♯</span> major written in
+      <span class="glyph">D♭</span> major is the same pitches one turn around the spiral of fifths — a
+      coherent transposition, not an error.</p>
+
+      <p>The speller settles both from a few simple principles in one harmonic space, with
+      <strong>no key detection anywhere</strong>: a running seven-letter scale, an interval score that
+      rewards consonance, and a spiral that decides which side of the comma a passage sits on. The side it
+      lands on is just a statistic of the notes it has already committed.</p>
+
+      <h2>Two spellers</h2>
+      <p>One engine, run at the latency you have. <strong>Real time</strong> spells each note as it plays,
+      from past context only. <strong>Two-pass</strong> reads the whole piece forward and backward and
+      reconciles the two, fixing the modulation boundaries the streaming pass spells late.</p>
+
+      <div class="stats" aria-label="accuracy on the held-out Meredith corpus">
+        <div class="stat"><span class="n">99.52%</span><span class="l">real-time, exact</span></div>
+        <div class="stat"><span class="n">99.86%</span><span class="l">two-pass, exact</span></div>
+        <div class="stat"><span class="n">0</span><span class="l">runtime dependencies</span></div>
+      </div>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact composer-spelling
+      match on David Meredith's held-out 8×25000 corpus (195,972 notes), the standard pitch-spelling
+      benchmark — level with the best deterministic and neural spellers.</p>
+
+      <div class="cta">
+        <a class="btn primary" href="viz/">Open the visualiser →</a>
+        <a class="btn" href="https://github.com/alexisdoualle/enharmonic">View on GitHub</a>
+      </div>
+    </main>
+
+    <footer>
+      Apache-2.0 · zero-dependency TypeScript / ESM · by Alexis Doualle
+    </footer>
+  </div>
+</body>
+</html>

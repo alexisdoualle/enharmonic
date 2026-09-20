@@ -40,7 +40,7 @@ const server = createServer(async (req, res) => {
     try {
         const url = new URL(req.url, `http://localhost:${PORT}`);
         let path = decodeURIComponent(url.pathname);
-        if (path === '/' || path === '') path = '/index.html';
+        if (path === '' || path.endsWith('/')) path += 'index.html';   // '/' → '/index.html', '/viz/' → '/viz/index.html'
         const filePath = normalize(join(OUT, path));
         if (!filePath.startsWith(OUT)) { res.writeHead(403); return res.end('forbidden'); }
         const body = await readFile(filePath);
