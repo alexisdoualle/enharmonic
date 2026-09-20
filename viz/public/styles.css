@@ -56,6 +56,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 #staff, #pianoroll { padding: 0; overflow-x: auto; }
 #staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 104px; overflow-y: auto; }
 #pianoroll { background: var(--panel); flex: 1 1 0; min-height: 0; overflow-y: auto; }
+/* Centre the engraving horizontally when it is narrower than the band (e.g. zoomed out on a phone). */
+#staff svg { display: block; margin: 0 auto; }
 .staff-empty { padding: 10px 14px; color: #888; font-size: 12px; }
 
 /* three cards in one row: scoring (widest — carries the surface rows + scoring table) · spiral · the

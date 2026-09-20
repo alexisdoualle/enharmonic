@@ -187,10 +187,12 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
     // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
     // band scrolls vertically to it (the SVG is cropped to content below), so nothing is clipped. On a
-    // narrow (phone) panel drop the floor so the window zooms out to fit the width instead of side-scrolling.
+    // narrow (phone) panel drop the floor so the window fits the width instead of side-scrolling, and
+    // shrink a touch further so the whole window reads comfortably on a small screen.
+    const narrow = avail > 0 && avail < 640;
     const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
-    const floor = avail > 0 && avail < 640 ? 0.12 : ZOOM_MIN;
-    const zoom = Math.max(floor, Math.min(1, widthZoom));
+    const floor = narrow ? 0.1 : ZOOM_MIN;
+    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1);
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
@@ -227,11 +229,13 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
             const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
             const bandH = host.clientHeight || 100;
             const pad = 6;
-            // Centre on middle C (C4), not the stave's middle line, so treble and bass windows are framed
-            // the same way and low-register (bass-clef) pieces don't sit too low. C4 is a ledger below the
-            // treble staff (line 5) and a ledger above the bass staff (line -1).
-            const middleCLine = clef === 'bass' ? -1 : 5;
-            const centerY = firstStave.getYForLine(middleCLine) * zoom;
+            // Vertical anchor to centre in the band. Wide screens centre on middle C (C4) so treble and
+            // bass windows are framed consistently and low pieces don't sit too low (C4 is a ledger below
+            // the treble staff, line 5, and a ledger above the bass staff, line -1). A phone's short band
+            // makes that register offset read as dead whitespace, so there centre on the actual content.
+            const centerY = narrow
+                ? bb.y + bb.height / 2
+                : firstStave.getYForLine(clef === 'bass' ? -1 : 5) * zoom;
             const top = Math.min(bb.y - pad, centerY - bandH / 2);
             const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
             const w = Math.ceil(totalW * zoom);

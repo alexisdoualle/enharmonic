@@ -28,6 +28,20 @@ let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) !== 
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
+// Staff visibility: a toolbar toggle to hide the sheet-music band (handy on phones), persisted per-browser.
+const SHOW_STAFF_KEY = 'viz.showStaff';
+let staffVisible = (() => { try { return localStorage.getItem(SHOW_STAFF_KEY) !== '0'; } catch { return true; } })();
+function applyStaffVisible() {
+    $('staff').style.display = staffVisible ? '' : 'none';
+    $<HTMLInputElement>('show-staff').checked = staffVisible;
+}
+function setStaffVisible(v: boolean) {
+    staffVisible = v;
+    try { localStorage.setItem(SHOW_STAFF_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
+    applyStaffVisible();
+    if (v) render();   // re-fit the staff to the (now-restored) band
+}
+
 // On phones the three side panels don't fit side by side, so only one shows at a time and a small tab
 // bar switches between them (scoring / spiral / tonnetz). On wider screens all three show and the tab
 // bar is hidden. `mobileTab` is which one is active in the narrow layout.
@@ -482,6 +496,7 @@ function wire() {
         soundOn = (e.target as HTMLInputElement).checked;
         if (soundOn) audioEnable(); else allNotesOff();
     });
+    $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('look-ahead').addEventListener('change', e => {
         state.lookAhead = (e.target as HTMLInputElement).checked;
         recompute(); syncUrl();   // changes the speller preset, so rebuild
@@ -548,7 +563,8 @@ async function boot() {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
     }
-    // Apply panel visibility (3D/2D choice + mobile tab) now that a fixture and its first snapshot exist.
+    // Apply panel visibility (3D/2D choice + mobile tab) and the staff toggle now that a fixture is loaded.
+    applyStaffVisible();
     applyPanelVisibility();
     render();
 }
