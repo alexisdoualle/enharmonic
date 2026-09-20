@@ -197,10 +197,12 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // Pass 2: draw each stave at its computed width, then format+draw its voice into the note area
     // so notes stay within their own measure instead of drifting into the next one.
     let x = 10;
+    let firstStave: Stave | null = null;
     for (let mi = 0; mi < built.length; mi++) {
         const b = built[mi]!;
         const stave = new Stave(x, STAVE_Y, b.staveW);
         if (mi === 0) {
+            firstStave = stave;
             stave.addClef(clef);
             if (b.keySpec !== 'C') stave.addKeySignature(b.keySpec);
         } else if (b.keySpec !== b.prevKey) {
@@ -216,24 +218,32 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
         x += b.staveW;
     }
 
-    // Crop the SVG to the actually-engraved content: fit its height to the real note range (so every
-    // note — including deep bass ledgers below the initial canvas — is reachable by scrolling) and
-    // offset the top so there is no wasted whitespace above the highest mark.
+    // Size the SVG to the engraved content, but keep at least half a band of room on each side of the
+    // middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
+    // band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top.
     const svg = host.querySelector('svg');
-    if (svg instanceof SVGSVGElement) {
+    if (svg instanceof SVGSVGElement && firstStave) {
         try {
             const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
+            const bandH = host.clientHeight || 100;
             const pad = 6;
+            // Centre on middle C (C4), not the stave's middle line, so treble and bass windows are framed
+            // the same way and low-register (bass-clef) pieces don't sit too low. C4 is a ledger below the
+            // treble staff (line 5) and a ledger above the bass staff (line -1).
+            const middleCLine = clef === 'bass' ? -1 : 5;
+            const centerY = firstStave.getYForLine(middleCLine) * zoom;
+            const top = Math.min(bb.y - pad, centerY - bandH / 2);
+            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
             const w = Math.ceil(totalW * zoom);
-            const h = Math.ceil(bb.height + 2 * pad);
-            svg.setAttribute('viewBox', `0 ${(bb.y - pad).toFixed(1)} ${w} ${h}`);
+            const h = Math.ceil(bottom - top);
+            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${w} ${h}`);
             svg.setAttribute('width', String(w));
             svg.setAttribute('height', String(h));
             svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
             svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
+            host.scrollTop = Math.max(0, centerY - top - bandH / 2);
         } catch { /* getBBox unavailable (detached node) — leave the fixed-size engraving */ }
-    }
-    host.scrollTop = 0;   // top of the real content — no leading whitespace
+    } else host.scrollTop = 0;
 }
 
 // ms-per-beat from consecutive same-measure onsets (Δt / Δbeat), median for robustness. The
