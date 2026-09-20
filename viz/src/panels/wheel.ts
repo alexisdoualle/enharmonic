@@ -119,6 +119,14 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
         if (noteLof === t) svg.appendChild(svgEl('circle', { cx: lx.toFixed(1), cy: (ly + TH / 2 - 3).toFixed(1), r: 2.6, class: 'note-dot' }));
     }
 
+    // TODO: out-of-range note dot. When a sounding note's line-of-fifths position (`noteLof`) falls
+    // OUTSIDE the drawn window [drawLo, drawHi] — e.g. D𝄪 (+16) when the spiral only reaches ~+8 — it
+    // currently gets no dot at all, so it looks like nothing played. Instead, extrapolate its position:
+    // keep drawing at `ang(noteLof)` / `rad(noteLof)` (both are continuous in t, so they still give a
+    // sensible angle + radius just past the rim) and render a faint dot there, nudged a little further
+    // out (or ghosted) so it reads as "off the edge, near where D𝄪 would be" rather than a real cell.
+    // Clamp the radius so a very distant note doesn't fly off the SVG. Purely a display cue.
+
     // Hub: the live key + the reachable-range readout.
     svg.appendChild(svgEl('circle', { cx: CC, cy: CC, r: R_IN - 2, fill: '#171b22', stroke: '#323845' }));
     svg.appendChild(svgEl('text', { x: CC, y: CC - 8, 'text-anchor': 'middle', 'font-size': 8.5, fill: '#7d8694' }, opts.control ? 'window' : 'spiral'));
