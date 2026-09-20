@@ -374,6 +374,7 @@ const COMPUTER_KEYS: Record<string, number> = {
     KeyS: 49, KeyD: 51, KeyG: 54, KeyH: 56, KeyJ: 58,
 };
 
+/** Wire the computer keyboard. Always safe to call on load: it prompts for nothing. */
 export function connectLiveInput(model: LiveSpeller): void {
     const down = new Set<string>();
     const onKeyDown = (event: KeyboardEvent) => {
@@ -394,12 +395,29 @@ export function connectLiveInput(model: LiveSpeller): void {
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+}
 
+/** True when this browser exposes Web MIDI at all (so the UI can hide the button otherwise). */
+export function midiAvailable(): boolean {
+    return typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess;
+}
+
+let midiRequested = false;
+
+/**
+ * Request Web MIDI and attach every input. Triggered by an explicit user action (a button) so the
+ * browser permission prompt never fires on page load. Safe to call more than once; only the first
+ * request runs. Resolves once the prompt has been answered (granted or denied).
+ */
+export function connectMidi(model: LiveSpeller): Promise<void> {
     if (!navigator.requestMIDIAccess) {
         model.setMidiStatus('Web MIDI unavailable · computer keyboard ready');
-        return;
+        return Promise.resolve();
     }
-    void navigator.requestMIDIAccess({ sysex: false }).then(access => {
+    if (midiRequested) return Promise.resolve();
+    midiRequested = true;
+    model.setMidiStatus('requesting MIDI access…');
+    return navigator.requestMIDIAccess({ sysex: false }).then(access => {
         const attach = (input: WebMidi.MIDIInput) => {
             input.addEventListener('midimessage', event => {
                 const [status, midi, velocity] = event.data;
@@ -416,5 +434,8 @@ export function connectLiveInput(model: LiveSpeller): void {
             const current = [...access.inputs.values()].map(input => input.name).filter(Boolean);
             model.setMidiStatus(current.length ? `MIDI: ${current.join(', ')}` : 'MIDI ready · computer keyboard ready');
         });
-    }).catch(() => model.setMidiStatus('MIDI permission denied · computer keyboard ready'));
+    }).catch(() => {
+        midiRequested = false; // let the user retry after a denial
+        model.setMidiStatus('MIDI permission denied · computer keyboard ready');
+    });
 }

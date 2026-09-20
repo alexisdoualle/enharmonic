@@ -16,8 +16,9 @@ import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // measures shown
 const MEASURE_W = 260;
-const STAFF_H = 130;
-const ZOOM_MIN = 0.55;     // floor for fit-to-width: below this a very dense window scrolls instead
+const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
+const STAFF_H = 220;       // initial canvas height (generous); overridden to the engraved content height
+const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very dense window scrolls sideways
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -184,17 +185,24 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
     // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates —
     // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
-    const zoom = avail > 0 ? Math.max(ZOOM_MIN, Math.min(1, (avail - 2) / totalW)) : 1;
+    // Fit the engraving to BOTH the panel width and the (compact) band height, shrinking only, so a
+    // tall-ranged window is zoomed out to fit the band instead of being clipped at the bottom.
+    // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
+    // band scrolls vertically to it, so tall-ranged windows are never clipped.
+    const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
+    const zoom = Math.max(ZOOM_MIN, Math.min(1, widthZoom));
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
     // Pass 2: draw each stave at its computed width, then format+draw its voice into the note area
     // so notes stay within their own measure instead of drifting into the next one.
     let x = 10;
+    let firstStave: Stave | null = null;
     for (let mi = 0; mi < built.length; mi++) {
         const b = built[mi]!;
-        const stave = new Stave(x, 20, b.staveW);
+        const stave = new Stave(x, STAVE_Y, b.staveW);
         if (mi === 0) {
+            firstStave = stave;
             stave.addClef(clef);
             if (b.keySpec !== 'C') stave.addKeySignature(b.keySpec);
         } else if (b.keySpec !== b.prevKey) {
@@ -202,13 +210,40 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
             stave.addKeySignature(b.keySpec, b.prevKey);
         }
         stave.setContext(ctx).draw();
-        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, 16); ctx.restore();
+        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, STAVE_Y - 4); ctx.restore();
         if (b.voice && b.fmt) {
             try { b.fmt.format([b.voice], b.noteArea); b.voice.draw(ctx, stave); }
             catch { /* leave this one measure blank rather than blanking the whole staff */ }
         }
         x += b.staveW;
     }
+
+    // Size the SVG to the engraved content, but keep at least half a band of room on each side of the
+    // middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
+    // band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top.
+    const svg = host.querySelector('svg');
+    if (svg instanceof SVGSVGElement && firstStave) {
+        try {
+            const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
+            const bandH = host.clientHeight || 100;
+            const pad = 6;
+            // Centre on middle C (C4), not the stave's middle line, so treble and bass windows are framed
+            // the same way and low-register (bass-clef) pieces don't sit too low. C4 is a ledger below the
+            // treble staff (line 5) and a ledger above the bass staff (line -1).
+            const middleCLine = clef === 'bass' ? -1 : 5;
+            const centerY = firstStave.getYForLine(middleCLine) * zoom;
+            const top = Math.min(bb.y - pad, centerY - bandH / 2);
+            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
+            const w = Math.ceil(totalW * zoom);
+            const h = Math.ceil(bottom - top);
+            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${w} ${h}`);
+            svg.setAttribute('width', String(w));
+            svg.setAttribute('height', String(h));
+            svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
+            svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
+            host.scrollTop = Math.max(0, centerY - top - bandH / 2);
+        } catch { /* getBBox unavailable (detached node) — leave the fixed-size engraving */ }
+    } else host.scrollTop = 0;
 }
 
 // ms-per-beat from consecutive same-measure onsets (Δt / Δbeat), median for robustness. The

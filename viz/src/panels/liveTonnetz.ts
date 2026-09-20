@@ -376,6 +376,8 @@ function renderSvg(s: LiveState, showCoords: boolean, collapseZ: number): string
 }
 
 export interface LiveTonnetzController {
+    /** The shared live model. Live input and playback both flow through it; the 3D panel subscribes too. */
+    model: LiveSpeller;
     renderPlaybackSnapshot(snapshot: Snapshot | null): void;
 }
 
@@ -429,6 +431,7 @@ export function initLiveTonnetz(host: HTMLElement): LiveTonnetzController {
     });
     connectLiveInput(model);
     return {
+        model,
         renderPlaybackSnapshot(snapshot) {
             if (!snapshot) return;
             model.setPlaybackState(
