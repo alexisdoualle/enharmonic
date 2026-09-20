@@ -28,19 +28,38 @@ let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) !== 
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
-/** Show either the coiled-Tonnetz panel or the 3D lattice panel in the right column, lazy-building the
- *  3D scene the first time it is shown. Feeding the visible view its snapshot is left to `render()`. */
-function applyTonnetz3d() {
-    $('live-tonnetz').style.display = tonnetz3dOn ? 'none' : '';
-    $('tonnetz').style.display = tonnetz3dOn ? 'flex' : 'none';
-    if (!tonnetz3dOn) return;
+// On phones the three side panels don't fit side by side, so only one shows at a time and a small tab
+// bar switches between them (scoring / spiral / tonnetz). On wider screens all three show and the tab
+// bar is hidden. `mobileTab` is which one is active in the narrow layout.
+const MOBILE_MQ = window.matchMedia('(max-width: 720px)');
+type PanelTab = 'scoring' | 'spiral' | 'tonnetz';
+let mobileTab: PanelTab = 'tonnetz';
+
+/** Set every side panel's visibility from the layout (all three on wide screens; only the active tab on
+ *  phones) and the 3D/2D choice within the tonnetz slot; reflect the active tab; and lazy-build the 3D
+ *  scene once its panel is actually on screen. Feeding the visible view its snapshot is left to render(). */
+function applyPanelVisibility() {
+    const mobile = MOBILE_MQ.matches;
+    const showScoring = !mobile || mobileTab === 'scoring';
+    const showSpiral = !mobile || mobileTab === 'spiral';
+    const showTonnetz = !mobile || mobileTab === 'tonnetz';
+    $('scoring').style.display = showScoring ? '' : 'none';
+    $('wheel').style.display = showSpiral ? '' : 'none';
+    $('live-tonnetz').style.display = showTonnetz && !tonnetz3dOn ? '' : 'none';
+    $('tonnetz').style.display = showTonnetz && tonnetz3dOn ? 'flex' : 'none';
+    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).classList.toggle('active', mobileTab === t);
+    if (showTonnetz && tonnetz3dOn) ensureTonnetz3d();
+}
+
+/** Lazy-load and build the 3D lattice the first time its panel is shown (it pulls in three.js). */
+function ensureTonnetz3d() {
     if (tonnetz3d) { tonnetz3d.initTonnetz($('tonnetz-canvas')); return; }   // initTonnetz is a no-op once built
     if (tonnetz3dLoading) return;
     tonnetz3dLoading = true;
     void import('./panels/tonnetz.js').then(mod => {
         tonnetz3dLoading = false;
         tonnetz3d = mod;
-        if (!tonnetz3dOn) return;              // toggled back off while the chunk was loading
+        if (!(tonnetz3dOn && (!MOBILE_MQ.matches || mobileTab === 'tonnetz'))) return;   // no longer visible
         mod.initTonnetz($('tonnetz-canvas'));
         render();                              // paint the current onset onto the freshly built lattice
     }).catch(err => {
@@ -53,8 +72,15 @@ function applyTonnetz3d() {
 function setTonnetz3d(on: boolean) {
     tonnetz3dOn = on;
     try { localStorage.setItem(TONNETZ3D_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
-    applyTonnetz3d();
+    applyPanelVisibility();
     render();
+}
+
+/** Switch the active panel in the narrow (phone) layout. */
+function setMobileTab(tab: PanelTab) {
+    mobileTab = tab;
+    applyPanelVisibility();
+    render();   // the newly shown panel needs the current snapshot (staff re-fit, 3D paint, …)
 }
 
 /** Append the corner overlay button that swaps this panel for the other tonnetz view. Its own panel
@@ -428,6 +454,9 @@ function wire() {
     addViewSwitch('tonnetz', '2D coiled', false);
     addViewSwitch('live-tonnetz', '3D lattice', true);
     wireMidiButton();
+    // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
+    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).addEventListener('click', () => setMobileTab(t));
+    MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
@@ -519,9 +548,9 @@ async function boot() {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
     }
-    // Restore the persisted 3D-tonnetz choice now that a fixture (and its first snapshot) is loaded.
-    applyTonnetz3d();
-    if (tonnetz3dOn) render();
+    // Apply panel visibility (3D/2D choice + mobile tab) now that a fixture and its first snapshot exist.
+    applyPanelVisibility();
+    render();
 }
 
 boot().catch(err => { $('status').textContent = 'ERROR: ' + err.message; console.error(err); });

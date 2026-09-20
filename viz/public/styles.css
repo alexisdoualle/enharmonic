@@ -66,9 +66,29 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
   gap: 14px; padding: 8px 16px 12px; align-items: stretch;
   flex: 42 1 0; min-height: 0;
 }
-/* stack once a single row would get too cramped — then let the region scroll instead of squashing cards */
-@media (max-width: 1040px) { #panels { grid-template-columns: 1fr 1fr; overflow-y: auto; } }
-@media (max-width: 720px) { #panels { grid-template-columns: 1fr; overflow-y: auto; } }
+/* two-up once a single row would get too cramped (small laptop / landscape tablet) */
+@media (max-width: 1040px) and (min-width: 721px) { #panels { grid-template-columns: 1fr 1fr; overflow-y: auto; } }
+
+/* Panel switcher: hidden on wide screens (all panels shown); shown on phones (one panel at a time). */
+#panel-tabs { display: none; }
+
+/* --- Phone layout: the page scrolls, and the side panels switch one-at-a-time from the tab bar --- */
+@media (max-width: 720px) {
+  body { height: auto; overflow-y: auto; }
+  #toolbar, #transport { flex-wrap: wrap; row-gap: 8px; }
+  #music { flex: none; }
+  #staff { height: 120px; }
+  #pianoroll { flex: none; height: 260px; }
+  #panels { display: block; flex: none; overflow: visible; padding-top: 6px; }
+  #panels > .panel { min-height: 66vh; }
+  #scoring, #wheel { overflow-y: visible; }        /* the page scrolls now, not each card */
+  #panel-tabs { display: flex; gap: 6px; padding: 8px 16px 0; }
+  #panel-tabs button {
+    flex: 1 1 0; background: var(--panel); color: var(--dim); border: 1px solid var(--line);
+    border-radius: 7px; padding: 9px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; cursor: pointer;
+  }
+  #panel-tabs button.active { background: var(--tonic); color: var(--ink); border-color: var(--accent); }
+}
 
 /* the speller's surface, compact: a small left label + a 7-cell letter row, two rows (frame / surface). */
 .surface-block { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
