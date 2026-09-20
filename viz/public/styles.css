@@ -54,7 +54,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
    roll fills the rest, scrolling vertically for tall pieces. */
 #music { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 0; flex: 58 1 0; min-height: 0; }
 #staff, #pianoroll { padding: 0; overflow-x: auto; }
-#staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 104px; overflow-y: hidden; }
+#staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 104px; overflow-y: auto; }
 #pianoroll { background: var(--panel); flex: 1 1 0; min-height: 0; overflow-y: auto; }
 .staff-empty { padding: 10px 14px; color: #888; font-size: 12px; }
 

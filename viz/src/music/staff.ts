@@ -16,9 +16,9 @@ import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // measures shown
 const MEASURE_W = 260;
-const STAVE_Y = 12;        // stave top inside the engraving — small top margin for high ledger notes
-const STAFF_H = 118;       // engraving envelope; scaled to fit the band height so nothing is clipped
-const ZOOM_MIN = 0.4;      // floor for the fit zoom: below this a very dense window scrolls instead
+const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
+const STAFF_H = 220;       // initial canvas height (generous); overridden to the engraved content height
+const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very dense window scrolls sideways
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -85,8 +85,7 @@ export function renderStaff(replay: Replay, step: number): void {
     // Fit-to-width depends on the panel's inner width, so bucket it into the cache token — a window
     // resize that crosses a bucket busts the cache and re-fits (main wires a resize → render).
     const avail = host.clientWidth || 0;
-    const availH = host.clientHeight || 0;
-    const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}|${Math.round(availH / 20)}`;
+    const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}`;
     if (replay === builtForReplay && token === builtToken) return;
     builtForReplay = replay; builtToken = token;
 
@@ -188,10 +187,10 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
     // Fit the engraving to BOTH the panel width and the (compact) band height, shrinking only, so a
     // tall-ranged window is zoomed out to fit the band instead of being clipped at the bottom.
-    const availH = host.clientHeight || STAFF_H;
+    // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
+    // band scrolls vertically to it, so tall-ranged windows are never clipped.
     const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
-    const heightZoom = availH > 0 ? availH / STAFF_H : 1;
-    const zoom = Math.max(ZOOM_MIN, Math.min(1, widthZoom, heightZoom));
+    const zoom = Math.max(ZOOM_MIN, Math.min(1, widthZoom));
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
@@ -209,13 +208,32 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
             stave.addKeySignature(b.keySpec, b.prevKey);
         }
         stave.setContext(ctx).draw();
-        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, 16); ctx.restore();
+        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, STAVE_Y - 4); ctx.restore();
         if (b.voice && b.fmt) {
             try { b.fmt.format([b.voice], b.noteArea); b.voice.draw(ctx, stave); }
             catch { /* leave this one measure blank rather than blanking the whole staff */ }
         }
         x += b.staveW;
     }
+
+    // Crop the SVG to the actually-engraved content: fit its height to the real note range (so every
+    // note — including deep bass ledgers below the initial canvas — is reachable by scrolling) and
+    // offset the top so there is no wasted whitespace above the highest mark.
+    const svg = host.querySelector('svg');
+    if (svg instanceof SVGSVGElement) {
+        try {
+            const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
+            const pad = 6;
+            const w = Math.ceil(totalW * zoom);
+            const h = Math.ceil(bb.height + 2 * pad);
+            svg.setAttribute('viewBox', `0 ${(bb.y - pad).toFixed(1)} ${w} ${h}`);
+            svg.setAttribute('width', String(w));
+            svg.setAttribute('height', String(h));
+            svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
+            svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
+        } catch { /* getBBox unavailable (detached node) — leave the fixed-size engraving */ }
+    }
+    host.scrollTop = 0;   // top of the real content — no leading whitespace
 }
 
 // ms-per-beat from consecutive same-measure onsets (Δt / Δbeat), median for robustness. The
