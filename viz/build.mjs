@@ -25,8 +25,14 @@ const LOCAL_FIXTURES = join(REPO, 'local-fixtures');
 
 const buildOpts = {
     entryPoints: [join(here, 'src/main.ts')],
-    outfile: join(OUT, 'app.js'),
+    // Code-splitting (outdir + splitting) so the 3D tonnetz panel's three.js only downloads as a
+    // separate chunk when the user opens that view — it stays out of the app.js everyone loads. The
+    // entry still emits as app.js (index.html references it); lazy chunks land under chunks/.
+    outdir: OUT,
+    entryNames: 'app',
+    chunkNames: 'chunks/[name]-[hash]',
     bundle: true,
+    splitting: true,
     format: 'esm',
     target: 'es2022',
     sourcemap: true,

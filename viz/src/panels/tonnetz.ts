@@ -1,7 +1,7 @@
 /**
  * 3D Tonnetz panel — the harmonic space the shipped speller reasons about, drawn as a lattice of
  * fifths (x), major/minor thirds (y) and accidental layers (z). Ported from the standalone tonnetz app
- * (`TonnetzSceneV2`, vendored under `viz/src/tonnetz3d/`), driven here purely by the enharmonic kernel's
+ * (`TonnetzSceneV2`, vendored under `viz/src/tonnetz3d/`), driven here purely by the enharmonic engine's
  * per-onset output: the resolved 7-letter surface becomes the lit scale, and the notes ringing at the
  * onset — spelled exactly as the library committed them — light their lattice nodes. So the Tonnetz is a
  * DISPLAY of the speller's choices (every spelling still comes from `src/`), not a second speller.
@@ -127,6 +127,10 @@ export function initTonnetz(container: HTMLElement): void {
     };
     scene = new TonnetzSceneV2(container, config);
     scene.setVisible(true);
+    // Pull the camera back from the scene's default framing so the whole lattice neighbourhood is in view
+    // on load — the panel is smaller than the standalone app's full-window canvas, so the default sits too
+    // close. The user can still orbit/scroll to taste; this only sets the initial distance.
+    scene.setCameraDistance(1.7);
     // The scene's default z-gap (0.1) is tiny next to the in-plane grid (~1.4), so the accidental layers
     // stack almost flat. Spread them to distinct depths — 0.8 matches the tonnetz app's default.
     scene.setZSpacing(0.8);

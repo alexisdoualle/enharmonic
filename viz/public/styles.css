@@ -79,7 +79,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; }
    canvas's intrinsic height (a % height can't resolve against a content-sized parent), and the tonnetz
    card latches tall and props the whole row open. With basis:0 the card's intrinsic height is just its
    title, so the row height is set by the scoring/spiral cards and the canvas fills whatever's left. */
-#tonnetz { display: flex; flex-direction: column; }
+#tonnetz { display: flex; flex-direction: column; min-height: 520px; }
 .tonnetz-canvas { position: relative; flex: 1 1 0; min-height: 0; border-radius: 8px; overflow: hidden; background: #1a1a2e; }
 .tonnetz-canvas canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
 
@@ -137,6 +137,12 @@ body.live-only { background: #fff; }
 .ctl-group button:hover:not(:disabled) { border-color: var(--accent); }
 .ctl-group button:disabled { opacity: .4; cursor: default; }
 .ctl-val { min-width: 28px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); cursor: help; }
+.ctl-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; cursor: help; }
+.ctl-seg button { height: 20px; padding: 0 8px; background: var(--bg); color: var(--dim); border: 0; cursor: pointer; font-size: 11px; line-height: 20px; font-variant-numeric: tabular-nums; }
+.ctl-seg button + button { border-left: 1px solid var(--line); }
+.ctl-seg button.on { background: var(--accent); color: var(--bg); }
+.ctl-seg button:hover:not(.on):not(:disabled) { color: var(--ink); }
+.ctl-seg button:disabled { opacity: .4; cursor: default; }
 .ctl-reset { background: none; border: 0; padding: 2px 4px; font-size: 11px; color: var(--accent); cursor: pointer; }
 .ctl-reset:hover:not(:disabled) { text-decoration: underline; }
 .ctl-reset:disabled { color: var(--dim); opacity: .5; cursor: default; }
@@ -168,6 +174,7 @@ body.live-only { background: #fff; }
 .score-table { table-layout: fixed; border-collapse: collapse; width: 100%; min-width: 348px; font-size: 12.5px; }
 .score-table .col-cand { width: 56px; }
 .score-table .col-total { width: 74px; }
+.score-table .col-slot { width: 23px; }
 .score-table .col-delta { width: 30px; }
 .score-table th, .score-table td { height: 22px; padding: 2px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
 .score-table th { height: 19px; font-size: 11px; color: var(--dim); font-weight: 600; text-align: left; }

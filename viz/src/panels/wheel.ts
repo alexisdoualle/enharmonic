@@ -3,18 +3,19 @@
  * closing, spirals so the two ends stack at the seam: a key and its enharmonic 12 fifths away share an
  * angle but sit one turn apart radially (G♭ inner, F♯ outer at the tritone). That is the exact
  * distinction the spiral frame reasons about — C♯(+7) and D♭(−5) are DIFFERENT positions, not one
- * wheel node. The live key (the kernel's signed line-of-fifths tonic) lights up; its collection is the
- * 7-fifth run around it. The band spans the shipped speller's reachable range [center−depth …
- * center+depth] = [−5 … +7], so the active turn is always on-screen. One dashed red cell immediately
- * beyond each end shows the fold-back limit, past which continuity would respell rather than dig deeper.
+ * wheel node. The live key (the engine's signed line-of-fifths tonic, `getAnchor()`) lights up; its
+ * collection is the 7-fifth run around it. The band spans the shipped speller's reachable range
+ * [center−depth … center+depth] = [−5 … +7], so the active turn is always on-screen. One dashed red
+ * cell immediately beyond each end shows the fold-back limit, past which continuity would respell
+ * rather than dig deeper.
  *
  * Ported from the lab viz (`music/wheel.ts` renderSpiral), stripped of the research local-key overlay.
- * depth/center are pinned to the shipped DiatonicBaseSubstrate defaults (spiralRange 6, spiralCenter +1).
+ * depth/center are pinned to the shipped `SpellingEngine`'s `RT_PRESET` defaults (spiralRange 6, spiralCenter +1).
  */
 import type { Snapshot } from '../replay.js';
-import { fifths } from '../replay.js';
+import { fifths, controlWindowLo } from '../replay.js';
 import {
-    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX,
+    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX,
     SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX,
 } from '../state.js';
 import { label } from '../format.js';
@@ -22,13 +23,16 @@ import { label } from '../format.js';
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 /** Controls + drawing params for the spiral panel. `range`/`center` are the values the replay actually
- *  ran with (shipped default 6 / +1); `onChange` reconfigures the substrate and rebuilds. `streaming`
+ *  ran with (shipped default 6 / +1); `onChange` reconfigures the engine and rebuilds. `streaming`
  *  is false in batch two-pass, where the spiral is inert and the controls are disabled. */
 export interface WheelOpts {
     range: number;
     center: number;
+    even: boolean;           // window parity: false = odd/symmetric spiral; true = drop one slot → even
     streaming: boolean;
-    onChange: (range: number, center: number) => void;
+    control: boolean;        // fixed-LoF control mode: the panel becomes the control's window editor
+    showKeyLanes: boolean;   // EXPERIMENTAL: also show the local/stable collection reads in the legend
+    onChange: (range: number, center: number, even: boolean) => void;
 }
 
 // Spelling of a key at signed line-of-fifths position `lof` (…F=−1, C=0, G=1…, F♯=+6, C♯=+7…).
@@ -59,15 +63,20 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     const DEPTH = opts.range;    // effective spiralRange the replay ran with (floor 6)
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
     const W = 256, CC = W / 2;
-    const lo = CENTER - DEPTH, hi = CENTER + DEPTH;                 // e.g. [−5 … +7] = D♭ … C♯ at 6/+1
-    const limitSlots = 1;
+    // The reachable window. Streaming/general: symmetric ±DEPTH (odd), or one flat-end slot dropped when
+    // `even` (mirrors the engine's spiralWindow). Control: the fixed 12-slot window positioned by centre.
+    const lo = opts.control ? controlWindowLo(CENTER) : CENTER - DEPTH + (opts.even ? 1 : 0);
+    const hi = opts.control ? lo + 11 : CENTER + DEPTH;
+    const limitSlots = opts.control ? 0 : 1;                        // control's window is the whole story
     const drawLo = lo - limitSlots, drawHi = hi + limitSlots;
     // Non-spiral two-pass frames use their canonical key spelling; it is a display position, not a
-    // continuity anchor like the streaming spiral's signed tonic.
-    const active = snap?.frameLofTonic ?? snap?.frameKeyLof ?? null;
+    // continuity anchor like the streaming spiral's signed tonic. The control has no key at all.
+    const active = opts.control ? null : (snap?.frameLofTonic ?? snap?.frameKeyLof ?? null);
     // The committed note's own line-of-fifths position, marked on its cell when it lands in range.
     const noteLof = snap?.committed ? fifths(snap.committed) : null;
-    const collection = active != null ? new Set(range(active - 1, active + 5)) : new Set<number>();
+    // Control: the whole 12-slot window is the "collection". Streaming: the 7-fifth run around the live key.
+    const collection = opts.control ? new Set(range(lo, hi))
+        : active != null ? new Set(range(active - 1, active + 5)) : new Set<number>();
 
     const R_IN = 34, R_OUT = 118;
     // Radial gain per fifth; a full 12-fifth turn adds one band-thickness (TH) so turns nest flush like
@@ -113,24 +122,37 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
 
     // Hub: the live key + the reachable-range readout.
     svg.appendChild(svgEl('circle', { cx: CC, cy: CC, r: R_IN - 2, fill: '#171b22', stroke: '#323845' }));
-    svg.appendChild(svgEl('text', { x: CC, y: CC - 8, 'text-anchor': 'middle', 'font-size': 8.5, fill: '#7d8694' }, 'spiral'));
-    svg.appendChild(svgEl('text', { x: CC, y: CC + 6, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, fill: '#e6e8ec' },
-        active != null ? keyName(active) : '—'));
+    svg.appendChild(svgEl('text', { x: CC, y: CC - 8, 'text-anchor': 'middle', 'font-size': 8.5, fill: '#7d8694' }, opts.control ? 'window' : 'spiral'));
+    svg.appendChild(svgEl('text', { x: CC, y: CC + 6, 'text-anchor': 'middle', 'font-size': opts.control ? 10 : 12, 'font-weight': 700, fill: '#e6e8ec' },
+        opts.control ? `${keyName(lo)}…${keyName(hi)}` : active != null ? `${keyName(active)}/${keyName(active + 3)}m` : '—'));
     svg.appendChild(svgEl('text', { x: CC, y: CC + 18, 'text-anchor': 'middle', 'font-size': 7.5, fill: '#7d8694' },
-        active != null ? `LoF ${active >= 0 ? '+' : ''}${active}` : 'batch'));
+        opts.control ? 'fixed LoF' : active != null ? `LoF ${active >= 0 ? '+' : ''}${active}` : 'batch'));
     host.appendChild(svg);
 
     if (snap) {
         const leg = document.createElement('div');
         leg.className = 'wheel-legend';
-        if (active != null) {
+        const noteDot = noteLof != null && noteLof >= lo && noteLof <= hi ? ` · <span class="note-dot-key"></span> ${label(snap.committed)}` : '';
+        if (opts.control) {
+            leg.innerHTML = `fixed-LoF window <b>${keyName(lo)}…${keyName(hi)}</b> · one spelling per pitch class, no context` + noteDot;
+        } else if (active != null) {
             const keyKind = snap.frameLofTonic != null ? 'live key' : 'frame key';
-            leg.innerHTML = `${keyKind} <b>${keyName(active)} major</b> · collection ${keyName(active - 1)}…${keyName(active + 5)}`
-                + (noteLof != null && noteLof >= lo && noteLof <= hi ? ` · <span class="note-dot-key"></span> ${label(snap.committed)}` : '');
+            leg.innerHTML = `${keyKind} <b>${keyName(active)} major / ${keyName(active + 3)} minor</b> · collection ${keyName(active - 1)}…${keyName(active + 5)}` + noteDot;
         } else {
             leg.textContent = 'batch two-pass — whole-piece decision, no streaming frame';
         }
         host.appendChild(leg);
+        // Collection reads (display-only): the axis the mode-blind frame can't express — collection =
+        // major + relative minor. LOCAL chases tonicizations; STABLE is the home key.
+        if (opts.showKeyLanes && (snap.localColl || snap.stableColl)) {
+            const ck = document.createElement('div');
+            ck.className = 'wheel-legend';
+            const parts: string[] = [];
+            if (snap.localColl) parts.push(`🎯 local <b>${snap.localColl.name}</b>`);
+            if (snap.stableColl) parts.push(`🏠 stable <b>${snap.stableColl.name}</b>`);
+            ck.innerHTML = parts.join(' · ');
+            host.appendChild(ck);
+        }
     }
 }
 
@@ -143,18 +165,23 @@ let lastPressed: string | null = null;
  *  (e.g. G♭…G♯) sit in the tooltip — widening the range digs to deeper enharmonics, the centre biases
  *  sharp/flat. */
 function renderControls(opts: WheelOpts): HTMLElement {
-    const { range, center, streaming, onChange } = opts;
+    const { range, center, even, streaming, control, onChange } = opts;
+    const editable = streaming || control;   // control mode also drives its window from these steppers
     const wrap = document.createElement('div');
-    wrap.className = 'spiral-ctl' + (streaming ? '' : ' disabled');
-    if (!streaming) wrap.title = 'streaming rungs only — batch two-pass has no spiral frame';
+    wrap.className = 'spiral-ctl' + (editable ? '' : ' disabled');
+    if (!editable) wrap.title = 'streaming rungs & control only — batch two-pass has no spiral frame';
+    // The window the current params span (streaming: ±range, one flat slot dropped when even; control: 12).
+    const wLo = control ? controlWindowLo(center) : center - range + (even ? 1 : 0);
+    const wHi = control ? wLo + 11 : center + range;
+    const slots = wHi - wLo + 1;
 
     const focusLater: HTMLButtonElement[] = [];
     const stepper = (
         labelText: string, value: number, min: number, max: number,
-        fmt: (n: number) => string, tip: string, set: (n: number) => void,
+        fmt: (n: number) => string, tip: string, set: (n: number) => void, enabled: boolean,
     ) => {
         const group = document.createElement('div');
-        group.className = 'ctl-group';
+        group.className = 'ctl-group' + (enabled ? '' : ' off');
         const lab = document.createElement('span');
         lab.className = 'ctl-label'; lab.textContent = labelText;
         const val = document.createElement('span');
@@ -162,7 +189,7 @@ function renderControls(opts: WheelOpts): HTMLElement {
         const btn = (sign: -1 | 1) => {
             const b = document.createElement('button');
             b.textContent = sign < 0 ? '−' : '+';
-            b.disabled = !streaming || (sign < 0 ? value <= min : value >= max);
+            b.disabled = !enabled || (sign < 0 ? value <= min : value >= max);
             b.dataset.k = `${labelText}${sign}`;
             b.addEventListener('click', () => { lastPressed = b.dataset.k!; set(value + sign); });
             if (b.dataset.k === lastPressed) focusLater.push(b);
@@ -172,26 +199,55 @@ function renderControls(opts: WheelOpts): HTMLElement {
         wrap.appendChild(group);
     };
 
+    // range = digging depth (streaming only; the control's window is always 12 slots wide).
     stepper(
         'range', range, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX, n => `±${n}`,
-        `${keyName(center - range)}…${keyName(center + range)}`,
-        n => onChange(n, center),
+        control ? 'fixed at 12 slots in control mode' : `${keyName(wLo)}…${keyName(wHi)} (${slots} slots)`,
+        n => onChange(n, center, even), streaming,
     );
+    // offset = the writability centre; in control mode it slides the whole fixed-LoF window.
     stepper(
         'offset', center, SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX, n => (n > 0 ? '+' : '') + n,
-        'line-of-fifths writability bias',
-        n => onChange(range, n),
+        control ? `slide the window (${keyName(wLo)}…${keyName(wHi)})` : 'line-of-fifths writability bias',
+        n => onChange(range, n, even), editable,
     );
+    // parity = odd (symmetric spiral, keeps the tritone doubling) ↔ even (drop one slot → 2·range).
+    // A two-segment pill; streaming only (the control is inherently even, positioned by offset alone).
+    if (!control) {
+        const group = document.createElement('div');
+        group.className = 'ctl-group' + (streaming ? '' : ' off');
+        const lab = document.createElement('span');
+        lab.className = 'ctl-label'; lab.textContent = 'parity';
+        const seg = document.createElement('div');
+        seg.className = 'ctl-seg';
+        // 1 = even window (tritone seam collapsed to a single spelling); 2 = odd/symmetric spiral (the
+        // seam pc kept both ways). Now: ${slots} slots.
+        seg.title = `1 = even (${2 * range} slots, one spelling per pc) · 2 = odd spiral (${2 * range + 1} slots, tritone doubled)`;
+        const segBtn = (isEven: boolean, text: string) => {
+            const b = document.createElement('button');
+            b.textContent = text;
+            b.className = even === isEven ? 'on' : '';
+            b.disabled = !streaming;
+            b.dataset.k = `parity${isEven ? 1 : 0}`;
+            b.addEventListener('click', () => { lastPressed = b.dataset.k!; if (even !== isEven) onChange(range, center, isEven); });
+            if (b.dataset.k === lastPressed) focusLater.push(b);
+            return b;
+        };
+        seg.append(segBtn(true, '1'), segBtn(false, '2'));
+        group.append(lab, seg);
+        wrap.appendChild(group);
+    }
 
     // Always in the layout — greyed out at the shipped preset — so it can't shove the steppers sideways
     // the moment a value changes.
     const shipped = `±${SPIRAL_RANGE_DEFAULT}, ${SPIRAL_CENTER_DEFAULT > 0 ? '+' : ''}${SPIRAL_CENTER_DEFAULT}`;
+    const atDefault = range === SPIRAL_RANGE_DEFAULT && center === SPIRAL_CENTER_DEFAULT && even === SPIRAL_EVEN_DEFAULT;
     const reset = document.createElement('button');
     reset.className = 'ctl-reset';
     reset.textContent = 'reset';
-    reset.disabled = !streaming || (range === SPIRAL_RANGE_DEFAULT && center === SPIRAL_CENTER_DEFAULT);
+    reset.disabled = !editable || atDefault;
     reset.title = reset.disabled ? `at shipped default (${shipped})` : `back to shipped (${shipped})`;
-    reset.addEventListener('click', () => { lastPressed = null; onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT); });
+    reset.addEventListener('click', () => { lastPressed = null; onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT); });
     wrap.appendChild(reset);
 
     // preventScroll: refocusing must not nudge the page, which is the whole point of this panel change.

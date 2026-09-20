@@ -1,13 +1,13 @@
 /**
  * Scoring table: WHY the speller spelled this note the way it did. For each enharmonic candidate it
  * shows the base interval score against the current frame (broken down per frame slot), the additive
- * look-ahead / neighbour-step deltas, the total the argmax used, and the winner — then a plain-language
- * note when a post-total mechanism (sounding tie-break, rel-minor leading tone, a look-ahead gate)
- * overrode that argmax. The numbers come straight from the kernel's record-only decision trace, so the
- * table is exactly the decision the shipped speller made.
+ * look-ahead / recency-guard / side-anchor deltas, the total the argmax used, and the winner — then a
+ * plain-language note when a post-total mechanism (sounding tie-break, rel-minor leading tone, a
+ * look-ahead gate) overrode that argmax. The numbers come straight from the engine's record-only
+ * decision trace (`decision()`), so the table is exactly the decision the shipped speller made.
  */
 import type { Snapshot } from '../replay.js';
-import type { DecisionCandidate } from '../../../src/base.js';
+import type { DecisionCandidate } from '../decision.js';
 import type { PitchClass } from '../../../src/index.js';
 import { rawIntervalBetween, intervalBetween, intervalLabel } from '../../../src/interval.js';
 import { label } from '../format.js';
@@ -38,7 +38,7 @@ const OVERRIDE_TEXT: Record<string, string> = {
     'lookahead-coherence-gate': '↔ look-ahead coherence gate — reverted a look-ahead pick that broke the passage side',
 };
 
-export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
+export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive = false): void {
     host.innerHTML = '';
     const title = document.createElement('div');
     title.className = 'panel-title';
@@ -51,11 +51,11 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     head.className = `note-line tier-${snap.tier}`;
     head.innerHTML = `<span class="note-big">${label(snap.committed)}</span>`
         + (snap.expected ? `<span class="note-exp">expected ${label(snap.expected)}</span>` : '')
-        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex}</span>`;
+        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex} · ${snap.durMs} ms</span>`;
     host.appendChild(head);
 
     // The speller's surface, compact: the bare diatonic frame (collection) and the resolved surface it
-    // feeds (frame + keep-alive + sounding). A resolved cell that an overlay changed from the frame is
+    // feeds (the collection plus its live alterations). A resolved cell changed from the frame is
     // marked. Two 7-cell rows — the state that the scoring below reasons against.
     if (snap.frame || snap.resolvedScale) {
         const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
@@ -73,16 +73,30 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
         host.appendChild(dim(
             snap.twoPass ? 'selected pass has no per-candidate trace'
             : snap.frame ? 'Core speller — no per-candidate scoring trace'
-            : 'batch two-pass — whole-piece decision, no per-onset scoring trace',
+            : 'fixed-LoF control (music21 default) — context-free window, no per-candidate scoring trace',
         ));
         return;
     }
 
     const dec = snap.decision;
     const frameByLetter = new Map(dec.frame.map(p => [p.step, p]));
-    const anyLA = dec.candidates.some(c => c.laDelta !== 0);
-    const anyNS = dec.candidates.some(c => c.nsDelta !== 0);
-    const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta;
+    const hasGuard = dec.candidates.some(c => c.guardDelta !== undefined);
+    const hasSide = dec.candidates.some(c => c.sideDelta !== undefined);
+    const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
+    // Delta columns depend on the SPELLER (structural), not on this onset's values, so the table never gains
+    // or loses a column between notes: the real-time preset shows Side (anchor) + Grd (guard), + LA
+    // when it looks ahead (`laActive`); the streaming rungs show LA/NS. Columns compose.
+    const deltaCols: { label: string; title: string; val: (c: DecisionCandidate) => number }[] = [];
+    if (hasSide) deltaCols.push({ label: 'Side', title: 'side-anchor penalty: −anchor × fifths outside the collection', val: c => c.sideDelta ?? 0 });
+    if (hasGuard) deltaCols.push({ label: 'Grd', title: 'recency-guard penalty', val: c => c.guardDelta ?? 0 });
+    if ((hasSide || hasGuard) && laActive) deltaCols.push({ label: 'LA', title: 'look-ahead: step toward the resolution', val: c => c.laDelta });
+    // Look-ahead preset (Grd but no Side): nsDelta carries its drift-leash + vertical-guard penalty — show it
+    // so the total reconciles (otherwise a candidate can win with no visible reason, e.g. the op28/4 dim7).
+    if (hasGuard && !hasSide) deltaCols.push({ label: 'Vrt', title: 'drift-leash + vertical-guard penalty', val: c => c.nsDelta });
+    if (!hasSide && !hasGuard) deltaCols.push(
+        { label: 'LA', title: 'look-ahead delta', val: c => c.laDelta },
+        { label: 'NS', title: 'neighbour-step delta', val: c => c.nsDelta },
+    );
     const chosenKey = `${dec.chosen.step}:${dec.chosen.alter}`;
     const baseWin = dec.candidates.reduce((b, c) => (c.base > b.base ? c : b), dec.candidates[0]!);
     const totalWin = dec.candidates.reduce((b, c) => (total(c) > total(b) ? c : b), dec.candidates[0]!);
@@ -96,7 +110,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
     table.innerHTML = `<colgroup>`
         + `<col class="col-cand"><col class="col-total">`
         + LETTERS.map(() => '<col class="col-slot">').join('')
-        + `<col class="col-delta"><col class="col-delta">`
+        + deltaCols.map(() => '<col class="col-delta">').join('')
         + `</colgroup>`;
     const thead = document.createElement('tr');
     thead.innerHTML = `<th>cand</th><th class="c">total</th>`
@@ -104,8 +118,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
             const p = frameByLetter.get(L);
             return `<th class="c" title="frame slot">${p ? label(p) : L}</th>`;
         }).join('')
-        + '<th class="c" title="look-ahead delta">LA</th>'
-        + '<th class="c" title="neighbour-step delta">NS</th>';
+        + deltaCols.map(d => `<th class="c" title="${d.title}">${d.label}</th>`).join('');
     table.appendChild(thead);
 
     for (const c of dec.candidates) {
@@ -124,14 +137,13 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
         tr.innerHTML = `<td><span class="pick${isChosen ? '' : ' blank'}">▶</span>${label(c.c)}</td>`
             + `<td class="c total"><b>${sgn(total(c))}</b> <span class="dim">(${sgn(c.base)})</span></td>`
             + cells
-            + `<td class="c ${numCls(c.laDelta)}">${c.laDelta ? sgn(c.laDelta) : '·'}</td>`
-            + `<td class="c ${numCls(c.nsDelta)}">${c.nsDelta ? sgn(c.nsDelta) : '·'}</td>`;
+            + deltaCols.map(d => { const v = d.val(c); return `<td class="c ${numCls(v)}">${v ? sgn(v) : '·'}</td>`; }).join('');
         table.appendChild(tr);
     }
     for (let i = dec.candidates.length; i < MAX_CANDIDATES; i++) {
         const tr = document.createElement('tr');
         tr.className = 'filler';
-        tr.innerHTML = `<td colspan="${2 + LETTERS.length + 2}"></td>`;
+        tr.innerHTML = `<td colspan="${2 + LETTERS.length + deltaCols.length}"></td>`;
         table.appendChild(tr);
     }
     scroll.appendChild(table);
@@ -139,14 +151,22 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null): void {
 
     // decision note: what actually chose the pick
     const notes: string[] = [];
-    if (snap.twoPass) {
-        notes.push(`selected ${snap.twoPass.selected} pass — its candidate table is shown below`);
-    }
     if (dec.override !== 'none') {
         notes.push(OVERRIDE_TEXT[dec.override] ?? dec.override);
+    } else if (hasSide) {
+        notes.push(baseWin !== totalWin
+            ? `collection tie-break took ${label(totalWin.c)} over the equally-near ${label(baseWin.c)} (sharp side)`
+            : `nearest rep to the collection — ${label(totalWin.c)} sits fewest fifths outside the key`);
+        notes.push('base = −(fifths outside the collection); the letter columns show each rep’s intervals with the collection');
     } else if (baseWin !== totalWin) {
-        const mech = anyLA && anyNS ? 'look-ahead / neighbour-step' : anyLA ? 'look-ahead' : 'neighbour-step';
-        notes.push(`${mech} moved the pick ${label(baseWin.c)} → ${label(totalWin.c)} (the letter into a semitone resolution)`);
+        // Name the mechanism(s) that actually moved the pick — the delta terms on which the winner beats the
+        // base-only winner. For the guarded speller LA / vertical / guard COMPOSE, so more than one can apply.
+        const movers: string[] = [];
+        if (totalWin.laDelta - baseWin.laDelta > 0) movers.push('look-ahead');
+        if ((totalWin.guardDelta ?? 0) - (baseWin.guardDelta ?? 0) > 0) movers.push('recency guard');
+        if (totalWin.nsDelta - baseWin.nsDelta > 0) movers.push(hasGuard ? 'vertical guard / drift leash' : 'neighbour-step');
+        const mech = movers.length ? movers.join(' + ') : 'the deltas';
+        notes.push(`${mech} moved the pick ${label(baseWin.c)} → ${label(totalWin.c)}`);
     } else {
         notes.push(`frame decided — ${label(totalWin.c)} has the top interval score`);
     }
@@ -182,17 +202,13 @@ function surfaceRow(name: string, byLetter: Map<string, PitchClass>, diffFrom?: 
     return wrap;
 }
 
-/** Offline reconciliation, kept distinct from the selected streaming pass's candidate table. */
+/** Offline reconciliation: the forward and backward directional picks and the merged result. */
 function twoPassSummary(trace: NonNullable<Snapshot['twoPass']>): HTMLElement {
     const d = document.createElement('div');
     d.className = 'decision-note';
-    const name = (p: typeof trace.forward.spelling) => label(p);
-    const key = (k: typeof trace.forward.localKey) => !k ? '—' : `${k.step}${k.alter > 0 ? '♯'.repeat(k.alter) : k.alter < 0 ? '♭'.repeat(-k.alter) : ''}${k.minor ? 'm' : ''}`;
-    const wolf = (direction: 'forward' | 'backward', n: number | undefined) =>
-        n == null ? '' : ` · ${direction} wolf ${n.toFixed(2)}`;
-    d.innerHTML = `<div><b>two-pass ${trace.phase}</b> · forward ${name(trace.forward.spelling)} · backward ${name(trace.backward.spelling)}</div>`
-        + `<div>local key: forward ${key(trace.forward.localKey)} · backward ${key(trace.backward.localKey)}</div>`
-        + `<div>resolved ${trace.selected}${trace.agrees ? ' (agree)' : ''}${wolf('forward', trace.forwardWolf)}${wolf('backward', trace.backwardWolf)}</div>`;
+    const name = (p: PitchClass | null) => (p ? label(p) : '—');
+    d.innerHTML = `<div><b>two-pass</b> · forward ${name(trace.forward)} · backward ${name(trace.backward)}</div>`
+        + `<div>resolved ${name(trace.selected)}${trace.agrees ? ' (both passes agree)' : ' (reconciled at a change-point)'}</div>`;
     return d;
 }
 

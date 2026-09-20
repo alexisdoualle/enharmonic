@@ -909,6 +909,15 @@ export class TonnetzSceneV2 {
         }
     }
 
+    /** Dolly the camera to `factor`× its current distance from the orbit target (>1 zooms out). Call once
+     *  after construction to set the initial framing; OrbitControls then keeps the new distance. */
+    setCameraDistance(factor: number): void {
+        const t = this.controls.target;
+        this.camera.position.sub(t).multiplyScalar(factor).add(t);
+        this.controls.update();
+        this.render();
+    }
+
     setNoteDisplayMode(mode: NoteDisplayMode): void {
         if (mode === this.displayMode) return;
         this.displayMode = mode;

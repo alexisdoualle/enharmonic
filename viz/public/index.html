@@ -13,11 +13,12 @@
     <label>speller
       <select id="mode">
         <option value="core">① Core speller</option>
-        <option value="rt">② real-time (diatonic + sticky)</option>
-        <option value="la">③ + look-ahead</option>
+        <option value="rt">② real-time</option>
         <option value="tp">④ two-pass (offline)</option>
+        <option value="control">⊘ control — fixed-LoF window (music21)</option>
       </select>
     </label>
+    <label class="ctl" id="look-ahead-ctl" title="③ near-real-time: let each note wait for its resolution (a small forward buffer) before committing — `new Speller({ lookAhead: true })`"><input type="checkbox" id="look-ahead" /> ③ look-ahead</label>
     <span class="spacer"></span>
     <span id="status"></span>
   </header>
@@ -30,6 +31,8 @@
     <span id="pos" class="pos">0 / 0</span>
     <span class="ctl side-ctl" title="editorial enharmonic side from the current onset; S sharp, F flat, A auto, X clear">side <button id="side-sharp" title="favor sharp side from here">♯</button><button id="side-flat" title="favor flat side from here">♭</button><button id="side-auto" title="return to auto from here">auto</button><button id="side-clear" title="clear all markers">×</button><span id="side-state" class="pos"></span></span>
     <label class="ctl" title="play audio (Web Audio EP synth)"><input type="checkbox" id="sound" checked /> 🔊</label>
+    <label class="ctl" id="key-lanes-ctl" title="EXPERIMENTAL (display-only): show the local + stable collection/key lanes under the piano roll"><input type="checkbox" id="key-lanes" /> 🎯🧪</label>
+    <label class="ctl" id="tonnetz3d-ctl" title="swap the right panel for the 3D tonnetz lattice (drag to orbit, scroll to zoom)"><input type="checkbox" id="tonnetz3d" /> 🧊 3D</label>
     <label class="ctl" title="playback speed (logarithmic; centre = 1×)">tempo
       <input type="range" id="tempo" min="-1" max="1" step="0.01" value="0" />
       <span id="tempo-val" class="pos">1×</span></label>

@@ -2,7 +2,7 @@
 import { buildReplay, withSectionAutoResets, type Mode, type RawEvent, type Expected, type Replay } from './replay.js';
 import {
     initialState, clampStep, current, clampRange, clampCenter,
-    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT,
+    SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT,
     sideOverridesFromSearch, writeSideOverrides, readableSearch, stepFromSearch, type AppState,
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
@@ -18,11 +18,50 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const state: AppState = { ...initialState };
 let liveTonnetz: ReturnType<typeof initLiveTonnetz>;
 
+// 3D tonnetz: a whole-panel swap for the right column (the coiled Tonnetz ⇄ the 3D lattice). The 3D
+// panel pulls in three.js, so `panels/tonnetz.js` is LAZY-loaded on first activation and its render loop
+// only spins up then. Toggled from the transport bar (#tonnetz3d), persisted per-browser.
+const TONNETZ3D_KEY = 'viz.tonnetz3d';
+let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) === '1'; } catch { return false; } })();
+let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
+let tonnetz3dLoading = false;
+
+/** Show either the coiled-Tonnetz panel or the 3D lattice panel in the right column, lazy-building the
+ *  3D scene the first time it is shown. Feeding the visible view its snapshot is left to `render()`. */
+function applyTonnetz3d() {
+    $('live-tonnetz').style.display = tonnetz3dOn ? 'none' : '';
+    $('tonnetz').style.display = tonnetz3dOn ? 'flex' : 'none';
+    $<HTMLInputElement>('tonnetz3d').checked = tonnetz3dOn;
+    if (!tonnetz3dOn) return;
+    if (tonnetz3d) { tonnetz3d.initTonnetz($('tonnetz-canvas')); return; }   // initTonnetz is a no-op once built
+    if (tonnetz3dLoading) return;
+    tonnetz3dLoading = true;
+    void import('./panels/tonnetz.js').then(mod => {
+        tonnetz3dLoading = false;
+        tonnetz3d = mod;
+        if (!tonnetz3dOn) return;              // toggled back off while the chunk was loading
+        mod.initTonnetz($('tonnetz-canvas'));
+        render();                              // paint the current onset onto the freshly built lattice
+    }).catch(err => {
+        tonnetz3dLoading = false;
+        console.error('3D tonnetz failed to load', err);
+        setTonnetz3d(false);
+    });
+}
+
+function setTonnetz3d(on: boolean) {
+    tonnetz3dOn = on;
+    try { localStorage.setItem(TONNETZ3D_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+    applyTonnetz3d();
+    render();
+}
+
 const MODE_NAME: Record<Mode, string> = {
     core: '① Core speller',
-    rt: '② real-time (diatonic anchor)',
+    rt: '② real-time',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
+    control: '⊘ control — fixed-LoF window (music21)',
 };
 
 async function listFixtures(): Promise<string[]> {
@@ -42,10 +81,17 @@ async function loadFixture(id: string): Promise<{ events: RawEvent[]; expected: 
 let rawEvents: RawEvent[] = [];
 let rawExpected: Expected[] = [];
 
+/** Look-ahead is an OPTION of the real-time speller (`Speller({ lookAhead })`), surfaced as a toolbar
+ *  toggle rather than a separate dropdown mode. Internally that is the `la` replay mode. */
+function effMode(): Mode {
+    return state.mode === 'rt' && state.lookAhead ? 'la' : state.mode;
+}
+
 function recompute() {
     if (!state.fixtureId) return;
-    state.replay = buildReplay(state.mode, rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter }, state.mode === 'tp', effectiveSideOverrides());
+    state.replay = buildReplay(effMode(), rawEvents, rawExpected,
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven },
+        state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
     render();
@@ -65,9 +111,10 @@ function setSideOverride(comma: number) {
 }
 
 /** Change the spiral what-if params (from the wheel steppers), rebuild, and persist to the URL. */
-function setSpiral(range: number, center: number) {
+function setSpiral(range: number, center: number, even: boolean) {
     state.spiralRange = clampRange(range);
     state.spiralCenter = clampCenter(center);
+    state.spiralEven = even;
     recompute();
     syncUrl();
 }
@@ -78,7 +125,8 @@ function renderStatus() {
     const t = r.tally;
     const pc = (x: number) => t.total ? (100 * x / t.total).toFixed(1) : '0.0';
     // "correct" = exact + flipped (right pitch-class / coherent side); exact & flipped break it down.
-    $('status').innerHTML = `${state.fixtureId} · ${MODE_NAME[state.mode]} · ${r.snapshots.length} onsets · `
+    const modeName = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
+    $('status').innerHTML = `${state.fixtureId} · ${modeName} · ${r.snapshots.length} onsets · `
         + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
         + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
         + `<span class="wrong">${pc(t.wrong)}% wrong (${t.wrong})</span>`
@@ -87,15 +135,19 @@ function renderStatus() {
 
 function render() {
     const snap = current(state);
-    renderScoring($('scoring'), snap);
+    $('look-ahead-ctl').style.display = state.mode === 'rt' ? '' : 'none';
+    renderScoring($('scoring'), snap, effMode() === 'la');
     renderWheel($('wheel'), snap, {
-        range: state.spiralRange, center: state.spiralCenter,
-        streaming: state.mode === 'rt' || state.mode === 'la', onChange: setSpiral,
+        range: state.spiralRange, center: state.spiralCenter, even: state.spiralEven,
+        streaming: state.mode === 'rt' || state.mode === 'la',
+        control: state.mode === 'control',
+        showKeyLanes: state.showKeyLanes, onChange: setSpiral,
     });
-    liveTonnetz?.renderPlaybackSnapshot(snap);
+    if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetz(snap);
+    else liveTonnetz?.renderPlaybackSnapshot(snap);
     if (state.replay) {
         renderStaff(state.replay, state.step);
-        renderPianoRoll(state.replay, state.step);
+        renderPianoRoll(state.replay, state.step, state.showKeyLanes);
     }
     renderStrip();
     $('scrub').setAttribute('max', String(Math.max(0, (state.replay?.snapshots.length ?? 1) - 1)));
@@ -314,6 +366,12 @@ function syncUrl() {
     else u.searchParams.delete('sr');
     if (state.spiralCenter !== SPIRAL_CENTER_DEFAULT) u.searchParams.set('sc', String(state.spiralCenter));
     else u.searchParams.delete('sc');
+    if (state.spiralEven !== SPIRAL_EVEN_DEFAULT) u.searchParams.set('sk', '1');
+    else u.searchParams.delete('sk');
+    // experimental key lanes are off by default; only record when enabled
+    if (state.lookAhead) u.searchParams.set('la', '1');
+    if (state.showKeyLanes) u.searchParams.set('keys', '1');
+    else u.searchParams.delete('keys');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
@@ -357,6 +415,15 @@ function wire() {
         soundOn = (e.target as HTMLInputElement).checked;
         if (soundOn) audioEnable(); else allNotesOff();
     });
+    $<HTMLInputElement>('look-ahead').addEventListener('change', e => {
+        state.lookAhead = (e.target as HTMLInputElement).checked;
+        recompute(); syncUrl();   // changes the speller preset, so rebuild
+    });
+    $<HTMLInputElement>('key-lanes').addEventListener('change', e => {
+        state.showKeyLanes = (e.target as HTMLInputElement).checked;
+        render(); syncUrl();   // display-only: no recompute, just re-render the panels/lanes
+    });
+    $<HTMLInputElement>('tonnetz3d').addEventListener('change', e => setTonnetz3d((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(posToRate(Number((e.target as HTMLInputElement).value))));
     const latencyEl = $<HTMLInputElement>('latency');
     latencyEl.value = String(audioOffsetMs);
@@ -398,16 +465,26 @@ async function boot() {
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');
     const urlStep = p.get('step');
-    if (urlMode === 'core' || urlMode === 'rt' || urlMode === 'la' || urlMode === 'tp') state.mode = urlMode;
+    if (urlMode === 'core' || urlMode === 'rt' || urlMode === 'tp' || urlMode === 'control') state.mode = urlMode;
+    // Look-ahead is now the toolbar toggle on the real-time speller; migrate an old `?mode=la` link.
+    if (urlMode === 'la') { state.mode = 'rt'; state.lookAhead = true; }
+    if (p.get('la') === '1') state.lookAhead = true;
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
+    if (p.get('sk')) state.spiralEven = p.get('sk') === '1';
+    if (p.get('keys') === '1') state.showKeyLanes = true;
     state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;
+    $<HTMLInputElement>('look-ahead').checked = state.lookAhead;
+    $<HTMLInputElement>('key-lanes').checked = state.showKeyLanes;
     const id = (urlFixture && ids.includes(urlFixture)) ? urlFixture : ids[0];
     if (id) {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
     }
+    // Restore the persisted 3D-tonnetz choice now that a fixture (and its first snapshot) is loaded.
+    applyTonnetz3d();
+    if (tonnetz3dOn) render();
 }
 
 boot().catch(err => { $('status').textContent = 'ERROR: ' + err.message; console.error(err); });

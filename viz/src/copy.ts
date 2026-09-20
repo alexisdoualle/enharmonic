@@ -1,7 +1,7 @@
 /**
  * Clipboard export: dump what the panels are showing as plain text, for pasting into an agent chat.
  *
- * ⌘/Ctrl+C copies the CURRENT onset — settings, the note, the kernel surface it was decided against,
+ * ⌘/Ctrl+C copies the CURRENT onset — settings, the note, the engine surface it was decided against,
  * and the scoring trace. ⌘/Ctrl+Shift+C copies the RUN — the tally plus every mis-spelled onset. Both
  * read the same snapshot the panels render, so the text can't drift from the screen. Spellings are
  * ASCII (Gb / F#), not the unicode glyphs, so they survive a paste into any terminal or issue box.
@@ -9,15 +9,17 @@
 import type { AppState } from './state.js';
 import { SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, current } from './state.js';
 import type { Snapshot, ReplayNote, Mode } from './replay.js';
+import type { DecisionCandidate } from './decision.js';
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { ascii } from './format.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const MODE_LONG: Record<Mode, string> = {
     core: 'Core speller (rung 1)',
-    rt: 'real-time (diatonic anchor)',
+    rt: 'real-time',
     la: 'real-time + look-ahead',
     tp: 'two-pass (offline batch)',
+    control: 'fixed-LoF control — context-free window (music21 default MIDI spelling)',
 };
 const MAX_ROWS = 300;   // a badly-failing fixture shouldn't paste thousands of lines into a chat
 
@@ -54,7 +56,7 @@ function header(s: AppState): string[] {
     return out;
 }
 
-/** The current onset in full: note, kernel surface, and the per-candidate scoring trace. */
+/** The current onset in full: note, engine surface, and the per-candidate scoring trace. */
 export function contextReport(s: AppState): string {
     const snap = current(s);
     if (!snap || !s.replay) return '(no fixture loaded)';
@@ -66,7 +68,7 @@ export function contextReport(s: AppState): string {
     L.push(...header(s), '');
 
     L.push('## note');
-    L.push(`committed: ${pitch(snap.committed)}   (midi ${snap.midi}, t ${snap.t} ms)`);
+    L.push(`committed: ${pitch(snap.committed)}   (midi ${snap.midi}, t ${snap.t} ms, dur ${snap.durMs} ms)`);
     L.push(`expected:  ${pitch(snap.expected)}${at ? `   (${at})` : ''}`);
     L.push(`tier:      ${snap.tier}`);
     L.push('');
@@ -78,7 +80,7 @@ export function contextReport(s: AppState): string {
             return LETTERS.map(x => pad(m.has(x) ? pitch(m.get(x)!) : '·', 3)).join(' ').trimEnd();
         };
         if (snap.frame) L.push(`frame:    ${byLetter(snap.frame)}`);
-        if (snap.resolvedScale) L.push(`surface:  ${byLetter(snap.resolvedScale)}   (frame + keep-alive + sounding overlays)`);
+        if (snap.resolvedScale) L.push(`surface:  ${byLetter(snap.resolvedScale)}   (the diatonic collection plus its live alterations)`);
         if (snap.frame && snap.resolvedScale) {
             const fm = new Map(snap.frame.map(p => [p.step, p]));
             const diff = snap.resolvedScale
@@ -90,30 +92,43 @@ export function contextReport(s: AppState): string {
     } else {
         L.push('(batch two-pass — whole-piece decision, no streaming frame)');
     }
+    if (s.showKeyLanes && snap.localColl) L.push(`local key: ${snap.localColl.name}  (tonicizations; margin ${snap.localColl.margin.toFixed(1)}, EXPERIMENTAL display-only)`);
+    if (s.showKeyLanes && snap.stableColl) L.push(`stable key: ${snap.stableColl.name}  (home; margin ${snap.stableColl.margin.toFixed(1)}, EXPERIMENTAL display-only)`);
     L.push(`sounding: ${snap.sounding.length
         ? snap.sounding.map(x => pitch(x.pitch) + (x.midi === snap.midi ? '*' : '')).join(' ') + '   (* = this note)'
         : '—'}`);
     L.push('');
 
     L.push('## decision');
-    L.push(...decisionLines(snap));
+    L.push(...decisionLines(snap, s.mode === 'la'));
     return L.join('\n');
 }
 
-function decisionLines(snap: Snapshot): string[] {
+function decisionLines(snap: Snapshot, laActive: boolean): string[] {
     const dec = snap.decision;
     if (!dec) return ['(batch two-pass — no per-onset scoring trace)'];
-    const rows = dec.candidates.map(c => ({
-        name: pitch(c.c), base: c.base, la: c.laDelta, ns: c.nsDelta, total: c.base + c.laDelta + c.nsDelta,
-        chosen: c.c.step === dec.chosen.step && c.c.alter === dec.chosen.alter,
-    }));
-    const out = ['  cand  base   LA   NS  total'];
-    for (const r of rows) {
-        out.push(`${r.chosen ? '▶' : ' '} ${pad(r.name, 5)}`
-            + `${padL(sgn(r.base), 5)}${padL(sgn(r.la), 5)}${padL(sgn(r.ns), 5)}${padL(sgn(r.total), 7)}`);
+    const hasSide = dec.candidates.some(c => c.sideDelta !== undefined);
+    const hasGuard = dec.candidates.some(c => c.guardDelta !== undefined);
+    const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
+    // Columns are STRUCTURAL (per speller), not per-onset, so the table never gains/loses a column between
+    // notes: the real-time preset shows Side + Grd (+ LA when it looks ahead); the streaming rungs
+    // show LA + NS. Same layout as the scoring panel.
+    const cols: { h: string; val: (c: DecisionCandidate) => number }[] = [];
+    if (hasSide) cols.push({ h: 'Side', val: c => c.sideDelta ?? 0 });
+    if (hasGuard) cols.push({ h: 'Grd', val: c => c.guardDelta ?? 0 });
+    if ((hasSide || hasGuard) && laActive) cols.push({ h: 'LA', val: c => c.laDelta });
+    // The look-ahead preset (Grd but no Side) also carries the drift-leash + vertical-guard penalty in nsDelta;
+    // show it so the printed total always reconciles (it was silently omitted, hiding why a candidate won).
+    if (hasGuard && !hasSide) cols.push({ h: 'Vrt', val: c => c.nsDelta });
+    if (!hasSide && !hasGuard) cols.push({ h: 'LA', val: c => c.laDelta }, { h: 'NS', val: c => c.nsDelta });
+    const out = ['  cand  base' + cols.map(c => padL(c.h, 5)).join('') + '  total'];
+    for (const c of dec.candidates) {
+        const chosen = c.c.step === dec.chosen.step && c.c.alter === dec.chosen.alter;
+        const cells = cols.map(col => { const v = col.val(c); return padL(v ? sgn(v) : '·', 5); }).join('');
+        out.push(`${chosen ? '▶' : ' '} ${pad(pitch(c.c), 5)}${padL(sgn(c.base), 5)}${cells}${padL(sgn(total(c)), 7)}`);
     }
     out.push(`chosen: ${pitch(dec.chosen)}`);
-    out.push(`override: ${dec.override}`);
+    if (dec.override !== 'none') out.push(`override: ${dec.override}`);
     return out;
 }
 

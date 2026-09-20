@@ -8,18 +8,22 @@ export interface AppState {
     mode: Mode;
     replay: Replay | null;
     step: number;             // index into replay.snapshots
-    spiralRange: number;      // substrate spiralRange override (digging-depth cap; floor 6, up to 8)
-    spiralCenter: number;     // substrate spiralCenter override (LoF writability bias; default +1)
+    spiralRange: number;      // engine spiralRange override (digging-depth cap; floor 6, up to 8)
+    spiralCenter: number;     // engine spiralCenter override (LoF writability bias; default +1)
+    spiralEven: boolean;      // engine spiralEven: window parity (false = odd/symmetric; true = 12-slot even)
+    lookAhead: boolean;       // real-time mode option: near-real-time letter look-ahead (Speller({ lookAhead }))
+    showKeyLanes: boolean;    // EXPERIMENTAL, display-only: the local + stable collection lanes (default off)
     sideOverrides: SideOverride[]; // editorial comma orientation markers for two-pass replay
 }
 
-export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 6, spiralCenter: 1, sideOverrides: [] };
+export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 6, spiralCenter: 1, spiralEven: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
 
 /** Shipped-preset defaults — the spiral controls reset to these, and the URL omits them when unchanged. */
 export const SPIRAL_RANGE_DEFAULT = 6;
 export const SPIRAL_CENTER_DEFAULT = 1;
+export const SPIRAL_EVEN_DEFAULT = false;
 export const SPIRAL_RANGE_MIN = 6, SPIRAL_RANGE_MAX = 12;
-export const SPIRAL_CENTER_MIN = -2, SPIRAL_CENTER_MAX = 2;
+export const SPIRAL_CENTER_MIN = -6, SPIRAL_CENTER_MAX = 6;
 export const clampRange = (n: number) => Math.max(SPIRAL_RANGE_MIN, Math.min(SPIRAL_RANGE_MAX, Math.round(n)));
 export const clampCenter = (n: number) => Math.max(SPIRAL_CENTER_MIN, Math.min(SPIRAL_CENTER_MAX, Math.round(n)));
 
