@@ -1,7 +1,8 @@
 /**
  * Held-out benchmark: score the shipped spellers over David Meredith's "8x25000"
- * pitch-spelling corpus (216 movements, 195,972 notes) — the literature-standard
- * benchmark ps13 / Temperley / Cambouropoulos / Chew report on. Ground truth we did
+ * pitch-spelling corpus (216 movements, 195,972 notes) — the standard pitch-spelling
+ * benchmark; the third-party baselines (ps13 / Temperley / Chew & Chen / PKSpell) are
+ * scored on the same notes in test/eval/meredith-baselines.json. Ground truth we did
  * NOT author, so it is an independent check on the curated fixtures.
  *
  *   scripts/fetch-meredith.sh          # download the corpus first (gitignored)

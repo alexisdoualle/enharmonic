@@ -64,8 +64,9 @@ time-windowed design and are kept only so existing callers compile.
 Extracted from a larger research codebase; the algorithm's development history and the full
 benchmark corpora live in a separate research repository. The shipped library is the two spellers above.
 
-Held-out Meredith (216 movements, 195,972 notes), exact composer-spelling match, the
-literature-standard benchmark ps13 / Temperley / Chew & Chen / PKSpell report on:
+Held-out Meredith (216 movements, 195,972 notes), exact composer-spelling match — the standard
+pitch-spelling benchmark, where it is level with the best deterministic and neural spellers
+(ps13, Temperley, Chew & Chen, PKSpell, scored on the same notes in `test/eval/meredith-baselines.json`):
 
 | Mode | clean | noisy |
 |---|--:|--:|
