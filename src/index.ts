@@ -13,7 +13,7 @@ export { resolveStep } from './kernel.js';
 export type { NoteContext } from './kernel.js';
 
 export { spellTwoPass } from './two-pass.js';
-export type { TwoPassNote, TwoPassOptions, TwoPassSideOverride } from './two-pass.js';
+export type { TwoPassNote, TwoPassOptions } from './two-pass.js';
 
 export type { Pitch, PitchClass, Letter, Accidental } from './pitch.js';
 export { midiOf, pitchClassValue, pitchToString } from './pitch.js';

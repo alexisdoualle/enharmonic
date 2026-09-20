@@ -1,26 +1,18 @@
 /**
- * CoreSpeller — rung 1: the pedagogical two-pillar foundation.
+ * CoreSpeller — rung 1: the two-pillar foundation.
  *
- * The 7-letter limit + interval aug/dim scoring, and nothing else — the minimal
+ * The 7-letter limit plus interval (aug/dim) scoring, nothing else: the minimal
  * causal baseline the rest of the ladder (Speller rungs 2/3, spellTwoPass rung 4)
- * improves on. Frameless and PERSISTENT: one drifting scale whose slots are
- * overwritten and never reverted, structurally unlike the reverting
- * DiatonicBaseSubstrate the shipped spellers run on.
+ * builds on. Frameless and persistent: one drifting scale whose slots are
+ * overwritten, never reverted.
  *
- * NOT part of the product API: it is deliberately the weakest speller (highest
- * `wrong%`), strictly dominated at its own latency by `Speller`, so it is not
- * re-exported from `index.ts` and the package `exports` gate keeps it off the npm
- * surface. It lives in `src/` (not a throwaway example) so the bench can drive and
- * score it as rung 1 — keeping the repo's ladder figure faithful to the paper's —
- * and so its source stays readable beside its siblings. Reachable only by an
- * in-repo path import (the eval harness, the viz).
+ * Not part of the product API. It is the weakest speller (highest wrong%), dominated
+ * at its own latency by Speller, so it is not re-exported from index.ts and the
+ * package exports keep it off the npm surface. It lives in src/ (not an example) so
+ * the bench can score it as rung 1; reach it only by an in-repo path import.
  *
- * The claim "the complete speller in ~100 effective lines" belongs to the
- * self-contained standalone in `examples/core-speller.ts`, not to this file:
- * spread across `src/`, the same model leans on shared primitives (candidate
- * enumeration, interval scoring) and carries library surface the two pillars
- * don't need. The standalone inlines only the core path (zero imports) and is
- * held byte-identical to this class by `test/examples/standalone.test.ts`.
+ * The self-contained ~100-line version is examples/core-speller.ts (zero imports),
+ * held byte-identical to this class by test/examples/standalone.test.ts.
  */
 
 import { enharmonicCandidatesFor } from './candidates.js';
@@ -38,8 +30,7 @@ export class CoreSpeller {
 
     /** @param doubleAccidentalPenalty over-rotation cap (default 0 = off): subtract this from any
      *  |alter| ≥ 2 candidate before the argmax, so a ♯♯/♭♭ spelling is picked only when it out-scores
-     *  every single-accidental rival by more than the cap. Mirrors
-     *  {@link PersistentSubstrateOptions.doubleAccidentalPenalty}; 0 keeps CoreSpeller byte-identical. */
+     *  every single-accidental rival by more than the cap. 0 keeps CoreSpeller as the paper's baseline. */
     constructor(private readonly doubleAccidentalPenalty = 0) {
         this.snapToCMajor();
     }
