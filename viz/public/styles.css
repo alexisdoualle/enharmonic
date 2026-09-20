@@ -137,8 +137,7 @@ body.live-only { background: #fff; }
    the column's main axis, eating the free space so nothing can center and the graphic pins to the bottom. */
 #wheel { display: flex; flex-direction: column; }
 .spiral { display: block; width: 100%; max-width: 220px; aspect-ratio: 1 / 1; height: auto;
-          flex-shrink: 0; margin: auto auto 0; }
-.spiral:last-child { margin-bottom: auto; } /* no legend (batch) → center the spiral alone */
+          flex-shrink: 0; margin: 0 auto auto; } /* top-aligned, just under the controls; slack falls below */
 .spiral .note-dot { fill: var(--ink); stroke: #171b22; stroke-width: 1; }
 .wheel-legend { text-align: center; font-size: 12px; color: var(--dim); margin: 8px 0 auto; line-height: 1.5; }
 .wheel-legend b { color: var(--ink); }
