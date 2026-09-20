@@ -52,7 +52,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 /* music panels: staff over piano roll, both horizontally-scrolling inside their own box (never the page).
    The region takes ~40% of the height left between the toolbars; the staff keeps a fixed band and the
    roll fills the rest, scrolling vertically for tall pieces. */
-#music { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 0; flex: 1 1 40%; min-height: 0; }
+#music { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 0; flex: 58 1 0; min-height: 0; }
 #staff, #pianoroll { padding: 0; overflow-x: auto; }
 #staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 104px; overflow-y: hidden; }
 #pianoroll { background: var(--panel); flex: 1 1 0; min-height: 0; overflow-y: auto; }
@@ -64,7 +64,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(140px, 0.55fr) minmax(0, 1fr);
   gap: 14px; padding: 8px 16px 12px; align-items: stretch;
-  flex: 1 1 60%; min-height: 0;
+  flex: 42 1 0; min-height: 0;
 }
 /* stack once a single row would get too cramped — then let the region scroll instead of squashing cards */
 @media (max-width: 1040px) { #panels { grid-template-columns: 1fr 1fr; overflow-y: auto; } }
