@@ -1,16 +1,17 @@
 /**
- * The line of fifths drawn as a true SPIRAL — a seamless circle-of-fifths ribbon that, instead of
+ * The line of fifths drawn as a true SPIRAL: a seamless circle-of-fifths ribbon that, instead of
  * closing, spirals so the two ends stack at the seam: a key and its enharmonic 12 fifths away share an
  * angle but sit one turn apart radially (G♭ inner, F♯ outer at the tritone). That is the exact
- * distinction the spiral frame reasons about — C♯(+7) and D♭(−5) are DIFFERENT positions, not one
- * wheel node. The live key (the engine's signed line-of-fifths tonic, `getAnchor()`) lights up; its
- * collection is the 7-fifth run around it. The band spans the shipped speller's reachable range
- * [center−depth … center+depth] = [−5 … +7], so the active turn is always on-screen. One dashed red
- * cell immediately beyond each end shows the fold-back limit, past which continuity would respell
- * rather than dig deeper.
+ * distinction the spiral frame reasons about: C♯(+7) and D♭(−5) are DIFFERENT positions, not one
+ * wheel node. The live key lights up at the frame's MEAN line-of-fifths minus 2 (a major scale's mean
+ * sits at tonic + 2), which is exactly the quantity the spiral fold clamps, so the lit key tracks what
+ * range/offset control. `range` IS the clamp radius, so the band spans exactly the tonics the fold ALLOWS,
+ * [center−range … center+range]; the dashed red cell immediately beyond each end (±(range+1)) is the FIRST
+ * folded tonic — the frame folds the moment the lit key reaches a red cell. Default range 7 = the shipped
+ * fold; dial it to 6 for a tighter 13-key fold.
  *
  * Ported from the lab viz (`music/wheel.ts` renderSpiral), stripped of the research local-key overlay.
- * depth/center are pinned to the shipped `SpellingEngine`'s `RT_PRESET` defaults (spiralRange 6, spiralCenter +1).
+ * The default range 7 / centre +1 map to the shipped `RT_PRESET` clamp (foldRadius 7, foldCenter 3).
  */
 import type { Snapshot } from '../replay.js';
 import { fifths, controlWindowLo } from '../replay.js';
@@ -32,6 +33,8 @@ export interface WheelOpts {
     control: boolean;        // fixed-LoF control mode: the panel becomes the control's window editor
     showKeyLanes: boolean;   // EXPERIMENTAL: also show the local/stable collection reads in the legend
     onChange: (range: number, center: number, even: boolean) => void;
+    repair: boolean;         // PROBE: repair the fold-centre scale (snap outliers to the diatonic window)
+    onRepair: (v: boolean) => void;
 }
 
 // Spelling of a key at signed line-of-fifths position `lof` (…F=−1, C=0, G=1…, F♯=+6, C♯=+7…).
@@ -62,11 +65,13 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     const DEPTH = opts.range;    // effective spiralRange the replay ran with (floor 6)
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
     const W = 256, CC = W / 2;
-    // The reachable window. Streaming/general: symmetric ±DEPTH (odd), or one flat-end slot dropped when
-    // `even` (mirrors the engine's spiralWindow). Control: the fixed 12-slot window positioned by centre.
+    // The reachable band = the tonics the fold ALLOWS: [center−range, center+range]. `range` now maps
+    // straight to the clamp radius (foldRadius = spiralRange), so the band width IS the fold width and the
+    // dashed red cell immediately beyond each end (±(range+1)) is the FIRST folded tonic. `even` drops one
+    // flat slot. Control: the fixed 12-slot window positioned by centre.
     const lo = opts.control ? controlWindowLo(CENTER) : CENTER - DEPTH + (opts.even ? 1 : 0);
     const hi = opts.control ? lo + 11 : CENTER + DEPTH;
-    const limitSlots = opts.control ? 0 : 1;                        // control's window is the whole story
+    const limitSlots = opts.control ? 0 : 1;                        // one fold-trigger (red) cell each side
     const drawLo = lo - limitSlots, drawHi = hi + limitSlots;
     // Non-spiral two-pass frames use their canonical key spelling; it is a display position, not a
     // continuity anchor like the streaming spiral's signed tonic. The control has no key at all.
@@ -119,6 +124,25 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
         if (noteLof === t) svg.appendChild(svgEl('circle', { cx: lx.toFixed(1), cy: (ly + TH / 2 - 3).toFixed(1), r: 2.6, class: 'note-dot' }));
     }
 
+    // Fractional-mean dot: the fold clamps the frame MEAN, which is often BETWEEN cells (e.g. 8.4). The lit
+    // key rounds it, so a small yellow dot at the exact mean shows how close it really is to the fold edge.
+    // Only when it is not on an integer (otherwise the lit cell already says it) and inside the drawn range.
+    if (!opts.control && snap?.frameMeanTonic != null) {
+        const m = snap.frameMeanTonic;
+        if (Math.abs(m - Math.round(m)) > 0.12 && m >= drawLo - 0.5 && m <= drawHi + 0.5) {
+            const [dx, dy] = pt(ang(m), rad(m));
+            svg.appendChild(svgEl('circle', { cx: dx.toFixed(1), cy: dy.toFixed(1), r: 3.2, fill: '#f2c14e', stroke: '#171b22', 'stroke-width': 1.2 }));
+        }
+    }
+
+    // TODO: out-of-range note dot. When a sounding note's line-of-fifths position (`noteLof`) falls
+    // OUTSIDE the drawn window [drawLo, drawHi] (e.g. D𝄪 (+16) when the spiral only reaches ~+8), it
+    // currently gets no dot at all, so it looks like nothing played. Instead, extrapolate its position:
+    // keep drawing at `ang(noteLof)` / `rad(noteLof)` (both are continuous in t, so they still give a
+    // sensible angle + radius just past the rim) and render a faint dot there, nudged a little further
+    // out (or ghosted) so it reads as "off the edge, near where D𝄪 would be" rather than a real cell.
+    // Clamp the radius so a very distant note doesn't fly off the SVG. Purely a display cue.
+
     // Hub: the live key + the reachable-range readout.
     svg.appendChild(svgEl('circle', { cx: CC, cy: CC, r: R_IN - 2, fill: '#171b22', stroke: '#323845' }));
     svg.appendChild(svgEl('text', { x: CC, y: CC - 8, 'text-anchor': 'middle', 'font-size': 8.5, fill: '#7d8694' }, opts.control ? 'window' : 'spiral'));
@@ -129,7 +153,7 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
     host.appendChild(svg);
 
     if (snap) {
-        // Collection reads (display-only): the axis the mode-blind frame can't express — collection =
+        // Collection reads (display-only): the axis the mode-blind frame can't express; collection =
         // major + relative minor. LOCAL chases tonicizations; STABLE is the home key.
         if (opts.showKeyLanes && (snap.localColl || snap.stableColl)) {
             const ck = document.createElement('div');
@@ -149,14 +173,14 @@ let lastPressed: string | null = null;
 
 /** The range / centre steppers, on one line above the spiral. Each rebuilds the speller on change;
  *  disabled in batch two-pass (the spiral is not the streaming frame there). The window ends
- *  (e.g. G♭…G♯) sit in the tooltip — widening the range digs to deeper enharmonics, the centre biases
+ *  (e.g. G♭…G♯) sit in the tooltip; widening the range digs to deeper enharmonics, the centre biases
  *  sharp/flat. */
 function renderControls(opts: WheelOpts): HTMLElement {
-    const { range, center, even, streaming, control, onChange } = opts;
+    const { range, center, even, streaming, control, onChange, repair, onRepair } = opts;
     const editable = streaming || control;   // control mode also drives its window from these steppers
     const wrap = document.createElement('div');
     wrap.className = 'spiral-ctl' + (editable ? '' : ' disabled');
-    if (!editable) wrap.title = 'streaming rungs & control only — batch two-pass has no spiral frame';
+    if (!editable) wrap.title = 'the streaming modes & control only: batch two-pass has no spiral frame';
     // The window the current params span (streaming: ±range, one flat slot dropped when even; control: 12).
     const wLo = control ? controlWindowLo(center) : center - range + (even ? 1 : 0);
     const wHi = control ? wLo + 11 : center + range;
@@ -225,7 +249,7 @@ function renderControls(opts: WheelOpts): HTMLElement {
         wrap.appendChild(group);
     }
 
-    // Always in the layout — greyed out at the shipped preset — so it can't shove the steppers sideways
+    // Always in the layout, greyed out at the shipped preset, so it can't shove the steppers sideways
     // the moment a value changes.
     const shipped = `±${SPIRAL_RANGE_DEFAULT}, ${SPIRAL_CENTER_DEFAULT > 0 ? '+' : ''}${SPIRAL_CENTER_DEFAULT}`;
     const atDefault = range === SPIRAL_RANGE_DEFAULT && center === SPIRAL_CENTER_DEFAULT && even === SPIRAL_EVEN_DEFAULT;
@@ -236,6 +260,20 @@ function renderControls(opts: WheelOpts): HTMLElement {
     reset.title = reset.disabled ? `at shipped default (${shipped})` : `back to shipped (${shipped})`;
     reset.addEventListener('click', () => { lastPressed = null; onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT); });
     wrap.appendChild(reset);
+
+    // PROBE toggle: repair the fold-centre scale (snap chromatic outliers to the diatonic window) so the
+    // detected key reads the underlying collection. Streaming rungs only.
+    if (!control) {
+        const rep = document.createElement('button');
+        rep.className = 'ctl-reset' + (repair ? ' on' : '');
+        rep.textContent = 'repair';
+        rep.disabled = !streaming;
+        rep.title = 'snap the fold-centre scale to its best-fit diatonic window (probe)';
+        rep.dataset.k = 'repair';
+        rep.addEventListener('click', () => { lastPressed = 'repair'; onRepair(!repair); });
+        if (rep.dataset.k === lastPressed) focusLater.push(rep);
+        wrap.appendChild(rep);
+    }
 
     // preventScroll: refocusing must not nudge the page, which is the whole point of this panel change.
     if (focusLater[0]) queueMicrotask(() => focusLater[0]!.focus({ preventScroll: true }));

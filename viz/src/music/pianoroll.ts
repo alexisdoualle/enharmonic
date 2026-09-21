@@ -2,16 +2,16 @@
  * Piano-roll scrub track: time → X, pitch → Y, one row per pitch, coloured by scoring tier.
  * Below the notes, a single "frame/key over time" lane shows the shipped spiral engine's
  * live line-of-fifths tonic (the same signal the spiral-of-fifths panel lights up) as contiguous
- * coloured runs — so you can see the key drift/flip alongside the notes that caused it.
+ * coloured runs, so you can see the key drift/flip alongside the notes that caused it.
  *
  * VIRTUALIZED: bach_jesu alone has ~7374 notes, and every step (arrow key) would otherwise touch
- * thousands of DOM nodes. Note *layouts* (x/y/width/color) are precomputed once per replay — cheap,
- * O(notes), no DOM — but only the rects inside (and a margin around) the visible scroll viewport are
+ * thousands of DOM nodes. Note *layouts* (x/y/width/color) are precomputed once per replay: cheap,
+ * O(notes), no DOM, but only the rects inside (and a margin around) the visible scroll viewport are
  * ever materialized. Scrolling and seeking both just adjust which slice of `layouts` is live.
  *
  * Adapted from the lab's `tools/viz/src/music/pianoroll.ts`, stripped of every research lane
  * (tonal-center / local-key / analysis / cadence / chord / scale / music21 / portal / frame-override
- * badges) — this viz has exactly one engine (the shipped spiral) so there is exactly one key lane.
+ * badges): this viz has exactly one engine (the shipped spiral) so there is exactly one key lane.
  */
 import type { Replay, ReplayNote, Tier } from '../replay.js';
 import type { Letter, Accidental } from '../../../src/index.js';
@@ -27,7 +27,7 @@ const CAPTION_H = 16;  // space under each lane for its caption
 const LANE_GAP2 = 8;   // space between the two lanes
 const MARGIN_PX = 400; // materialize this far beyond the viewport so scrolling stays ahead of the eye
 
-// Same idiom as panels/wheel.ts's keyName/colorForFifth (copied, not imported — the wheel's helpers
+// Same idiom as panels/wheel.ts's keyName/colorForFifth (copied, not imported: the wheel's helpers
 // aren't exported, and these are a two-liner each). `lof` is the signed line-of-fifths tonic.
 const LOF_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 function keyName(lof: number): string {
@@ -59,7 +59,7 @@ function svgEl(name: string, attrs: Record<string, string | number>): SVGElement
 let onSeek: (step: number) => void = () => {};
 export function initPianoRoll(seek: (step: number) => void): void { onSeek = seek; }
 
-// The replay we last built the SVG for — rebuild keys off OBJECT IDENTITY. main.ts makes a fresh
+// The replay we last built the SVG for: rebuild keys off OBJECT IDENTITY. main.ts makes a fresh
 // Replay on every fixture/mode change, so any such change rebuilds automatically; a mere seek (same
 // replay, new step) skips straight to the cheap path (move playhead, recolor, maybe scroll).
 let builtForReplay: Replay | null = null;
@@ -68,9 +68,10 @@ let notesGroup: SVGGElement | null = null;
 let playhead: SVGLineElement | null = null;
 let layouts: Layout[] = [];                 // one per note, index == onIndex, ascending by x (== onset order)
 let maxW = 0;                                // widest note, so long-held notes starting off-screen-left still show
-let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex — only the visible ones exist
+let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex: only the visible ones exist
 let rendered = new Set<number>();            // onIndices currently materialized in the DOM
 let pxPerMs = PX_PER_SEC / 1000;
+let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
 let scrollBound = false;
 // Autoscroll "follow": the playhead keeps itself in view while stepping, but a manual scroll
@@ -81,9 +82,12 @@ let follow = true;
 let expectedScrollLeft = -1;
 
 let builtWithKeyLanes = false;
+let builtMobile = false;
+// Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
+const isMobile = () => window.matchMedia('(max-width: 720px)').matches;
 export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false): void {
-    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes) {
-        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes;
+    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile) {
+        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile();
     }
     updatePlayhead(replay, step);
 }
@@ -93,9 +97,11 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     host.innerHTML = '';
     rects = []; rendered = new Set(); prevActive = [];
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
-    pxPerMs = PX_PER_SEC / 1000;
+    const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
+    pxPerMs = (PX_PER_SEC / 1000) * sc;
+    rowH = ROW_H * sc;
     const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs);
-    const noteH = (hi - lo + 1) * ROW_H;
+    const noteH = (hi - lo + 1) * rowH;
     const laneTop = PAD + noteH + LANE_GAP;                              // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.
     const localLaneTop = laneTop + LANE_H + CAPTION_H + LANE_GAP2;       // LOCAL collection (tonicizations)
@@ -111,18 +117,18 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     // faint row guides at octave Cs
     for (let m = lo; m <= hi; m++) {
         if (m % 12 !== 0) continue;
-        const y = PAD + (hi - m) * ROW_H + ROW_H / 2;
+        const y = PAD + (hi - m) * rowH + rowH / 2;
         svg.appendChild(svgEl('line', { x1: 0, x2: width, y1: y, y2: y, stroke: '#222833', 'stroke-width': 1 }));
     }
 
-    // precompute layouts (cheap, O(notes), no DOM) — replay.notes is already in onset (== x) order
+    // precompute layouts (cheap, O(notes), no DOM); replay.notes is already in onset (== x) order
     layouts = new Array(replay.notes.length);
     maxW = 0;
     for (const note of replay.notes) {
         const w = Math.max(3, (note.offT - note.onT) * pxPerMs);
         if (w > maxW) maxW = w;
         layouts[note.onIndex] = {
-            x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * ROW_H,
+            x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * rowH,
             onIndex: note.onIndex, onT: note.onT, offT: note.offT, tier: note.tier, midi: note.midi,
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
         };
@@ -166,7 +172,7 @@ function build(replay: Replay, showKeyLanes: boolean): void {
 }
 
 // ReplayNote.expected carries loosely-typed step/alter (from the fixture's JSON); the shipped Pitch
-// type narrows them to Letter/Accidental. The cast is safe — fixtures are pre-validated against the
+// type narrows them to Letter/Accidental. The cast is safe: fixtures are pre-validated against the
 // same shipped grammar the speller itself emits.
 function expLabel(e: ReplayNote['expected']): string {
     if (!e) return '∅';
@@ -191,12 +197,12 @@ function makeRect(oi: number): void {
     const L = layouts[oi]!;
     const rect = document.createElementNS(SVGNS, 'rect') as SVGRectElement;
     rect.setAttribute('x', String(L.x)); rect.setAttribute('y', String(L.y));
-    rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(ROW_H - 1));
+    rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
     rect.setAttribute('fill', TIER_COLOR[L.tier]);
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
-    title.textContent = `${L.committedLabel} (midi ${L.midi}) — expected ${L.expectedLabel}`;
+    title.textContent = `${L.committedLabel} (midi ${L.midi}), expected ${L.expectedLabel}`;
     rect.appendChild(title);
     rect.addEventListener('click', e => { e.stopPropagation(); onSeek(L.onIndex); });
     notesGroup!.appendChild(rect);
@@ -266,10 +272,10 @@ function buildKeyLane(replay: Replay, host: SVGSVGElement, width: number, laneTo
     text(PAD, laneTop + LANE_H + 12, `frame key: ${flips} change${flips === 1 ? '' : 's'} · ${rate} per 100 onsets`, '#9aa4b2', 'start', 9);
 }
 
-// Contiguous runs of a COLLECTION lane (display-only; major + relative minor as one unit — the axis the
+// Contiguous runs of a COLLECTION lane (display-only; major + relative minor as one unit: the axis the
 // mode-blind frame lane cannot express). `which` selects the LOCAL (tonicizations) or STABLE (home key)
 // read. See music/collection.ts + the memory `modeaware-key-read-viz`.
-function collectionSegments(replay: Replay, which: 'local' | 'stable'): { name: string; relMajorPc: number; margin: number; t0: number; t1: number }[] {
+export function collectionSegments(replay: Replay, which: 'local' | 'stable'): { name: string; relMajorPc: number; margin: number; t0: number; t1: number }[] {
     const segs: { name: string; relMajorPc: number; margin: number; t0: number; t1: number }[] = [];
     let cur: string | null = null, segStart = 0, relMajorPc = 0, margin = 0;
     for (const snap of replay.snapshots) {
@@ -343,7 +349,7 @@ function updatePlayhead(replay: Replay, step: number): void {
     playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
 
     // autoscroll to keep the playhead in view, then materialize the new viewport. While the user
-    // has scrolled away (follow off), don't yank the view back — but re-engage the moment the
+    // has scrolled away (follow off), don't yank the view back, but re-engage the moment the
     // playhead drifts back into view on its own.
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, right = left + host.clientWidth;
@@ -357,7 +363,7 @@ function updatePlayhead(replay: Replay, step: number): void {
 }
 
 // Bold gold outline on the current note; a thin light outline on every other note ringing at this
-// instant (onT ≤ headT < offT — the same rule the state-table's "sounding" chips use).
+// instant (onT ≤ headT < offT, the same rule the state-table's "sounding" chips use).
 function applyActiveStrokes(replay: Replay, step: number): void {
     for (const oi of prevActive) { const r = rects[oi]; if (r) r.setAttribute('stroke', 'none'); }
     if (!replay.notes.length) { prevActive = []; return; }

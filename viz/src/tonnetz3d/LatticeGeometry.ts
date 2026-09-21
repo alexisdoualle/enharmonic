@@ -226,12 +226,12 @@ export function triangleHasSecond(a: PitchClass, b: PitchClass, c: PitchClass): 
  * Tries each of the 3 notes as root and checks if the ascending semitone
  * intervals match a known pattern. This rotation search is necessary because
  * the same set of intervals maps to different patterns depending on which
- * note is treated as root — e.g. C-F-G is [5,7] from C (sus4) but [2,7]
+ * note is treated as root, e.g. C-F-G is [5,7] from C (sus4) but [2,7]
  * from F (sus2). Similarly, [4,7] from C = major, but from E the same
  * triad gives [3,8] and from G it gives [5,9]. Only root position matches.
  *
- * For exotic types like aug3 ([5,7]), semitones alone are ambiguous — a P4
- * and an A3 are both 5 semitones — so we verify spelling via letter names.
+ * For exotic types like aug3 ([5,7]), semitones alone are ambiguous: a P4
+ * and an A3 are both 5 semitones, so we verify spelling via letter names.
  * 5, 7 is a Sus4 chord. It's enharmonic to a Sus2 chord a 4th away.
  * However Suspended chords don't create triangles on a linear P5 chain.
  * The enharmonic Aug3 and dim3 do, though.
@@ -264,7 +264,7 @@ export function classifyTriad(a: PitchClass, b: PitchClass, c: PitchClass): stri
         }
     }
     // dim3 + P5 (e.g. C-Ebb-G): checked in a second pass because [2,7] from
-    // one root can coexist with [5,7] aug3 from another — aug3 takes precedence
+    // one root can coexist with [5,7] aug3 from another; aug3 takes precedence
     for (let r = 0; r < 3; r++) {
         const root = semitones[r];
         const others = semitones.filter((_, i) => i !== r);

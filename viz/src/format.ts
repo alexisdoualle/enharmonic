@@ -10,7 +10,7 @@ export function label(p: Pitch | PitchClass | null): string {
     return 'octave' in p ? `${base}${(p as Pitch).octave}` : base;
 }
 
-/** Same as {@link label} but the raw ASCII form ("C#", "Eb") — for equality/keys. */
+/** Same as {@link label} but the raw ASCII form ("C#", "Eb"), for equality/keys. */
 export function ascii(p: Pitch | PitchClass | null): string {
     if (!p) return '';
     const suffix = p.alter === 0 ? '' : (p.alter > 0 ? '#'.repeat(p.alter) : 'b'.repeat(-p.alter));

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>enharmonic — pitch spelling for MIDI</title>
+<title>enharmonic: pitch spelling for MIDI</title>
 <meta name="description" content="A small, dependency-free library that recovers written pitch spelling (C♯ vs D♭) from a MIDI stream, from musical context alone." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -67,9 +67,11 @@
   .note { font-family: 'Newsreader', Georgia, serif; }
   .glyph { font-variant-ligatures: none; }
   mono, .mono, code { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; }
-  /* stat row */
-  .stats { display: flex; flex-wrap: wrap; gap: 1.5rem 2.5rem; margin: 1.4rem 0 0; padding: 1.2rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .stat { }
+  /* stat groups: two corpora + footprint, each a captioned column of tiles */
+  .stats { display: flex; flex-wrap: wrap; gap: 1.6rem 3rem; margin: 1.4rem 0 0; padding: 1.2rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .statgroup { display: flex; flex-direction: column; gap: .7rem; }
+  .statgroup .cap { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  .statgroup .row { display: flex; flex-wrap: wrap; gap: 1.2rem 2.4rem; }
   .stat .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; }
   .stat .l { display: block; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-top: .15rem; }
   /* buttons */
@@ -99,7 +101,7 @@
     <main>
       <p class="lead">A written score names each note with a letter and an accidental. A MIDI stream keeps
       only the twelve pitch classes and throws that away: it cannot say whether note 61 is a
-      <span class="glyph">C♯</span> or a <span class="glyph">D♭</span>. The letter is not cosmetic — it tells
+      <span class="glyph">C♯</span> or a <span class="glyph">D♭</span>. The letter is not cosmetic. It tells
       a reader the note's harmonic identity. This library recovers it from musical context alone.</p>
 
       <h2>The idea</h2>
@@ -107,27 +109,48 @@
       chord, note 68 is <span class="glyph">A♭</span>, not <span class="glyph">G♯</span>, because
       <span class="glyph">G♯</span> would make an augmented second where the ear hears a minor third. The
       second is the <em>comma</em>, or side: a passage in <span class="glyph">C♯</span> major written in
-      <span class="glyph">D♭</span> major is the same pitches one turn around the spiral of fifths — a
+      <span class="glyph">D♭</span> major is the same pitches one turn around the spiral of fifths, a
       coherent transposition, not an error.</p>
 
-      <p>The speller settles both from a few simple principles in one harmonic space, with
+      <p>The speller settles both from three principles in one harmonic space, with
       <strong>no key detection anywhere</strong>: a running seven-letter scale, an interval score that
       rewards consonance, and a spiral that decides which side of the comma a passage sits on. The side it
-      lands on is just a statistic of the notes it has already committed.</p>
+      lands on is a statistic of the notes it has already committed.</p>
 
-      <h2>Two spellers</h2>
-      <p>One engine, run at the latency you have. <strong>Real time</strong> spells each note as it plays,
-      from past context only. <strong>Two-pass</strong> reads the whole piece forward and backward and
-      reconciles the two, fixing the modulation boundaries the streaming pass spells late.</p>
+      <h2>One speller</h2>
+      <p>One engine spells each note as it plays, from past context only. An optional
+      <strong>look-ahead</strong> setting reads a small forward buffer to fix the direction a semitone
+      resolves. An offline <strong>two-pass</strong> option reads the whole piece forward and backward,
+      then reconciles the two to repair the modulation boundaries the streaming pass spells late.</p>
 
-      <div class="stats" aria-label="accuracy on the held-out Meredith corpus">
-        <div class="stat"><span class="n">99.52%</span><span class="l">real-time, exact</span></div>
-        <div class="stat"><span class="n">99.86%</span><span class="l">two-pass, exact</span></div>
-        <div class="stat"><span class="n">0</span><span class="l">runtime dependencies</span></div>
+      <div class="stats" aria-label="accuracy on two corpora: Meredith and the curated corpus">
+        <div class="statgroup">
+          <span class="cap">Standard benchmark · Meredith, 195,972 notes</span>
+          <div class="row">
+            <div class="stat"><span class="n">99.52%</span><span class="l">real-time, exact</span></div>
+            <div class="stat"><span class="n">99.86%</span><span class="l">two-pass, exact</span></div>
+          </div>
+        </div>
+        <div class="statgroup">
+          <span class="cap">Harder curated corpus · 59 pieces</span>
+          <div class="row">
+            <div class="stat"><span class="n">94.73%</span><span class="l">two-pass, exact</span></div>
+            <div class="stat"><span class="n">98.66%</span><span class="l">two-pass, coherent</span></div>
+          </div>
+        </div>
+        <div class="statgroup">
+          <span class="cap">Footprint</span>
+          <div class="row">
+            <div class="stat"><span class="n">0</span><span class="l">runtime dependencies</span></div>
+          </div>
+        </div>
       </div>
-      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact composer-spelling
-      match on David Meredith's held-out 8×25000 corpus (195,972 notes), the standard pitch-spelling
-      benchmark — level with the best deterministic and neural spellers.</p>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact means a
+      composer-spelling match. Meredith's held-out 8×25000 corpus (195,972 notes) is the standard
+      pitch-spelling benchmark; here the library is level with the best deterministic and neural spellers.
+      The 59-piece curated corpus is harder and less overfit: it stresses the side (comma) choice Meredith
+      mostly avoids. Coherent also counts a whole-passage flip to the other side of the spiral as correct,
+      since it is the same music transposed, not a wrong note.</p>
 
       <div class="cta">
         <a class="btn primary" href="viz/">Open the visualiser →</a>

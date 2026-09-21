@@ -1,10 +1,10 @@
 /**
- * The viz's own per-note decision-trace shape — a display record the scoring panel and copy view render.
+ * The viz's own per-note decision-trace shape: a display record the scoring panel and copy view render.
  *
  * It is deliberately viz-local: `replay.ts` ADAPTS each speller's native decision (the shipped
- * {@link SpellingEngine}'s `Decision`, or a rung's own trace) into this one shape, so the panels have a
+ * {@link SpellingEngine}'s `Decision`, or a mode's own trace) into this one shape, so the panels have a
  * single stable contract and never depend on any one speller's internal trace type. Recording a trace
- * never changes a spelling — it mirrors what the argmax saw.
+ * never changes a spelling; it mirrors what the argmax saw.
  */
 
 import type { PitchClass } from '../../src/index.js';
@@ -16,7 +16,7 @@ export type DecisionOverride =
 
 /** One candidate's scoring breakdown. `base` is the interval-consonance score; the deltas are each
  *  mechanism's contribution (0 when its mechanism is off). `nsDelta` is the general "other penalties"
- *  column — for the shipped engine it carries the drift-leash + vertical-guard total. */
+ *  column: for the shipped engine it carries the drift-leash + vertical-guard total. */
 export interface DecisionCandidate {
     readonly c: PitchClass;
     readonly base: number;

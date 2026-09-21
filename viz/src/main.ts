@@ -28,19 +28,52 @@ let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) !== 
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
-/** Show either the coiled-Tonnetz panel or the 3D lattice panel in the right column, lazy-building the
- *  3D scene the first time it is shown. Feeding the visible view its snapshot is left to `render()`. */
-function applyTonnetz3d() {
-    $('live-tonnetz').style.display = tonnetz3dOn ? 'none' : '';
-    $('tonnetz').style.display = tonnetz3dOn ? 'flex' : 'none';
-    if (!tonnetz3dOn) return;
+// Staff visibility: a toolbar toggle to hide the sheet-music band (handy on phones), persisted per-browser.
+const SHOW_STAFF_KEY = 'viz.showStaff';
+let staffVisible = (() => { try { return localStorage.getItem(SHOW_STAFF_KEY) !== '0'; } catch { return true; } })();
+function applyStaffVisible() {
+    $('staff').style.display = staffVisible ? '' : 'none';
+    $<HTMLInputElement>('show-staff').checked = staffVisible;
+}
+function setStaffVisible(v: boolean) {
+    staffVisible = v;
+    try { localStorage.setItem(SHOW_STAFF_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
+    applyStaffVisible();
+    if (v) render();   // re-fit the staff to the (now-restored) band
+}
+
+// On phones the three side panels don't fit side by side, so only one shows at a time and a small tab
+// bar switches between them (scoring / spiral / tonnetz). On wider screens all three show and the tab
+// bar is hidden. `mobileTab` is which one is active in the narrow layout.
+const MOBILE_MQ = window.matchMedia('(max-width: 720px)');
+type PanelTab = 'scoring' | 'spiral' | 'tonnetz';
+let mobileTab: PanelTab = 'tonnetz';
+
+/** Set every side panel's visibility from the layout (all three on wide screens; only the active tab on
+ *  phones) and the 3D/2D choice within the tonnetz slot; reflect the active tab; and lazy-build the 3D
+ *  scene once its panel is actually on screen. Feeding the visible view its snapshot is left to render(). */
+function applyPanelVisibility() {
+    const mobile = MOBILE_MQ.matches;
+    const showScoring = !mobile || mobileTab === 'scoring';
+    const showSpiral = !mobile || mobileTab === 'spiral';
+    const showTonnetz = !mobile || mobileTab === 'tonnetz';
+    $('scoring').style.display = showScoring ? '' : 'none';
+    $('wheel').style.display = showSpiral ? '' : 'none';
+    $('live-tonnetz').style.display = showTonnetz && !tonnetz3dOn ? '' : 'none';
+    $('tonnetz').style.display = showTonnetz && tonnetz3dOn ? 'flex' : 'none';
+    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).classList.toggle('active', mobileTab === t);
+    if (showTonnetz && tonnetz3dOn) ensureTonnetz3d();
+}
+
+/** Lazy-load and build the 3D lattice the first time its panel is shown (it pulls in three.js). */
+function ensureTonnetz3d() {
     if (tonnetz3d) { tonnetz3d.initTonnetz($('tonnetz-canvas')); return; }   // initTonnetz is a no-op once built
     if (tonnetz3dLoading) return;
     tonnetz3dLoading = true;
     void import('./panels/tonnetz.js').then(mod => {
         tonnetz3dLoading = false;
         tonnetz3d = mod;
-        if (!tonnetz3dOn) return;              // toggled back off while the chunk was loading
+        if (!(tonnetz3dOn && (!MOBILE_MQ.matches || mobileTab === 'tonnetz'))) return;   // no longer visible
         mod.initTonnetz($('tonnetz-canvas'));
         render();                              // paint the current onset onto the freshly built lattice
     }).catch(err => {
@@ -53,8 +86,15 @@ function applyTonnetz3d() {
 function setTonnetz3d(on: boolean) {
     tonnetz3dOn = on;
     try { localStorage.setItem(TONNETZ3D_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
-    applyTonnetz3d();
+    applyPanelVisibility();
     render();
+}
+
+/** Switch the active panel in the narrow (phone) layout. */
+function setMobileTab(tab: PanelTab) {
+    mobileTab = tab;
+    applyPanelVisibility();
+    render();   // the newly shown panel needs the current snapshot (staff re-fit, 3D paint, …)
 }
 
 /** Append the corner overlay button that swaps this panel for the other tonnetz view. Its own panel
@@ -91,7 +131,7 @@ const MODE_NAME: Record<Mode, string> = {
     rt: '② real-time',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
-    control: '⊘ control — fixed-LoF window (music21)',
+    control: '⊘ control: fixed-LoF window (music21)',
 };
 
 async function listFixtures(): Promise<string[]> {
@@ -120,7 +160,7 @@ function effMode(): Mode {
 function recompute() {
     if (!state.fixtureId) return;
     state.replay = buildReplay(effMode(), rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven },
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
@@ -141,6 +181,12 @@ function setSideOverride(comma: number) {
 }
 
 /** Change the spiral what-if params (from the wheel steppers), rebuild, and persist to the URL. */
+function setRepair(v: boolean) {
+    state.repair = v;
+    recompute();
+    syncUrl();
+}
+
 function setSpiral(range: number, center: number, even: boolean) {
     state.spiralRange = clampRange(range);
     state.spiralCenter = clampCenter(center);
@@ -172,6 +218,7 @@ function render() {
         streaming: state.mode === 'rt' || state.mode === 'la',
         control: state.mode === 'control',
         showKeyLanes: state.showKeyLanes, onChange: setSpiral,
+        repair: state.repair, onRepair: setRepair,
     });
     // Feed the shared live model always: the 2D panel subscribes, and so does the 3D panel (see the
     // subscription in the boot block), so whichever view is on tracks both playback and live input.
@@ -197,7 +244,7 @@ function render() {
     }
 }
 
-/** A thin ribbon of every onset, coloured by tier, with the cursor marked — click to seek. */
+/** A thin ribbon of every onset, coloured by tier, with the cursor marked; click to seek. */
 function renderStrip() {
     return;
     const strip = $('strip');
@@ -223,7 +270,7 @@ function renderStrip() {
     }
 }
 
-/** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there —
+/** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there:
  *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
  *  slider, which seeks continuously while dragged and resumes once on release instead. */
 function seek(i: number, audible = false, resume = true) {
@@ -246,13 +293,13 @@ function seek(i: number, audible = false, resume = true) {
 
 // --- playback: a real wall-clock MIDI player -----------------------------------------------------
 // The playhead is driven by performance.now() and audio is scheduled AHEAD on the AudioContext clock,
-// so timing stays sample-accurate and doesn't drift when a dense texture makes rendering lag — under
+// so timing stays sample-accurate and doesn't drift when a dense texture makes rendering lag; under
 // load the visual playhead simply skips events (drops frames) instead of falling behind, while every
 // note still rings on time. Adapted from the lab viz's player.
 let soundOn = true;
 let tempoRate = 1;                 // playback speed multiplier (tempo slider); >1 faster
 // Extra playhead delay (ms) ADDED on top of the auto-measured output latency, for setups the browser
-// under-reports — chiefly Bluetooth headphones, whose latency getOutputTimestamp misses. Applied to
+// under-reports (chiefly Bluetooth headphones, whose latency getOutputTimestamp misses). Applied to
 // the VISUAL playhead only (never to when audio is scheduled), so raising it lets sight catch up to
 // late sound. Persisted per-browser.
 const LATENCY_KEY = 'viz.audioOffsetMs';
@@ -266,7 +313,7 @@ const TEMPO_SPAN = 4;
 const posToRate = (p: number) => Math.pow(TEMPO_SPAN, p);
 const rateToPos = (r: number) => Math.log(r) / Math.log(TEMPO_SPAN);
 
-// Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS — honours the
+// Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS: honours the
 // score's rhythm but never lets a huge rest stall the player. Rebuilt only when the replay changes.
 let timeline: number[] = [];
 let noteDurMs: number[] = [];
@@ -315,7 +362,7 @@ function startClocks() {
     audioIdx = state.step;
     if (soundOn) {
         // Schedule the first onset START_LEAD_MS ahead on the audio clock (future → never clamped), and
-        // anchor the visual playhead to when that onset actually reaches the SPEAKERS — scheduleAnchor
+        // anchor the visual playhead to when that onset actually reaches the SPEAKERS: scheduleAnchor
         // folds in the output latency, so sight and sound start together even on the cold first play.
         const a = scheduleAnchor(START_LEAD_MS / 1000);
         t0Ctx = a.ctx;
@@ -344,7 +391,7 @@ function frame() {
     }
     // The playhead trails the audio position by the user's extra offset (sound arrives that much later
     // than the browser reports, e.g. Bluetooth) so sight and sound line up. Audio scheduling above is
-    // untouched — only the visual cursor is delayed.
+    // untouched; only the visual cursor is delayed.
     const nowVisual = nowPlay - (soundOn ? audioOffsetMs : 0) * tempoRate;
     // Advance the visual playhead to the latest onset whose time has arrived (may jump several under load).
     let i = state.step;
@@ -376,7 +423,7 @@ function setTempo(rate: number) {
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
 
 /** ⌘/Ctrl+C dumps the current onset (⇧ adds the whole run) as agent-pasteable text. A real text
- *  selection still copies natively — the shortcut only claims the keystroke when nothing is selected. */
+ *  selection still copies natively; the shortcut only claims the keystroke when nothing is selected. */
 function copyContext(ev: KeyboardEvent) {
     if (!state.replay) return;
     if ((window.getSelection()?.toString() ?? '').trim()) return;
@@ -399,6 +446,8 @@ function syncUrl() {
     else u.searchParams.delete('sc');
     if (state.spiralEven !== SPIRAL_EVEN_DEFAULT) u.searchParams.set('sk', '1');
     else u.searchParams.delete('sk');
+    if (state.repair) u.searchParams.set('rp', '1');
+    else u.searchParams.delete('rp');
     // experimental key lanes are off by default; only record when enabled
     if (state.lookAhead) u.searchParams.set('la', '1');
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
@@ -428,6 +477,9 @@ function wire() {
     addViewSwitch('tonnetz', '2D coiled', false);
     addViewSwitch('live-tonnetz', '3D lattice', true);
     wireMidiButton();
+    // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
+    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).addEventListener('click', () => setMobileTab(t));
+    MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
@@ -453,6 +505,7 @@ function wire() {
         soundOn = (e.target as HTMLInputElement).checked;
         if (soundOn) audioEnable(); else allNotesOff();
     });
+    $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('look-ahead').addEventListener('change', e => {
         state.lookAhead = (e.target as HTMLInputElement).checked;
         recompute(); syncUrl();   // changes the speller preset, so rebuild
@@ -477,8 +530,8 @@ function wire() {
         const tag = (ev.target as HTMLElement)?.tagName ?? '';
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
-        // Spacebar always plays/pauses — even while a <select> (e.g. the fixture picker) holds
-        // focus after a change — except in real text fields where a space is literal input.
+        // Spacebar always plays/pauses, even while a <select> (e.g. the fixture picker) holds
+        // focus after a change, except in real text fields where a space is literal input.
         if (ev.key === ' ' && !/INPUT|TEXTAREA/.test(tag)) { ev.preventDefault(); togglePlay(); return; }
         if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
@@ -509,6 +562,7 @@ async function boot() {
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
     if (p.get('sk')) state.spiralEven = p.get('sk') === '1';
+    if (p.get('rp')) state.repair = p.get('rp') === '1';
     if (p.get('keys') === '1') state.showKeyLanes = true;
     state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;
@@ -519,9 +573,10 @@ async function boot() {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
     }
-    // Restore the persisted 3D-tonnetz choice now that a fixture (and its first snapshot) is loaded.
-    applyTonnetz3d();
-    if (tonnetz3dOn) render();
+    // Apply panel visibility (3D/2D choice + mobile tab) and the staff toggle now that a fixture is loaded.
+    applyStaffVisible();
+    applyPanelVisibility();
+    render();
 }
 
 boot().catch(err => { $('status').textContent = 'ERROR: ' + err.message; console.error(err); });

@@ -4,7 +4,7 @@
  * Extracted for testability.
  */
 
-// Minimum resonance activation to count as "present" — filters out
+// Minimum resonance activation to count as "present": filters out
 // sympathetic noise that would otherwise cause arrows to flicker.
 export const LIT_THRESHOLD = 0.05;
 
@@ -16,7 +16,7 @@ const SOURCE_LIT_THRESHOLD = 0.5;
 export const LETTER_INDICES: Record<string, number> = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 const NATURAL_MIDI = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
 
-// A5 policy — which end of an augmented 5th is allowed to carry an arrow?
+// A5 policy: which end of an augmented 5th is allowed to carry an arrow?
 // Root is allowed only when the crown is NOT also active (see isActive param).
 const allowA5crown = true;  // true → don't block arrows pointing to the crown of an A5
 
@@ -29,7 +29,7 @@ const allowA5crown = true;  // true → don't block arrows pointing to the crown
  * resolvedMidi maps letter index (0–6) → midi pitch class (0–11) or null.
  * isActive checks whether a pitch class is sounding (held, active, or resonating).
  * When the target is the root of an A5, the root is only allowed as a target
- * if the crown is NOT also active — otherwise the A5 is truly present and blocks.
+ * if the crown is NOT also active; otherwise the A5 is truly present and blocks.
  */
 export function hasNonPerfectFifth(
     targetMidi: number,
@@ -37,7 +37,7 @@ export function hasNonPerfectFifth(
     resolvedMidi: (letterIdx: number) => number | null,
     isActive?: (pc: number) => boolean,
 ): boolean {
-    // 5th above = 4 letter steps up (e.g. A→E) — target is root
+    // 5th above = 4 letter steps up (e.g. A→E); target is root
     const aboveIdx = (targetLetterIndex + 4) % 7;
     const aboveMidi = resolvedMidi(aboveIdx);
     if (aboveMidi !== null) {
@@ -46,7 +46,7 @@ export function hasNonPerfectFifth(
         const a5RootOk = interval === 8 && (!isActive || !isActive(aboveMidi));
         if (interval !== 7 && !a5RootOk) return true;
     }
-    // 5th below = 3 letter steps up = 4 steps down (e.g. A→D) — target is crown
+    // 5th below = 3 letter steps up = 4 steps down (e.g. A→D); target is crown
     const belowIdx = (targetLetterIndex + 3) % 7;
     const belowMidi = resolvedMidi(belowIdx);
     if (belowMidi !== null) {

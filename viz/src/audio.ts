@@ -1,6 +1,6 @@
 /**
  * Tiny zero-dependency Web Audio synth so a passage can be audited by ear. The voice is a warm FM
- * electric piano (Rhodes-ish): a sine CARRIER frequency-modulated by two sine operators — a 1:1 "body"
+ * electric piano (Rhodes-ish): a sine CARRIER frequency-modulated by two sine operators: a 1:1 "body"
  * modulator for the round, slightly-hollow EP warmth, and a fast-decaying high-ratio "tine" modulator
  * for the bell-like attack bark before it settles. The modulation index is largest at onset and decays
  * quickly, so each note barks then mellows the way a struck tine does. An attack/decay/SUSTAIN/release
@@ -41,7 +41,7 @@ function ensure(): AudioContext {
 }
 
 /** Call from a user gesture (e.g. the sound toggle / play button) to unlock audio. The returned
- *  promise resolves once the AudioContext is actually running — on first unlock its clock stays at 0
+ *  promise resolves once the AudioContext is actually running; on first unlock its clock stays at 0
  *  until the resume lands, so callers that anchor a clock should wait for this before reading now(). */
 export function enable(): Promise<void> {
     const c = ensure();
@@ -49,7 +49,7 @@ export function enable(): Promise<void> {
 }
 
 /** Resolves once the audio clock is actually PRODUCING OUTPUT. resume() can resolve while the render
- *  thread is still spinning up — currentTime / getOutputTimestamp not yet advancing — which on the
+ *  thread is still spinning up (currentTime / getOutputTimestamp not yet advancing), which on the
  *  first play let the playhead start before any sound. Polls until the output clock moves (or a short
  *  safety cap), so callers can anchor the visual clock against a clock that has truly started. */
 export function whenPlaying(): Promise<void> {
@@ -66,15 +66,15 @@ export function whenPlaying(): Promise<void> {
     });
 }
 
-/** The AudioContext's monotonic clock (seconds) — schedule notes AHEAD of the playhead so timing is
+/** The AudioContext's monotonic clock (seconds): schedule notes AHEAD of the playhead so timing is
  *  sample-accurate and immune to main-thread render jank. */
 export function audioNow(): number { return ensure().currentTime; }
 
 /** Anchor for starting playback `leadSec` from now. `ctx` is the audio-clock time to schedule the
- *  first onset at — always in the future (currentTime + lead), so it is never clamped. `perf` is the
+ *  first onset at, always in the future (currentTime + lead), so it is never clamped. `perf` is the
  *  performance-clock time at which that onset actually reaches the SPEAKERS: it folds in the output
  *  latency via getOutputTimestamp's ctx→perf mapping, so anchoring the visual playhead to it keeps
- *  sight and sound together — even on the cold first play when output latency is largest. Without a
+ *  sight and sound together, even on the cold first play when output latency is largest. Without a
  *  timestamp (unsupported), falls back to assuming zero output latency. */
 export function scheduleAnchor(leadSec: number): { ctx: number; perf: number } {
     const c = ensure();
@@ -105,7 +105,7 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     carrier.type = 'sine';
     carrier.frequency.value = f;
 
-    // Body modulator, ratio 1:1 — the warm Rhodes core. Depth starts wide for a vocal attack, then eases
+    // Body modulator, ratio 1:1: the warm Rhodes core. Depth starts wide for a vocal attack, then eases
     // back so the held tone is rounder than the onset.
     const modBody = c.createOscillator();
     modBody.type = 'sine';
@@ -115,7 +115,7 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     modBodyGain.gain.exponentialRampToValueAtTime(Math.max(1, f * 0.35), t0 + 0.22);
     modBody.connect(modBodyGain).connect(carrier.frequency);
 
-    // Tine modulator, high ratio — the bell-like "bark" of the struck tine: a deep index that decays
+    // Tine modulator, high ratio, the bell-like "bark" of the struck tine: a deep index that decays
     // fast (~70ms) so it's an attack transient, not a sustained ring.
     const modTine = c.createOscillator();
     modTine.type = 'sine';
@@ -156,7 +156,7 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
 export function allNotesOff(): void {
     if (!ctx) return;
     const t = ctx.currentTime;
-    const REL = 0.03;   // 30ms fade — fast but clickless
+    const REL = 0.03;   // 30ms fade, fast but clickless
     for (const v of voices) {
         try {
             v.gain.gain.cancelScheduledValues(t);

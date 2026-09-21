@@ -1,5 +1,5 @@
 /**
- * State table: the speller's surface at the current onset — the 7-letter resolved scale (the
+ * State table: the speller's surface at the current onset, the 7-letter resolved scale (the
  * diatonic collection plus its live alterations), the note just committed vs its ground truth, and
  * the notes still ringing. This is read straight from the shipped engine's `getResolvedScale()` /
  * `getCollection()`, so it is exactly the state the spelling decision saw.
@@ -29,7 +29,7 @@ export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void
     host.appendChild(noteBox);
 
     // The bare diatonic collection (the frame), then the resolved surface it feeds. Where the surface
-    // differs from the frame is its live alterations — those surface cells are marked.
+    // differs from the frame is its live alterations: those surface cells are marked.
     const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
     const surfByLetter = new Map(snap.resolvedScale?.map(p => [p.step, p]) ?? []);
 
@@ -49,7 +49,7 @@ export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void
     host.appendChild(labelled(`sounding (${snap.sounding.length})`, sounding));
 
     if (snap.frameLofTonic == null && snap.resolvedScale == null)
-        host.appendChild(row('frame', 'batch two-pass — whole-piece decision, no streaming frame'));
+        host.appendChild(row('frame', 'batch two-pass: whole-piece decision, no streaming frame'));
 }
 
 /** A 7-cell letter grid for a resolved map. When `diffFrom` is given, a cell whose spelling differs
