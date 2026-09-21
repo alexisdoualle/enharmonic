@@ -34,7 +34,7 @@ suite('Speller smoke', () => {
     });
 
     // These two exercise the paths the parity bench does NOT: the reset(scale) soft key-signature
-    // hint, and getResolvedScale — both flow through the slimmed snapshot()/suppliedKey surface.
+    // hint, and getResolvedScale, both flow through the slimmed snapshot()/suppliedKey surface.
     test('reset(scale) key hint orients an ambiguous pitch class', () => {
         const dMajor: PitchClass[] = [
             { step: 'D', alter: 0 }, { step: 'E', alter: 0 }, { step: 'F', alter: 1 },
@@ -64,7 +64,7 @@ suite('Speller smoke', () => {
     });
 
     // After a just-played G♮, the recency guard penalises the same-letter flip to G♯, so pc 8 is spelled
-    // A♭ (the real-time preset has no separate co-onset sounding-tiebreak mechanism — see the
+    // A♭ (the real-time preset has no separate co-onset sounding-tiebreak mechanism, see the
     // soundingTiebreak audit note in CLAUDE.local.md). This pins that real-time tradeoff, which nets
     // positive corpus-wide.
     test('recency guard spells pc 8 as A♭ right after a G♮', () => {

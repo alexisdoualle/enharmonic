@@ -1,9 +1,9 @@
 /**
  * Standalone ↔ shipped-model parity guard.
  *
- * `examples/core-speller.ts` is the paper's pedagogical artifact: the entire two-pillar speller in one
- * self-contained file (zero imports, ~100 effective lines). It is a DERIVED copy — `src/core.ts` is the
- * source of truth (the bench drives it as rung 1 and shares its primitives with rungs 2–4). This test
+ * `examples/core-speller.ts` is the self-contained reference copy: the entire two-pillar speller in one
+ * file (zero imports, ~100 effective lines). It is a DERIVED copy: `src/core.ts` is the
+ * source of truth (the bench drives it as Core and shares its primitives with the rest of the speller). This test
  * pins the copy to the original: for every curated fixture the standalone must produce byte-identical
  * spellings to `CoreSpeller`, so "the complete speller in ~100 lines" stays a true claim as the code
  * evolves. Edit `src/core.ts` and this drift will fail here until the standalone is re-synced.

@@ -1,5 +1,5 @@
 /**
- * Pitch and PitchClass — plain immutable objects.
+ * Pitch and PitchClass: plain immutable objects.
  */
 
 export type Letter = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';

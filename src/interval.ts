@@ -1,10 +1,10 @@
 /**
- * Diatonic intervals — plain immutable objects.
+ * Diatonic intervals: plain immutable objects.
  *
  * Zero runtime dependencies. The chroma-based interval-quality formula in
  * `qualityFromChroma` is adapted from Brian Bowman's meantonal project
  * (https://github.com/meantonal/meantonal-js, MIT License), applied directly
- * to chroma computed from (letter, alter) — which sidesteps the (whole-step,
+ * to chroma computed from (letter, alter), which sidesteps the (whole-step,
  * half-step) vector representation meantonal uses and we don't otherwise need.
  */
 
@@ -38,7 +38,7 @@ const LETTER_CHROMA = {
 /**
  * Line-of-fifths position of a pitch-class spelling. Naturals run F=-1…B=+5;
  * each accidental shifts by ±7 (so F♯=+6, B♭=-2, E♯=+11, B𝄫=-9). The integer
- * distance between two positions is the count of fifths separating them — a
+ * distance between two positions is the count of fifths separating them: a
  * spelling's "remoteness" from a tonal center.
  */
 export function lineOfFifths(pc: PitchClass): number {

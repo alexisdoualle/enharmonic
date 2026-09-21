@@ -1,11 +1,11 @@
 /**
- * Column-width three-tier scoreboard for the LBD — the FRAMELESS GUARDED family (two rungs: real-time +
+ * Column-width three-tier scoreboard for the LBD: the FRAMELESS GUARDED family (two modes: real-time +
  * offline two-pass) vs the kept baselines. Terser than tools/figures/three-tier.mjs and sized to survive
  * scaling to one paper column (fonts are a large fraction of the figure width).
  *
- * Our two rungs come from results/data/guarded-tiers-<variant>.json (emit with test/eval/guarded-tiers.ts);
+ * Our two modes come from results/data/guarded-tiers-<variant>.json (emit with test/eval/guarded-tiers.ts);
  * the baselines from the frozen test/eval/meredith-baselines.json. Kept: real-time, Chew&Chen, offline(2-pass),
- * PKSpell, ps13, Temperley, music21(control). Dropped from the old figure: our core/la rungs.
+ * PKSpell, ps13, Temperley, music21(control). Dropped from the old figure: our core/la modes.
  *
  *   node tools/figures/three-tier-guarded.mjs <clean|noisy> <out.svg>
  */
@@ -35,11 +35,11 @@ const ZONES = { 'real-time': 'real-time', offline: 'offline', control: 'control'
 
 const C_CORRECT = '#2f6f3b', C_FLIP = '#bd7a1a', C_WRONG = '#8c2f2c', C_OURS = '#1f5fb0';
 const FONT = "'DejaVu Sans','Verdana',sans-serif";
-const tiersOf = (col) => { const [s, k] = col.src; const t = s === 'ours' ? ours.rungs[k] : baselines[k]; const d = t.committed;
+const tiersOf = (col) => { const [s, k] = col.src; const t = s === 'ours' ? ours.modes[k] : baselines[k]; const d = t.committed;
     return { exact: 100 * t.correct / d, coherent: 100 * (t.correct + t.flipped) / d, wrong: 100 * t.wrong / d, cov: 100 * d / t.total }; };
 const cols = COLUMNS.map(c => ({ ...c, t: tiersOf(c) }));
 
-// Geometry — near-square, sized so text is a large fraction of width (survives \columnwidth scaling).
+// Geometry: near-square, sized so text is a large fraction of width (survives \columnwidth scaling).
 const W = 1000, H = 820;
 const M = { top: 150, right: 26, bottom: 168, left: 96 };
 const plotW = W - M.left - M.right, plotH = H - M.top - M.bottom, plotBottom = M.top + plotH;
@@ -56,7 +56,7 @@ const text = (x, yy, s, { size = 22, fill = '#222', anchor = 'middle', weight = 
 push(`<rect width="${W}" height="${H}" fill="#ffffff"/>`);
 
 // Title (one terse line) + subtitle.
-text(W / 2, 44, `Meredith corpus${variant === 'noisy' ? ' (noisy)' : ''} — three-tier accuracy`, { size: 33, weight: 'bold', fill: '#111' });
+text(W / 2, 44, `Meredith corpus${variant === 'noisy' ? ' (noisy)' : ''}: three-tier accuracy`, { size: 33, weight: 'bold', fill: '#111' });
 text(W / 2, 78, 'share of committed notes; y-axis from 90%', { size: 22, fill: '#555' });
 
 // Latency zone bands + labels.
@@ -83,10 +83,10 @@ cols.forEach((c, k) => {
     push(`<rect x="${x.toFixed(1)}" y="${yE.toFixed(1)}" width="${barW.toFixed(1)}" height="${(yBot - yE).toFixed(1)}" fill="${C_CORRECT}"/>`);
     if (coherent - exact > 0.001) push(`<rect x="${x.toFixed(1)}" y="${yC.toFixed(1)}" width="${barW.toFixed(1)}" height="${(yE - yC).toFixed(1)}" fill="${C_FLIP}"/>`);
     if (wrong > 0.001) push(`<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${(yC - yTop).toFixed(1)}" fill="${C_WRONG}"/>`);
-    // exact% inside the green, near the bar top (white) — avoids the crowded top strip.
+    // exact% inside the green, near the bar top (white): avoids the crowded top strip.
     text(ax, yE + 28, exact.toFixed(2), { size: 20, weight: 'bold', fill: '#ffffff' });
 
-    // x label; our rungs boxed + bold blue.
+    // x label; our modes boxed + bold blue.
     const boxY = plotBottom + 14;
     if (c.ours) push(`<rect x="${(ax - slot * 0.46).toFixed(1)}" y="${boxY.toFixed(1)}" width="${(slot * 0.92).toFixed(1)}" height="58" rx="4" fill="none" stroke="${C_OURS}" stroke-width="1.6"/>`);
     // wrap the label onto up to two lines at the space nearest the middle.

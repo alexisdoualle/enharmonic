@@ -1,5 +1,5 @@
 /**
- * Two-pass batch speller — the offline, highest-accuracy entry point (whole piece in hand).
+ * Two-pass batch speller: the offline, highest-accuracy entry point (whole piece in hand).
  *
  * A streaming speller switches enharmonic side LATE at a modulation boundary (it sees only the past),
  * so a section's opening lags on the previous side. With the whole piece available we do better: run the
@@ -7,10 +7,10 @@
  * then reconcile the two:
  *
  *   - where forward and backward AGREE, keep it (the reliable majority);
- *   - each pass is COLD at its entry end (forward at the start, backward at the end) — before the first
+ *   - each pass is COLD at its entry end (forward at the start, backward at the end): before the first
  *     agreement trust the backward (warm) pass, after the last trust the forward;
  *   - each contiguous DISAGREEMENT run is one boundary lag → place a single change-point (forward before
- *     it, backward after) minimising local WOLF-cost (|ΔLoF| ≥ 6 intervals — a dim4/aug2 misspelling
+ *     it, backward after) minimising local WOLF-cost (|ΔLoF| ≥ 6 intervals, a dim4/aug2 misspelling
  *     tell). A COHERENT flip makes no wolves, so every change-point ties at 0; break that tie toward the
  *     side nearer the piece's committed line-of-fifths CENTRE (an emergent statistic, never a detected key).
  *
@@ -32,9 +32,9 @@ export interface TwoPassNote {
 export interface TwoPassOptions {
     /**
      * How the backward pass handles look-ahead:
-     *   `'forward'` (default) — feed FORWARD-time resolution to the backward pass. Processing in reverse,
+     *   `'forward'` (default): feed FORWARD-time resolution to the backward pass. Processing in reverse,
      *     the resolution target is already committed, so a leading tone is spelled from its real resolution.
-     *   `'off'` — no look-ahead in the backward pass.
+     *   `'off'`: no look-ahead in the backward pass.
      */
     backwardLookAhead?: 'forward' | 'off';
     /**
@@ -183,8 +183,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     for (let i = 0; i < firstAgree; i++) out[i] = bwd[i]!;
     for (let i = lastAgree + 1; i < n; i++) out[i] = fwd[i]!;
 
-    // A frameless SIDE PRIOR for breaking wolf-cost ties: the median LoF of the passes' AGREED notes — the
-    // reliable majority — an emergent statistic, not a detected key. Whole-piece median (deliberately not
+    // A frameless SIDE PRIOR for breaking wolf-cost ties: the median LoF of the passes' AGREED notes (the
+    // reliable majority), an emergent statistic, not a detected key. Whole-piece median (deliberately not
     // windowed: a local centre is dragged by nearby agreed-but-wrong runs).
     const agreedLofs: number[] = [];
     for (let t = 0; t < n; t++) if (agree(t)) agreedLofs.push(lof(fwd[t]!));
@@ -225,7 +225,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
 
     // HONOR-RESOLUTION. The wolf-cost merge reconciles the SIDE and can discard a note the forward pass
     // spelled from a real resolution (a sharp leading tone the merge flattened). A confirmed exact-midi
-    // UP-resolver is dispositive: keep the forward pick where it is SHARPER than the merged pick — guarded
+    // UP-resolver is dispositive: keep the forward pick where it is SHARPER than the merged pick, guarded
     // by the sounding chord (honored only when it forms no more vertical wolves than the merged pick), with
     // a full sounding dim7 overriding the guard, and same-pc co-onset partners (octave doublings) skipped.
     if (opts.honorResolution ?? false) {
