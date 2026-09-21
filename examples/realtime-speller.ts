@@ -1,8 +1,9 @@
 /**
- * RealtimeSpeller: the shipped real-time speller, in one file.
+ * RealtimeSpeller: the demo real-time speller, in one file, ~160 loc.
  *
  * CoreSpeller (core-speller.ts) plus three mechanisms; same style, zero imports.
- * Meredith clean: 99.52% exact, up from Core's 92.94%.
+ * On a held-out corpus of ~196k notes (Meredith 8×25000, clean): 99.52% exact, up
+ * from Core's 92.94%.
  *
  * Core's two pillars (7-letter limit + interval scoring) solve COHERENCE but drift
  * on the SIDE. The three additions fix both:

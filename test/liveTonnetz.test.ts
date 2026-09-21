@@ -11,7 +11,7 @@ const fixtureRoot = join(process.cwd(), 'local-fixtures', 'mozart_requiem');
 
 if (!existsSync(join(fixtureRoot, 'events.json'))) {
     suite('live Tonnetz geometry', () => {
-        test('skipped — local-fixtures/mozart_requiem not present', () => { /* private fixture absent */ });
+        test('skipped: local-fixtures/mozart_requiem not present', () => { /* private fixture absent */ });
     });
 } else {
     const replay = buildReplay(

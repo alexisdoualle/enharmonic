@@ -7,7 +7,7 @@
  *                           intended change. Review the diff before committing.
  *
  * The baseline snapshots exact {correct,flipped,wrong} counts per fixture per mode, so
- * an improvement fails just as loudly as a regression — you must acknowledge it with
+ * an improvement fails just as loudly as a regression: you must acknowledge it with
  * --update. Counts (not percentages) are the gate: integer, unambiguous, ungameble.
  */
 
@@ -20,7 +20,7 @@ import { scoreTiers, type Tiers } from './score.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BASELINE_PATH = join(HERE, 'baseline.json');
 const MODES: Mode[] = ['core', 'rt', 'la', 'tp'];
-const MODE_LABEL: Record<Mode, string> = { core: 'core (rung 1)', rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
+const MODE_LABEL: Record<Mode, string> = { core: 'core', rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
 
 type Cell = Pick<Tiers, 'correct' | 'flipped' | 'wrong' | 'total'>;
 type Snapshot = Record<string, Record<Mode, Cell>>;
@@ -72,7 +72,7 @@ function diff(current: Snapshot, baseline: Snapshot): string[] {
 
 const update = process.argv.includes('--update');
 const current = measure();
-console.log('enharmonic — curated fixture parity');
+console.log('enharmonic: curated fixture parity');
 printTable(current);
 
 if (update) {

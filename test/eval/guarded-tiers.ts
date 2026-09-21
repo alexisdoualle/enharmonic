@@ -2,7 +2,7 @@
  * Emit the two shipped tiers' three-tier scores for the LBD figure: the real-time speller (`Speller`)
  * and the offline two-pass (`spellTwoPass`). Drives the SHIPPED src library directly (not the examples),
  * so the figure numbers are exactly what the library produces. Writes JSON in the shape the figure
- * generator reads: { rungs: { rt: tiers, tp: tiers } }, tiers = {correct,flipped,wrong,committed,total}.
+ * generator reads: { modes: { rt: tiers, tp: tiers } }, tiers = {correct,flipped,wrong,committed,total}.
  *   npx tsx test/eval/guarded-tiers.ts <clean|noisy> <out.json>
  */
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -54,6 +54,6 @@ for (const f of files) {
 const tiers = (t: { correct: number; flipped: number; wrong: number }) => {
     const committed = t.correct + t.flipped + t.wrong; return { ...t, committed, total: committed };
 };
-const out = { corpus: 'meredith-8x25000', variant, rungs: { rt: tiers(acc.rt), tp: tiers(acc.tp) } };
+const out = { corpus: 'meredith-8x25000', variant, modes: { rt: tiers(acc.rt), tp: tiers(acc.tp) } };
 writeFileSync(outPath, JSON.stringify(out, null, 2));
 console.log(`wrote ${outPath}: rt ${acc.rt.correct}c/${acc.rt.flipped}f/${acc.rt.wrong}w  tp ${acc.tp.correct}c/${acc.tp.flipped}f/${acc.tp.wrong}w`);

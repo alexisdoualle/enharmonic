@@ -1,7 +1,7 @@
 /**
  * Chromatic-line detector pins (`test/eval/chromatic-lines.ts`).
  *
- * Synthetic invariants nail the two design choices that make it survive polyphony — strict
+ * Synthetic invariants nail the two design choices that make it survive polyphony: strict
  * monotonicity (a run, not a trill) and legato-by-timing (a real line, not a co-onset cluster or a
  * cross-voice ±1 coincidence). The Grieg pin locks the validated real-music behaviour: the count of
  * notes it flags on `death_of_ase` (the descents the recency-guard experiment was measured against).
@@ -34,7 +34,7 @@ suite('chromatic-line detector', () => {
     });
 
     test('diatonic stepwise motion is NOT a run', () => {
-        // C D E F G — mostly whole tones; the lone E–F semitone is an isolated length-2 line.
+        // C D E F G: mostly whole tones; the lone E–F semitone is an isolated length-2 line.
         const scale = detectChromaticLines(legatoVoice([60, 62, 64, 65, 67]));
         assert(scale.every(t => !t.inRun), 'a diatonic scale contains no chromatic run');
     });

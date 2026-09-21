@@ -1,30 +1,30 @@
 /**
- * Three-tier, side-corrected scoring of predicted spellings against ground truth —
+ * Three-tier, side-corrected scoring of predicted spellings against ground truth:
  * the COMMA-OFFSET COHERENCE metric. This is a faithful port of the lab's blessed
- * scorer (`enharmonic-lab/test/parity/sideclass.ts::tiersFromOffsets`), so the
- * numbers this repo reports are identical to the paper's.
+ * scorer (`enharmonic-lab/test/parity/sideclass.ts::tiersFromOffsets`), so this
+ * repo grades spellings by exactly the same metric.
  *
  * Every prediction spells the *same sounding pitch* as its expected counterpart, so a
- * mismatch is never a wrong note — only a wrong enharmonic *side*. Grade on the line of
+ * mismatch is never a wrong note: only a wrong enharmonic *side*. Grade on the line of
  * fifths: `commaOffset = (lof(pred) − lof(expected)) / 12` is 0 for an exact match and a
  * nonzero integer for an enharmonic respelling (C♯ vs D♭ differ by one comma). A note is
- * measured NOT against the composer directly but against its LOCAL CONSENSUS offset — the
+ * measured NOT against the composer directly but against its LOCAL CONSENSUS offset: the
  * dominant offset of the ±`radius` ONSET window around it:
  *
- *   correct  — offset EQUALS the consensus AND the consensus is 0 (matches the composer, unflipped).
- *   flipped  — offset EQUALS a NONZERO consensus (the whole neighbourhood is uniformly shifted; a
- *              defensible side choice — magnitude irrelevant, a uniform −2 passage is a flip).
- *   wrong    — offset BREAKS the consensus. This INCLUDES an offset-0 straggler stranded inside a
- *              flipped passage (a natural that failed to flip with its neighbours — an incoherent
+ *   correct  : offset EQUALS the consensus AND the consensus is 0 (matches the composer, unflipped).
+ *   flipped  : offset EQUALS a NONZERO consensus (the whole neighbourhood is uniformly shifted; a
+ *              defensible side choice, magnitude irrelevant, a uniform −2 passage is a flip).
+ *   wrong    : offset BREAKS the consensus. This INCLUDES an offset-0 straggler stranded inside a
+ *              flipped passage (a natural that failed to flip with its neighbours, an incoherent
  *              MIX, not a clean flip), as well as a lone off-side note inside an unflipped passage.
- *   unread   — no read-back (pred null). Should be 0 for a healthy speller.
+ *   unread   : no read-back (pred null). Should be 0 for a healthy speller.
  *
  * Two properties are essential and were both missing from an earlier lenient version of this file
  * (which under-reported `wrong`, most visibly on the frameless Core over heavily-flipped movements):
- *   1. Matching the composer (offset 0) is NOT a per-note pass — an offset-0 note that breaks a
+ *   1. Matching the composer (offset 0) is NOT a per-note pass: an offset-0 note that breaks a
  *      flipped consensus is `wrong`.
  *   2. The consensus window is measured in ONSETS (co-struck notes share one onset), not raw note
- *      indices — otherwise a wide window collapses to a few chords on polyphonic music.
+ *      indices: otherwise a wide window collapses to a few chords on polyphonic music.
  *
  * A wide consensus radius (±16 onsets ≈ two bars) is what stops a short run of identical
  * mis-spellings from forming its own false "consensus" and masquerading as a coherent flip.
@@ -42,7 +42,7 @@ export function fifths(step: string, alter: number): number {
 /**
  * Signed comma-offset of a prediction from the composer's spelling: how many commas (12-fifth steps)
  * the prediction sits from the score (composer A♯ + prediction B♭ → −1). `null` when they are NOT the
- * same pitch (offset is not a whole number of commas) — a genuine wrong PITCH, never a side choice.
+ * same pitch (offset is not a whole number of commas): a genuine wrong PITCH, never a side choice.
  */
 export function commaOffset(
     pred: { step: string; alter: number } | null | undefined,
@@ -68,7 +68,7 @@ export interface Tiers {
 }
 
 /**
- * Per-onset tier for a prediction stream — the ONE place the correct/flipped/wrong split is defined.
+ * Per-onset tier for a prediction stream: the ONE place the correct/flipped/wrong split is defined.
  * The bench gate ({@link scoreTiers}) and the viz (`viz/src/replay.ts`) both consume this, so a viz
  * tally can never diverge from what the parity baseline blesses.
  *
@@ -103,7 +103,7 @@ export function classifyOnsets(
 
     return pred.map((_p, i) => {
         const e = expected[i];
-        if (e == null) return 'correct';            // unscored onset — neutral
+        if (e == null) return 'correct';            // unscored onset, neutral
         if (pred[i] == null) return 'unread';        // no read-back
         const off = offsets[i];
         if (off == null) return 'wrong';             // committed but a genuinely different pitch

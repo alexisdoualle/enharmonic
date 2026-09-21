@@ -16,7 +16,7 @@ export interface NoteContext {
 }
 
 /**
- * Semitone step from `from` to `to` IGNORING the octave: +1 up, −1 down, 0 otherwise — the test a
+ * Semitone step from `from` to `to` IGNORING the octave: +1 up, −1 down, 0 otherwise; the test a
  * look-ahead driver applies over its forward buffer to fill {@link NoteContext.resolveDir}.
  *
  * A resolution is a semitone on the line, and the voice that answers it need not be in the same octave:

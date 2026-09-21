@@ -1,30 +1,30 @@
 /**
- * Chromatic melodic-line detector — a polyphony-surviving reader of the chromatic RUNS in a
+ * Chromatic melodic-line detector: a polyphony-surviving reader of the chromatic RUNS in a
  * note stream. Analysis tooling, NOT a shipped speller: an experiment (HANDOFF_chromatic_line_core)
  * proved that DETECTING runs is cheap and clean, but SPELLING their notes key-relative needs the
- * frame/side machinery the higher rungs have, so a frameless Core line-handler washes. The detector
- * itself is kept because it isolates genuine chromatic lines reliably — a future rung that wants to
+ * frame/side machinery the full Speller has, so a frameless Core line-handler washes. The detector
+ * itself is kept because it isolates genuine chromatic lines reliably: a future mode that wants to
  * ROUTE runs to side machinery can lift it into `src/`.
  *
  * What a chromatic RUN is (and what trips naive detectors up):
  *   A run is a chain of notes stepping ±1 SEMITONE in a CONSISTENT direction, connected by LEGATO
  *   HANDOFF (each note ends about when the next begins). Two design choices carry it:
- *   1. STRICT MONOTONICITY — once a line has a direction, only a same-direction ±1 step extends it;
+ *   1. STRICT MONOTONICITY: once a line has a direction, only a same-direction ±1 step extends it;
  *      a reversal starts a FRESH line. This is what separates a chromatic run from a trill/neighbour
  *      oscillation, and is the single biggest guard against over-firing. (±1 semitone alone is NOT
- *      chromatic — diatonic scales contain E–F and B–C semitones; but two CONSECUTIVE same-direction
+ *      chromatic: diatonic scales contain E–F and B–C semitones; but two CONSECUTIVE same-direction
  *      semitones cannot be diatonic, so a run of length ≥ 3 is genuinely chromatic.)
- *   2. LEGATO by note timing, NOT a fixed ms window — a slow chromatic ascent can span seconds. The
+ *   2. LEGATO by note timing, NOT a fixed ms window: a slow chromatic ascent can span seconds. The
  *      connection test is temporal adjacency (previous offset ≈ next onset), scaled to note duration.
  *
  *   Polyphony is handled by tracking MULTIPLE open lines at once: parallel semitone descents (e.g.
- *   Grieg's "each chord has a descent") become parallel lines, each extended by its own ±1 step —
+ *   Grieg's "each chord has a descent") become parallel lines, each extended by its own ±1 step,
  *   NOT collapsed into one, and NOT grabbing co-onset chord tones the way a nearest-pitch
  *   `prevSameVoice` detector does. It uses no voice/channel labels (the ear streams a chromatic line
  *   across voices, and voice labels were falsified anyway).
  *
  * Causality: the scan is left-to-right and never looks at the future, but a note's reported
- * `runLength` is its line's FINAL length (retroactive) — the length a batch/offline consumer sees.
+ * `runLength` is its line's FINAL length (retroactive): the length a batch/offline consumer sees.
  */
 
 /** One note, in onset order (bass-first within a chord). `tOn`/`tOff` in ms (or any consistent unit). */
@@ -37,11 +37,11 @@ export interface LineNote {
 export interface DetectOptions {
     /** Minimum line length (notes) to count as a run. 3 = two consecutive same-direction semitones,
      *  the shortest fragment that cannot be diatonic. Default 3. (4+ over-tightens: it drops real
-     *  three-note chromatic fragments — measured to lose Grieg's descents entirely.) */
+     *  three-note chromatic fragments: measured to lose Grieg's descents entirely.) */
     readonly minRun?: number;
     /** Legato gap tolerance as a MULTIPLE of the incoming note's duration: a line connects if the
      *  previous note's offset falls within [tOn − 0.5·dur, tOn + legatoGap·dur] (small overlap OR a
-     *  small gap). Default 0.25 — tight enough to reject cross-voice ±1 coincidences in dense
+     *  small gap). Default 0.25: tight enough to reject cross-voice ±1 coincidences in dense
      *  polyphony, loose enough to keep true legato runs. */
     readonly legatoGap?: number;
 }
@@ -52,7 +52,7 @@ export interface LineTag {
     readonly runLength: number;
     /** Direction of this note's line: +1 ascending, −1 descending, 0 for a length-1 singleton. */
     readonly direction: number;
-    /** `runLength >= minRun` — whether this note reads as part of a genuine chromatic run. */
+    /** `runLength >= minRun`: whether this note reads as part of a genuine chromatic run. */
     readonly inRun: boolean;
 }
 

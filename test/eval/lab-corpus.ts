@@ -1,5 +1,5 @@
 /**
- * Second corpus — score THIS repo's shipped rungs against the legacy lab's curated fixtures,
+ * Second corpus: score THIS repo's shipped modes against the legacy lab's curated fixtures,
  * IN PLACE, without hoisting them into this repo.
  *
  *   npm run lab-corpus                 # reads $ENHARMONIC_LAB/fixtures (else ../enharmonic-lab)
@@ -8,7 +8,7 @@
  * The lab (`enharmonic-lab`) is the legacy experimental repo, to be retired; its curated corpus
  * (~59 hand-audited fixtures, broader than the 6 shipped here) is a useful independent check while
  * it lasts. Its fixtures use the SAME format as this repo (events.json on/off + positional
- * expected.json), so we drive them with the real speller and the shared three-tier scorer — no copy,
+ * expected.json), so we drive them with the real speller and the shared three-tier scorer: no copy,
  * no lab code. If the lab is gone, this simply reports the path is missing.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -35,7 +35,7 @@ const loadExpected = (id: string): Expected[] =>
     (JSON.parse(readFileSync(join(FIXTURES, id, 'expected.json'), 'utf8')) as Expected[]).map(e => ({ step: e.step, alter: e.alter }));
 
 const MODES: Mode[] = ['core', 'rt', 'la', 'tp'];
-const LABELS: Record<Mode, string> = { core: 'core (rung 1)', rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
+const LABELS: Record<Mode, string> = { core: 'core', rt: 'real-time', la: 'look-ahead', tp: 'two-pass' };
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
 
 const agg: Record<Mode, { correct: number; flipped: number; wrong: number; total: number }> =
@@ -49,7 +49,7 @@ for (const id of ids) {
     }
 }
 
-console.log(`\nLab curated corpus (SECOND corpus, referenced in place) — ${ids.length} fixtures — ${LAB}`);
+console.log(`\nLab curated corpus (SECOND corpus, referenced in place): ${ids.length} fixtures, ${LAB}`);
 console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'coherent%'.padStart(9)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const mode of MODES) {
     const a = agg[mode], co = a.correct + a.flipped;

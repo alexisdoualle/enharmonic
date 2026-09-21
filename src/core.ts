@@ -1,18 +1,19 @@
 /**
- * CoreSpeller — rung 1: the two-pillar foundation.
+ * CoreSpeller: the two-pillar foundation.
  *
  * The 7-letter limit plus interval (aug/dim) scoring, nothing else: the minimal
- * causal baseline the rest of the ladder (Speller rungs 2/3, spellTwoPass rung 4)
- * builds on. Frameless and persistent: one drifting scale whose slots are
+ * causal baseline the real-time Speller (look-ahead is an option) and the
+ * two-pass function `spellTwoPass` build on. Frameless and persistent: one drifting scale whose slots are
  * overwritten, never reverted.
  *
  * Not part of the product API. It is the weakest speller (highest wrong%), dominated
  * at its own latency by Speller, so it is not re-exported from index.ts and the
  * package exports keep it off the npm surface. It lives in src/ (not an example) so
- * the bench can score it as rung 1; reach it only by an in-repo path import.
+ * the bench can score it as Core; reach it only by an in-repo path import.
  *
  * The self-contained ~100-line version is examples/core-speller.ts (zero imports),
- * held byte-identical to this class by test/examples/standalone.test.ts.
+ * kept in lockstep with this class (identical spellings on every fixture) by
+ * test/examples/standalone.test.ts.
  */
 
 import { enharmonicCandidatesFor } from './candidates.js';
@@ -30,7 +31,7 @@ export class CoreSpeller {
 
     /** @param doubleAccidentalPenalty over-rotation cap (default 0 = off): subtract this from any
      *  |alter| ≥ 2 candidate before the argmax, so a ♯♯/♭♭ spelling is picked only when it out-scores
-     *  every single-accidental rival by more than the cap. 0 keeps CoreSpeller as the paper's baseline. */
+     *  every single-accidental rival by more than the cap. 0 keeps CoreSpeller at its plain baseline. */
     constructor(private readonly doubleAccidentalPenalty = 0) {
         this.snapToCMajor();
     }
@@ -45,7 +46,7 @@ export class CoreSpeller {
     reset(scale: readonly PitchClass[]): void {
         this.resolved.clear();
         // NOTE: `active` (currently-sounding notes) is deliberately NOT cleared. A note that has
-        // already committed and is still sounding keeps its own spelling until its own note-off — a
+        // already committed and is still sounding keeps its own spelling until its own note-off: a
         // key-signature change (respell/reset) under a held note does not respell it. Clearing it here
         // orphaned held pitches so getSpelling() fell through to the new frame at note-off (a low C held
         // across the seam into the C♯-major WTC prelude read back as B♯). See getSpelling()'s

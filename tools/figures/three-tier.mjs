@@ -1,11 +1,11 @@
 /**
- * Three-tier (correct / flipped / wrong) Meredith scoreboard — rendered as a self-contained SVG,
+ * Three-tier (correct / flipped / wrong) Meredith scoreboard: rendered as a self-contained SVG,
  * styled to match the original matplotlib figure (DejaVu Sans, latency bands, blue "Enharmonic"
- * brackets on our rungs, bottom-left legend).
+ * brackets on our modes, bottom-left legend).
  *
- * Sourced entirely from THIS repo: our four shipped rungs are scored live by
+ * Sourced entirely from THIS repo: our four shipped modes are scored live by
  * `test/eval/meredith.ts --json` (the real speller), and the third-party baselines come from the
- * committed snapshot `test/eval/meredith-baselines.json` (frozen external-tool scores — they can't
+ * committed snapshot `test/eval/meredith-baselines.json` (frozen external-tool scores; they can't
  * run in this zero-dep repo; see that file's _provenance). No dependency on the legacy lab.
  *
  * Usage (normally via `npm run scoreboard`, which scores first):
@@ -29,7 +29,7 @@ const baseSnap = JSON.parse(readFileSync(join(REPO, 'test', 'eval', 'meredith-ba
 const baselines = baseSnap.variants[variant];
 if (!baselines) { console.error(`no baseline snapshot for variant '${variant}'`); process.exit(1); }
 
-// Column order, grouped by LATENCY (causal → bounded → offline → control) — the original design.
+// Column order, grouped by LATENCY (causal → bounded → offline → control): the original design.
 const COLUMNS = [
     { src: ['ours', 'core'], latency: 'causal', ours: true, label: ['CoreSpeller', '(~100 lines)'] },
     { src: ['ours', 'rt'], latency: 'causal', ours: true, label: ['real-time', '(guard + fold + leash)'] },
@@ -45,16 +45,16 @@ const COLUMNS = [
 // matplotlib palette (exact) + latency accents.
 const C_CORRECT = '#2f6f3b', C_FLIP = '#bd7a1a', C_WRONG = '#8c2f2c', C_OURS = '#1f5fb0';
 const LAT = {
-    causal: { title: 'CAUSAL — 0 look-ahead (strict real-time)', c: '#2f6f3b' },
+    causal: { title: 'CAUSAL: 0 look-ahead (strict real-time)', c: '#2f6f3b' },
     bounded: { title: 'BOUNDED look-ahead (≈16-note buffer)', c: '#b8860b' },
-    offline: { title: 'OFFLINE — whole-piece look-ahead', c: '#5a3f8f' },
+    offline: { title: 'OFFLINE: whole-piece look-ahead', c: '#5a3f8f' },
     control: { title: 'CONTROL', c: '#6b6b6b' },
 };
 const FONT = "'DejaVu Sans','Bitstream Vera Sans','Verdana',sans-serif";
 
 function tiersOf(col) {
     const [src, key] = col.src;
-    const t = src === 'ours' ? ours.rungs[key] : baselines[key];
+    const t = src === 'ours' ? ours.modes[key] : baselines[key];
     if (!t) throw new Error(`missing tiers for ${src}:${key}`);
     const d = t.committed;
     return { exact: 100 * t.correct / d, coherent: 100 * (t.correct + t.flipped) / d, wrong: 100 * t.wrong / d, cov: 100 * d / t.total };
@@ -104,7 +104,7 @@ push(`<line x1="${M.left}" y1="${M.top}" x2="${M.left}" y2="${plotBottom}" strok
 const span = plotH;
 push(`<line x1="${M.left}" y1="${(plotBottom - span * 0.006).toFixed(1)}" x2="${M.left}" y2="${(plotBottom - span * 0.020).toFixed(1)}" stroke="#000" stroke-width="1.4"/>`);
 for (const f of [0.010, 0.016]) push(`<line x1="${(M.left - 6).toFixed(1)}" y1="${(plotBottom - span * (f - 0.003)).toFixed(1)}" x2="${(M.left + 6).toFixed(1)}" y2="${(plotBottom - span * (f + 0.003)).toFixed(1)}" stroke="#000" stroke-width="1.4"/>`);
-push(`<text transform="translate(26 ${(M.top + plotH / 2).toFixed(1)}) rotate(-90)" text-anchor="middle" font-size="${FS(9.5)}" fill="#222">Share of committed notes (%) — y-axis starts at 90%</text>`);
+push(`<text transform="translate(26 ${(M.top + plotH / 2).toFixed(1)}) rotate(-90)" text-anchor="middle" font-size="${FS(9.5)}" fill="#222">Share of committed notes (%); y-axis starts at 90%</text>`);
 
 // bars + annotations + x labels
 cols.forEach((c, k) => {
@@ -118,7 +118,7 @@ cols.forEach((c, k) => {
     text(ax, ROW.exact, `${exact.toFixed(2)} exact`, { size: 8.5, fill: C_CORRECT, weight: 'bold' });
     text(ax, ROW.coh, `${coherent.toFixed(2)} coherent · ${wrong.toFixed(2)} wrong`, { size: 7.2, fill: '#444' });
 
-    // x-axis labels; our rungs get a blue box
+    // x-axis labels; our modes get a blue box
     const boxY = plotBottom + 22;
     if (c.ours) {
         const bw = slot * 0.9, bx = ax - bw / 2;
@@ -132,13 +132,13 @@ cols.forEach((c, k) => {
 // ps13 published reference line (drawn over the bars)
 const PS13 = 99.31;
 push(`<line x1="${M.left}" y1="${y(PS13).toFixed(1)}" x2="${W - M.right}" y2="${y(PS13).toFixed(1)}" stroke="#222" stroke-width="1.3" stroke-dasharray="1.5 3"/>`);
-text(W - M.right - 4, y(PS13) - 5, `ps13 published (Meredith 2006) — ${PS13.toFixed(2)}% exact`, { size: 8, fill: '#222', anchor: 'end', italic: true });
+text(W - M.right - 4, y(PS13) - 5, `ps13 published (Meredith 2006): ${PS13.toFixed(2)}% exact`, { size: 8, fill: '#222', anchor: 'end', italic: true });
 
 // title (two lines, matplotlib set_title style)
-text(W / 2, ROW.title1, `Meredith 8×25000 corpus (${variant === 'clean' ? 'clean' : 'noisy (human-performance timing)'}) — this repo's spellers vs published baselines, split three ways`, { size: 12, fill: '#111', weight: 'bold' });
+text(W / 2, ROW.title1, `Meredith 8×25000 corpus (${variant === 'clean' ? 'clean' : 'noisy (human-performance timing)'}): this repo's spellers vs published baselines, split three ways`, { size: 12, fill: '#111', weight: 'bold' });
 text(W / 2, ROW.title2, '(above each bar: exact = correct only; coherent = correct + flipped)', { size: 11, fill: '#222' });
 
-// legend — lower-left inside the plot, vertical stack, white box (framealpha 0.95)
+// legend: lower-left inside the plot, vertical stack, white box (framealpha 0.95)
 const lg = [[C_CORRECT, 'correct (exact composer spelling)'], [C_FLIP, 'flipped (coherent enharmonic side)'], [C_WRONG, 'wrong (genuine spelling error)']];
 const lgX = M.left + 12, lgY = plotBottom - 14 - lg.length * 22, lgW = 320;
 push(`<rect x="${(lgX - 8).toFixed(1)}" y="${(lgY - 16).toFixed(1)}" width="${lgW}" height="${lg.length * 22 + 14}" rx="3" fill="#ffffff" fill-opacity="0.95" stroke="#cccccc" stroke-width="1"/>`);

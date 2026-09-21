@@ -1,5 +1,5 @@
 /**
- * Regenerate the two-rung LBD scoreboard figures (column-width), on demand.
+ * Regenerate the two-mode LBD scoreboard figures (column-width), on demand.
  *   npm run scoreboard:guarded
  * Scores the two shipped tiers (real-time `Speller` + offline `spellTwoPass`) on Meredith
  * clean + noisy via test/eval/guarded-tiers.ts, then renders the column-width three-tier SVGs via

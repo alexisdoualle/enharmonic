@@ -3,7 +3,7 @@
  *
  * A fixture is `fixtures/<id>/{events.json,expected.json}`. `events.json` is the raw
  * MIDI stream (`on`/`off`/`respell`); `expected.json` is the curated ground-truth
- * spelling, one entry per `on` event in onset order (positional pairing — the i-th
+ * spelling, one entry per `on` event in onset order (positional pairing: the i-th
  * `on` pairs with the i-th expected entry, preserving the bass-first invariant).
  */
 
@@ -15,8 +15,8 @@ import { Speller, spellTwoPass } from '../../src/index.js';
 import { resolveStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
-/** The streaming surface `drive` needs — satisfied by both the shipped `Speller` and the
- *  package-private rung-1 `CoreSpeller` (which ignores the look-ahead `ctx` and has no `lookAhead`). */
+/** The streaming surface `drive` needs: satisfied by both the shipped `Speller` and the
+ *  package-private `CoreSpeller` (which ignores the look-ahead `ctx` and has no `lookAhead`). */
 export interface StreamingSpeller {
     readonly lookAhead?: boolean;
     noteOn(midi: number, ctx?: NoteContext): void;
@@ -57,7 +57,7 @@ export function loadExpected(id: string): Expected[] {
  * Drive a streaming Speller over an event list, returning one spelling per `on`
  * event in onset order. Read-back happens at `noteOff` (a note's final committed
  * spelling). For look-ahead mode, `resolveDir` is derived from the next onset a
- * semitone away in ANY octave within `horizon` upcoming onsets — the small forward
+ * semitone away in ANY octave within `horizon` upcoming onsets: the small forward
  * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored.
  */
 export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
@@ -111,10 +111,11 @@ export function onNotes(events: BatchEv[]): { midi: number; tOn: number; tOff: n
     return notes;
 }
 
-/** `core` = rung 1 (frameless baseline); `rt`/`la` = rungs 2/3 (Speller); `tp` = rung 4 (two-pass). */
+/** `core` = the frameless CoreSpeller baseline; `rt`/`la` = the real-time Speller (look-ahead is an
+ *  option); `tp` = the two-pass function `spellTwoPass`. */
 export type Mode = 'core' | 'rt' | 'la' | 'tp';
 
-/** Produce predictions for a fixture in the given rung/latency mode, paired 1:1 with expected. */
+/** Produce predictions for a fixture in the given mode/latency setting, paired 1:1 with expected. */
 export function predict(mode: Mode, events: BatchEv[]): (Pitch | null)[] {
     if (mode === 'tp') return spellTwoPass(onNotes(events)) as (Pitch | null)[];
     if (mode === 'core') return drive(new CoreSpeller(), events);

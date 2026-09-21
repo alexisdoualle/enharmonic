@@ -1,6 +1,6 @@
 /**
  * Held-out benchmark: score the shipped spellers over David Meredith's "8x25000"
- * pitch-spelling corpus (216 movements, 195,972 notes) — the standard pitch-spelling
+ * pitch-spelling corpus (216 movements, 195,972 notes): the standard pitch-spelling
  * benchmark; the third-party baselines (ps13 / Temperley / Chew & Chen / PKSpell) are
  * scored on the same notes in test/eval/meredith-baselines.json. Ground truth we did
  * NOT author, so it is an independent check on the curated fixtures.
@@ -32,8 +32,8 @@ const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
 const counts = process.argv.includes('--counts');
 // `--json <path>` also writes the aggregate tiers as machine-readable JSON (consumed by the
-// scoreboard figure generator — tools/figures/three-tier.mjs). Keeps the scoreboard sourced from
-// THIS repo's shipped rungs, not a mirror of the legacy lab.
+// scoreboard figure generator, tools/figures/three-tier.mjs). Keeps the scoreboard sourced from
+// THIS repo's shipped modes, not a mirror of the legacy lab.
 const jsonArg = process.argv.indexOf('--json');
 const jsonPath = jsonArg >= 0 ? process.argv[jsonArg + 1] : null;
 
@@ -68,9 +68,9 @@ function resolveDirs(notes: Note[]): number[] {
     return d;
 }
 
-// The engine is onset-based, so there is no memory window to configure: the streaming rungs stay fully
-// causal (never see the future), and the ladder's real distinction is the look-ahead depth (rung 3) and
-// the backward pass (rung 4). We map each tatum to a fixed musical clock (1 tatum = a 16th at 120 BPM)
+// The engine is onset-based, so there is no memory window to configure: the streaming modes stay fully
+// causal (never see the future), and the real distinction is the look-ahead depth (the `la` mode) and
+// the backward pass (the two-pass mode). We map each tatum to a fixed musical clock (1 tatum = a 16th at 120 BPM)
 // only so co-struck notes (same onset) group into one chord via the `t` they share.
 const TATUM_MS = 125;
 
@@ -121,7 +121,7 @@ const files = readdirSync(dir).filter(f => f.endsWith('.opnd-m')).sort();
 
 // --- score ---------------------------------------------------------------------------------
 const MODES: { key: Mode; label: string }[] = [
-    { key: 'core', label: 'core (rung 1)' },
+    { key: 'core', label: 'core' },
     { key: 'rt', label: 'real-time' },
     { key: 'la', label: 'look-ahead' },
     { key: 'tp', label: 'two-pass' },
@@ -144,11 +144,11 @@ for (const f of files) {
 }
 
 // Percentages are over COMMITTED notes (correct+flipped+wrong), matching the lab: an abstained/unread
-// note (no read-back — the jittered noisy corpus produces a few) is excluded, not counted as wrong.
+// note (no read-back, the jittered noisy corpus produces a few) is excluded, not counted as wrong.
 const committedOf = (a: { correct: number; flipped: number; wrong: number }) => a.correct + a.flipped + a.wrong;
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
 const absTotal = MODES.reduce((s, { key }) => s + agg[key].unread, 0);
-console.log(`\nMeredith 8x25000 — ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'} — ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
+console.log(`\nMeredith 8x25000: ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'}, ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
 console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'coherent%'.padStart(9)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const { key, label } of MODES) {
     const a = agg[key];
@@ -168,9 +168,9 @@ if (jsonPath) {
         variant: noisy ? 'noisy' : 'clean',
         notes: agg.rt.total,
         generated: new Date().toISOString(),
-        // Each rung: raw tier counts. Percentages are derived by the consumer over `committed`
+        // Each mode: raw tier counts. Percentages are derived by the consumer over `committed`
         // (correct+flipped+wrong), matching the console output and the baseline snapshot.
-        rungs: Object.fromEntries(MODES.map(({ key }) => {
+        modes: Object.fromEntries(MODES.map(({ key }) => {
             const a = agg[key];
             return [key, { correct: a.correct, flipped: a.flipped, wrong: a.wrong, unread: a.unread, total: a.total, committed: committedOf(a) }];
         })),

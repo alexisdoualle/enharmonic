@@ -2,7 +2,7 @@
  * Viz ↔ bench parity guard.
  *
  * The viz drives its OWN engine (`viz/src/replay.ts::buildReplay`) and used to carry its own private
- * tier classifier, which silently drifted from the bench scorer — an isolated wrong-side note showed as
+ * tier classifier, which silently drifted from the bench scorer: an isolated wrong-side note showed as
  * "flipped (coherent side)" in the app while the bench (correctly) never counted it as a flip
  * (WTC1 prelude onset 209). Nothing compared the two, so the drift hid.
  *
@@ -20,10 +20,10 @@ import { scoreTiers } from './eval/score.js';
 import { buildReplay, withSectionAutoResets, type RawEvent } from '../viz/src/replay.js';
 import { readableSearch, sideOverridesFromSearch, stepFromSearch, writeSideOverrides } from '../viz/src/state.js';
 
-// The viz replays every benchmark speller, including the pedagogical rung 1 (`core`).
+// The viz replays every benchmark speller, including the baseline mode (`core`).
 const MODES: Mode[] = ['core', 'rt', 'la', 'tp'];
 
-/** Raw events.json (on/off/respell) — what the viz consumes directly. */
+/** Raw events.json (on/off/respell): what the viz consumes directly. */
 const loadRaw = (id: string): RawEvent[] =>
     JSON.parse(readFileSync(join(REPO_ROOT, 'fixtures', id, 'events.json'), 'utf8')) as RawEvent[];
 

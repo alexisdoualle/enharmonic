@@ -1,5 +1,5 @@
 /**
- * Interval scoring for CoreSpeller (rung 1). A candidate is scored against the OTHER letters of the
+ * Interval scoring for CoreSpeller. A candidate is scored against the OTHER letters of the
  * resolved scale by summing per-interval consonance:
  *
  *   P4, P5, and 3rds / 6ths          +1   consonant

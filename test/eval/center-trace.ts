@@ -1,5 +1,5 @@
 /**
- * center-trace — debug the FRAME CENTRE's movement over a piece. Fast swings of the centre on the line of
+ * center-trace: debug the FRAME CENTRE's movement over a piece. Fast swings of the centre on the line of
  * fifths are a symptom of a destabilised frame (chromatic notes yanking it), and wrong spellings cluster
  * there. This prints the per-onset centre trajectory, flags fast swings, and reports whether wrongs coincide.
  *
@@ -68,7 +68,7 @@ for (const e of evs) {
 // ── Per-onset velocity + swing flags ───────────────────────────────────────────────────────────────────
 const d = centre.map((c, i) => i === 0 ? 0 : c - centre[i - 1]!);
 const wrong = (i: number) => out[i] != null && (out[i]!.step !== expected[i]!.step || out[i]!.alter !== expected[i]!.alter);
-// A centre reversal: it moves up and back down (or vice-versa) within the window — a fast swing, not a modulation.
+// A centre reversal: it moves up and back down (or vice-versa) within the window, a fast swing, not a modulation.
 const reversal = (i: number) => {
     const lo = Math.max(1, i - REVERSAL_WIN), hi = Math.min(centre.length - 1, i + REVERSAL_WIN);
     let up = false, down = false;
@@ -100,4 +100,4 @@ for (let i = lo; i <= hi; i++) {
 }
 console.log(`\nSWING↔WRONG correlation (whole piece):`);
 console.log(`  wrongs: ${wrongCount}   near a swing (±${NEAR}): ${wrongNearSwing} (${wrongCount ? (100 * wrongNearSwing / wrongCount).toFixed(0) : 0}%)`);
-console.log(`  swing onsets: ${swingOnsets}/${notes.length} (${(100 * baseRate).toFixed(1)}% of onsets)   — lift = wrong-near-swing rate vs base rate`);
+console.log(`  swing onsets: ${swingOnsets}/${notes.length} (${(100 * baseRate).toFixed(1)}% of onsets); lift = wrong-near-swing rate vs base rate`);

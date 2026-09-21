@@ -1,8 +1,8 @@
 /**
  * Public API for `enharmonic`.
  *
- *   Speller              — real-time; `{ lookAhead: true }` → near-real-time (small forward buffer)
- *   spellTwoPass         — offline (whole piece in hand; highest accuracy)
+ *   Speller              : real-time; `{ lookAhead: true }` → near-real-time (small forward buffer)
+ *   spellTwoPass         : offline (whole piece in hand; highest accuracy)
  *
  * Pitch / interval helpers are exported for callers that want typed spellings.
  */
