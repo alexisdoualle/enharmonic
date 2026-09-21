@@ -33,9 +33,9 @@
       "total": 1282
     },
     "rt": {
-      "correct": 1279,
+      "correct": 1278,
       "flipped": 0,
-      "wrong": 3,
+      "wrong": 4,
       "total": 1282
     },
     "la": {
@@ -59,9 +59,9 @@
       "total": 604
     },
     "rt": {
-      "correct": 574,
+      "correct": 581,
       "flipped": 0,
-      "wrong": 30,
+      "wrong": 23,
       "total": 604
     },
     "la": {
@@ -85,15 +85,15 @@
       "total": 1566
     },
     "rt": {
-      "correct": 934,
-      "flipped": 619,
+      "correct": 1212,
+      "flipped": 341,
       "wrong": 13,
       "total": 1566
     },
     "la": {
-      "correct": 936,
-      "flipped": 617,
-      "wrong": 13,
+      "correct": 1215,
+      "flipped": 342,
+      "wrong": 9,
       "total": 1566
     },
     "tp": {
@@ -111,9 +111,9 @@
       "total": 606
     },
     "rt": {
-      "correct": 588,
+      "correct": 593,
       "flipped": 0,
-      "wrong": 18,
+      "wrong": 13,
       "total": 606
     },
     "la": {
@@ -137,9 +137,9 @@
       "total": 7374
     },
     "rt": {
-      "correct": 7365,
+      "correct": 7367,
       "flipped": 0,
-      "wrong": 9,
+      "wrong": 7,
       "total": 7374
     },
     "la": {
@@ -163,15 +163,15 @@
       "total": 1623
     },
     "rt": {
-      "correct": 802,
-      "flipped": 796,
-      "wrong": 25,
+      "correct": 982,
+      "flipped": 625,
+      "wrong": 16,
       "total": 1623
     },
     "la": {
-      "correct": 182,
-      "flipped": 1417,
-      "wrong": 24,
+      "correct": 975,
+      "flipped": 623,
+      "wrong": 25,
       "total": 1623
     },
     "tp": {
