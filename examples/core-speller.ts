@@ -1,35 +1,34 @@
 /**
- * CoreSpeller — the complete two-pillar enharmonic speller, self-contained.
+ * CoreSpeller: the two-pillar enharmonic speller, self-contained.
  *
- * This is the pedagogical reference for the paper: the ENTIRE spelling model in
- * one file with zero imports — no library, no dependencies, ~74 effective lines.
- * It is the same algorithm the repo ships as rung 1 (`src/core.ts`), inlined so
- * the whole thing can be read top to bottom. `src/core.ts` is the source of truth
- * (the bench drives it as rung 1 and shares its primitives with rungs 2–4); this
- * file is a derived artifact, kept byte-identical by `test/examples/standalone.ts`.
+ * The basic spelling model in one file, zero imports. A truncated version of the
+ * shipped real-time Speller: the two pillars alone, without the settings that
+ * correct the enharmonic side. `src/core.ts` is the source of truth; this file is a
+ * derived copy, pinned to it by `test/examples/standalone.test.ts` (equal spellings
+ * on every fixture). Kept for pedagogy. On its own, this model is sufficient to
+ * achieve 99.12% coherent reading of spellings (with a cost of being on the wrong side
+ * of the spiral of fifths, C# vs Db...).
  *
  * Two pillars, and nothing else:
- *   1. The 7-LETTER LIMIT. A running "resolved scale" holds one spelling per
- *      letter A–G. Every note overwrites its letter's slot; a note is spelled by
- *      choosing WHICH letter to claim.
- *   2. INTERVAL SCORING. Among the enharmonic candidates for a pitch, pick the one
- *      that forms the most consonant intervals with the rest of the resolved scale
- *      (perfect/imperfect consonances reward, augmented/diminished punish). This
- *      alone makes the scale drift into key without any explicit key detection.
+ *   1. The 7-LETTER LIMIT. A running "resolved scale" holds one spelling per letter
+ *      A-G. Every note overwrites its letter's slot; spelling a note means choosing
+ *      which letter to claim.
+ *   2. INTERVAL SCORING. Among a pitch's enharmonic candidates, pick the one that
+ *      forms the most consonant intervals with the rest of the resolved scale
+ *      (consonances reward, augmented/diminished punish). The scale drifts into key
+ *      with no explicit key detection.
  *
- * Frameless and PERSISTENT: one drifting scale whose slots are overwritten and
- * never reverted. That is the minimal causal baseline; the shipped Speller
- * (rungs 2/3) and `spellTwoPass` (rung 4) improve on it. This standalone is
- * deliberately the weakest speller — yet it still beats classic SOTA on tonal
- * corpora, which is the point the ~74 lines are here to make.
+ * Frameless and persistent: one drifting scale whose slots are overwritten, never
+ * reverted. The weakest form of the speller. The shipped Speller adds side
+ * correction, an optional look-ahead, and more; spellTwoPass runs the same model
+ * offline in two passes.
  *
- * On the held-out Meredith 8×25000 corpus (clean): 92.94% exact, but 99.12%
- * COHERENT and only 0.88% wrong. Read those three numbers together — they are the
- * whole thesis. The two pillars all but solve COHERENCE (get the intervals right;
- * <1% incoherent notes); nearly the entire ~6pt gap from coherent to exact is the
- * SIDE — the speller has no key-signature prior and no range cap, so it drifts onto
- * the other enharmonic side of a passage (a coherent FLIP, e.g. D♭–F–A♭ for C♯–E♯–G♯),
- * which is notation, not error. Fixing the side is exactly what the higher rungs add.
+ * Held-out corpus of ~196k notes (Meredith 8x25000, clean): 92.94% exact, 99.12%
+ * coherent, 0.88% wrong. The pillars all but solve coherence (intervals right, under
+ * 1% incoherent). The ~6pt gap from coherent to exact is the SIDE: with no
+ * key-signature prior and no range cap, the scale can drift onto the other enharmonic
+ * side of a passage (a coherent flip, e.g. D♭ F A♭ for C♯ E♯ G♯: notation, not error).
+ * The full Speller fixes the side.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -45,51 +44,57 @@ interface Pitch { readonly step: Letter; readonly alter: Accidental; readonly oc
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 /** Natural pitch class of each letter (C = 0). */
 const LETTER_BASE: Record<Letter, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-/** Line-of-fifths position of each natural, F=−1 … B=+5 — the fifth-distance axis pillar 2 scores on. */
+/** Line-of-fifths position of each natural (F=-1 to B=+5); the fifth-distance axis pillar 2 scores on. */
 const LETTER_CHROMA: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 
 // ── Enharmonic candidates ────────────────────────────────────────────────────
 
+/** The seven letters in fifths order; F is at line-of-fifths position -1, B at +5. */
+const FIFTHS = ['F', 'C', 'G', 'D', 'A', 'E', 'B'] as const;
+
 /**
- * Every spelling of `midi`'s pitch class with an accidental in [−2, +2], ordered
- * by |accidental| ascending then letter order (so the plainest spelling is first).
- *   0 → [C, B♯, D♭♭]   1 → [C♯, D♭, B♯♯]   8 → [G♯, A♭]
+ * Spelling at line-of-fifths position `n` (C=0). +1 is a fifth (C, G, D), +7 is one
+ * accidental (E♭, E, E♯), so the letter cycles every 7 steps: F♭♭(-15) to B♯♯(+19).
  */
-function enharmonicCandidatesFor(midi: number): PitchClass[] {
-    const pc = ((midi % 12) + 12) % 12;
-    const found: { step: Letter; alter: Accidental; order: number }[] = [];
-    for (let i = 0; i < LETTERS.length; i++) {
-        const step = LETTERS[i]!;
-        const raw = ((pc - LETTER_BASE[step]) % 12 + 12) % 12; // required accidental, 0..11
-        const alter = raw > 6 ? raw - 12 : raw;                // fold into −6..+5
-        if (Math.abs(alter) <= 2) found.push({ step, alter: alter as Accidental, order: i });
-    }
-    found.sort((a, b) => Math.abs(a.alter) - Math.abs(b.alter) || a.order - b.order);
-    return found.map(({ step, alter }) => ({ step, alter }));
+function spellingAt(n: number): PitchClass {
+    return { step: FIFTHS[((n + 1) % 7 + 7) % 7]!, alter: Math.floor((n + 1) / 7) as Accidental };
 }
+
+/**
+ * The 35 spellings bucketed by pitch class. Walk the line of fifths from F♭♭(-15) to
+ * B♯♯(+19) and wrap it onto 12 pitch classes: position `n` sounds pitch class
+ * 7n mod 12, so two or three spellings fall on each class. Sort each pile plainest
+ * first (smallest accidental, sharp before flat on a tie) so noteOn's argmax reaches
+ * the natural or nearest accidental first.
+ */
+function buildCandidates(): PitchClass[][] {
+    const byPc: PitchClass[][] = Array.from({ length: 12 }, () => []);
+    for (let n = -15; n <= 19; n++) {
+        byPc[((7 * n) % 12 + 12) % 12]!.push(spellingAt(n)); // wrap position n onto its pitch class
+    }
+    for (const pile of byPc) pile.sort((a, b) => Math.abs(a.alter) - Math.abs(b.alter) || b.alter - a.alter);
+    return byPc;
+}
+/** Pitch class (0-11) to its spellings, plainest first; noteOn picks from this. */
+const CANDIDATES: readonly (readonly PitchClass[])[] = buildCandidates();
 
 // ── Interval scoring ─────────────────────────────────────────────────────────
 
-/** Line-of-fifths position of a spelling (C=0): the natural's fifth-position (F=−1) + 7·accidental.
- *  One accidental = 7 steps (E♭ → E → E♯); one fifth = 1 step (C → G → D). */
+/** Line-of-fifths position of a spelling (C=0): the natural's fifth-position + 7*accidental.
+ *  One accidental = 7 steps (E♭, E, E♯); one fifth = 1 step (C, G, D). */
 function lofOf(p: PitchClass): number {
     return LETTER_CHROMA[p.step] + 7 * p.alter;
 }
 
 /**
- * Consonance of the interval between two spellings — the whole of pillar 2, as ONE number.
- *
- * The insight: an interval's consonance depends only on the DISTANCE between the two notes on the line
- * of fifths — a fifth is 1 step, a major third 4, a tritone 6. Close on the line = consonant, far =
- * dissonant. So we never need to NAME the interval (a P5? an aug4?) and then look up how consonant that
- * name is; both steps collapse into reading the score straight off the distance:
- *   d = 1  →  P5 / P4                consonant  → +1
- *   d = 3,4 → 3rds / 6ths           consonant  → +1
- *   d = 0,2,5 → unison, 2nds, 7ths  neutral    →  0
- *   d = 6..12 → augmented / dim.     dissonant  → −1
- *   d ≥ 13   → doubly aug / dim.     worse      → −2
- * That the interval NUMBER never has to be computed is why one line replaces the usual quality+number
- * machinery — the line of fifths already encodes both.
+ * Consonance of the interval between two spellings, the whole of pillar 2 as one number.
+ * It depends only on their distance `d` on the line of fifths, so the interval never has
+ * to be named: read the score straight off `d`.
+ *   d = 1      P5 / P4              consonant  +1
+ *   d = 3, 4   3rds / 6ths          consonant  +1
+ *   d = 0,2,5  unison, 2nds, 7ths   neutral     0
+ *   d = 6..12  augmented / dim.     dissonant  -1
+ *   d >= 13    doubly aug / dim.    worse      -2
  */
 function consonance(a: PitchClass, b: PitchClass): number {
     const d = Math.abs(lofOf(a) - lofOf(b));
@@ -112,10 +117,10 @@ function intervalScore(candidate: PitchClass, resolved: ReadonlyMap<Letter, Pitc
 // ── The speller ──────────────────────────────────────────────────────────────
 
 export class CoreSpeller {
-    /** One spelling per letter A–G — the drifting scale. Starts at C major. */
+    /** One spelling per letter A-G, the drifting scale. Starts at C major. */
     private resolved = new Map<Letter, PitchClass>();
-    /** midi → the spelling committed while that note is sounding, so read-back at note-off returns
-     *  the note's OWN spelling even if a later same-letter note has since overwritten the slot. */
+    /** Spelling committed for each sounding note, so note-off reads back that note's own
+     *  spelling even if a later same-letter note has overwritten the slot. */
     private active = new Map<number, PitchClass>();
 
     constructor() {
@@ -126,7 +131,7 @@ export class CoreSpeller {
     noteOn(midi: number): void {
         let best: PitchClass | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        for (const c of enharmonicCandidatesFor(midi)) {
+        for (const c of CANDIDATES[midi % 12]!) {
             const s = intervalScore(c, this.resolved);
             if (s > bestScore) { bestScore = s; best = c; }
         }
