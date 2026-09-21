@@ -3,11 +3,11 @@
  * GROUND-TRUTH spellings with the piece's real key signature. Accidentals are context-aware:
  * in-key notes draw no accidental (VexFlow's `Accidental.applyAccidentals`), and mid-piece key
  * changes render with cancellation + new signature. Notehead COLORS still indicate whether the
- * speller succeeded (green/blue = correct/flipped, red/purple = wrong) — the staff shows what
+ * speller succeeded (green/blue = correct/flipped, red/purple = wrong); the staff shows what
  * the note SHOULD be, the color shows whether we found it.
  *
  * Rhythm is a DISPLAY approximation: durations come from onset/offset deltas quantized to the
- * nearest (possibly dotted) note value, not engraving-accurate values — soft voices (Voice.Mode.SOFT)
+ * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
  */
 import { Renderer, Stave, StaveNote, Accidental, Dot, Formatter, Voice } from 'vexflow';
@@ -58,7 +58,7 @@ function keyAtTime(respells: RespellEvent[], t_ms: number): string {
     return keySpecFromScale(sectionScale(respells, t_ms));
 }
 
-// Rebuild only when the piece slice, the measure window, or the sounding set actually change — a
+// Rebuild only when the piece slice, the measure window, or the sounding set actually change: a
 // mere playhead move within the same window (e.g. stepping to the next note in the same measure)
 // is a cheap no-op. `builtForReplay` covers the "different fixture/mode" case (a new Replay object);
 // `builtToken` covers "same replay, different window/sounding".
@@ -82,7 +82,7 @@ export function renderStaff(replay: Replay, step: number): void {
     const sounding = soundingSet(replay, s);
     const soundSig = [...sounding].sort((a, b) => a - b).join(',');
 
-    // Fit-to-width depends on the panel's inner width, so bucket it into the cache token — a window
+    // Fit-to-width depends on the panel's inner width, so bucket it into the cache token: a window
     // resize that crosses a bucket busts the cache and re-fits (main wires a resize → render).
     const avail = host.clientWidth || 0;
     const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}`;
@@ -117,7 +117,7 @@ function firstMeasure(notes: ReplayNote[]): number | null {
     return null;
 }
 
-// onIndexes of every note sounding at note `step`'s onset (onT ≤ headT < offT) — the same rule the
+// onIndexes of every note sounding at note `step`'s onset (onT ≤ headT < offT), the same rule the
 // piano roll's active-outline pass uses, so both panels agree on "what's ringing right now."
 function soundingSet(replay: Replay, step: number): Set<number> {
     const t = replay.notes[step]!.onT;
@@ -157,7 +157,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     const OTHER_LEAD = 14, RIGHT_PAD = 18;
 
     // Pass 1: build each measure's voice and measure how wide it actually needs to be. Dense bars
-    // (e.g. 16 sixteenths) need far more than a fixed width — squeezing them makes VexFlow overflow
+    // (e.g. 16 sixteenths) need far more than a fixed width; squeezing them makes VexFlow overflow
     // notes past the stave into the next measure ("superposed" collisions). So width follows content.
     type Built = { m: number; voice: Voice | null; fmt: Formatter | null; staveW: number; noteArea: number; keySpec: string; prevKey: string };
     const built: Built[] = measures.map((m, mi) => {
@@ -183,8 +183,8 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
 
     const totalW = built.reduce((a, b) => a + b.staveW, 0) + 20;
     // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
-    // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates —
-    // ctx.scale maps them into the smaller SVG — so all the width/collision maths above is unaffected.
+    // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates;
+    // ctx.scale maps them into the smaller SVG, so all the width/collision maths above is unaffected.
     // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
     // band scrolls vertically to it (the SVG is cropped to content below), so nothing is clipped. On a
     // narrow (phone) panel drop the floor so the window fits the width instead of side-scrolling, and
@@ -246,7 +246,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
             svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
             svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
             host.scrollTop = Math.max(0, centerY - top - bandH / 2);
-        } catch { /* getBBox unavailable (detached node) — leave the fixed-size engraving */ }
+        } catch { /* getBBox unavailable (detached node): leave the fixed-size engraving */ }
     } else host.scrollTop = 0;
 }
 
@@ -292,7 +292,7 @@ function spellOf(n: ReplayNote): Pitch {
 
 // Build StaveNotes for one measure: group notes by beat (chord-merge same-beat onsets). The note
 // value is the group's actual sounding length (offT-onT ÷ ms-per-beat), capped by the gap to the
-// next onset (or the barline) — so held notes and dotted rhythms come out roughly right instead of
+// next onset (or the barline), so held notes and dotted rhythms come out roughly right instead of
 // every note snapping to the onset spacing. Accidentals are encoded in the key string (e.g. 'c#/4')
 // so VexFlow's applyAccidentals (called by the caller) can decide whether to draw them.
 function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, sounding: Set<number>, msPerBeat: number, numerator: number): StaveNote[] {
@@ -325,7 +325,7 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
         });
         const sn = new StaveNote({ clef, keys, duration: code });
         if (dots) Dot.buildAndAttach([sn], { all: true });
-        // No manual accidental adding — applyAccidentals in the caller handles it per the key sig.
+        // No manual accidental adding: applyAccidentals in the caller handles it per the key sig.
 
         // Colour per notehead (four-tier, mirroring the lab): sounding+wrong(or unread) = purple,
         // sounding+correct/flipped = blue; silent wrong/unread = red, silent correct = green, silent

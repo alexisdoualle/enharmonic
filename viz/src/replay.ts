@@ -1,8 +1,8 @@
 /**
  * Replay: drive the REAL shipped speller over a fixture and capture one snapshot per onset.
  *
- * Zero drift by construction — the streaming rungs drive the exact `SpellingEngine` the public `Speller`
- * builds, at its `RT_PRESET`/`LA_PRESET` (rt/la), and the batch rung calls the shipped `spellTwoPass`.
+ * Zero drift by construction: the streaming modes drive the exact `SpellingEngine` the public `Speller`
+ * builds, at its `RT_PRESET`/`LA_PRESET` (rt/la), and the two-pass mode calls the shipped `spellTwoPass`.
  * The viz never re-implements a spelling decision; it only reads what the engine holds
  * (`getResolvedScale()`/`getAnchor()`/`getCollection()` → resolved surface, signed line-of-fifths tonic,
  * diatonic collection) plus each note's own committed spelling (`getSpelling`) and the record-only
@@ -17,7 +17,7 @@ import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
 
-/** Editorial enharmonic side marker (viz-local; the shipped two-pass no longer consumes these — they
+/** Editorial enharmonic side marker (viz-local; the shipped two-pass no longer consumes these; they
  *  remain a viz-session convenience for the auto-reset helper and the URL state). */
 export interface TwoPassSideOverride { readonly from: number; readonly comma: number; }
 import { CollectionReader, collectionName } from './music/collection.js';
@@ -36,7 +36,7 @@ import { intervalScore } from '../../src/scoring.js';
 
 export type Mode = 'core' | 'rt' | 'la' | 'tp' | 'control';
 
-/** The rung-1 CoreSpeller's structural shape. CoreSpeller's 1-arg noteOn is assignable to this
+/** The CoreSpeller's structural shape. CoreSpeller's 1-arg noteOn is assignable to this
  *  2-arg signature (the extra onset time is ignored). */
 interface CoreLike {
     noteOn(midi: number, t?: number): void;
@@ -45,7 +45,7 @@ interface CoreLike {
     getResolvedScale(): PitchClass[];
 }
 
-/** Build a viz decision trace for a rung-1 note: re-score the candidates against the pre-commit
+/** Build a viz decision trace for a Core note: re-score the candidates against the pre-commit
  *  scale. Frame = the 7-letter scale the candidates were scored against. */
 function coreDecision(before: PitchClass[], midi: number, committed: Pitch | null): DecisionTrace | null {
     const frameMap = new Map(before.map(p => [p.step, p] as const));
@@ -69,7 +69,7 @@ export interface Expected { step: string; alter: number; measure?: number; beat?
 
 export interface Sounding { midi: number; pitch: Pitch; }
 
-/** The captured state at one onset — everything the panels render. */
+/** The captured state at one onset: everything the panels render. */
 export interface Snapshot {
     onIndex: number;                 // index into the onset stream (== expected[] index)
     midi: number;
@@ -79,10 +79,12 @@ export interface Snapshot {
     expected: Pitch | null;
     resolvedScale: PitchClass[] | null;   // the 7-letter surface (the diatonic collection plus its live alterations)
     frame: PitchClass[] | null;           // the bare diatonic collection, before its live alterations
-    frameLofTonic: number | undefined;    // signed line-of-fifths tonic (spiral); distinguishes C♯ from D♭
+    frameLofTonic: number | undefined;    // signed line-of-fifths tonic (spiral, = round(fold centre) − 2); what the fold clamps
+    frameMeanTonic: number | undefined;   // the UNROUNDED fold-centre tonic (fold centre − 2), so a fractional mean can be shown between cells
+    keyCenterLof: number | undefined;     // the leash's DETECTED local-key tonic (collection centre − 2); rt only
     frameKeyLof: number | undefined;      // canonical frame-key spelling when the spiral is off
     sounding: Sounding[];            // notes ringing at this onset (incl. this one)
-    decision: DecisionTrace | null;  // per-candidate scores + deltas + override (streaming rungs; null in batch)
+    decision: DecisionTrace | null;  // per-candidate scores + deltas + override (streaming modes; null in batch)
     twoPass: TwoPassNoteTrace | null; // forward/backward evidence + offline reconciliation (batch only)
     localColl: CollectionRead | null;  // LOCAL collection lane (chases tonicizations); display-only
     stableColl: CollectionRead | null; // STABLE collection lane (home key); display-only
@@ -116,7 +118,7 @@ export interface Replay {
 
 /** What-if overrides for the streaming engine's spiral frame (rt/la only; the batch two-pass ignores
  *  them). Defaults reproduce the shipped preset (range 6, centre +1). */
-export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; }
+export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; repair?: boolean; }
 
 /** Add `auto` releases where a stitched fixture's measure number restarts. These are a viz-session
  * convenience, not hidden production policy: library callers supply their own releases. */
@@ -146,15 +148,15 @@ export function pcOf(p: { step: string; alter: number }): number {
 }
 
 /**
- * The fixed line-of-fifths CONTROL — Meredith's chance-level window: 12 consecutive fifths, so exactly
+ * The fixed line-of-fifths CONTROL: Meredith's chance-level window: 12 consecutive fifths, so exactly
  * one spelling per pitch class, applied with NO context (every occurrence of a pc gets the same letter
- * forever, regardless of key or neighbours). It never drifts, flips, or looks — which is exactly why
- * it's worth seeing beside the rungs.
+ * forever, regardless of key or neighbours). It never drifts, flips, or looks, which is exactly why
+ * it's worth seeing beside the other modes.
  *
- * The window is a fixed 12-slot (EVEN) window — one degree of freedom, its position — so the spiral
+ * The window is a fixed 12-slot (EVEN) window (one degree of freedom, its position), so the spiral
  * panel's `center` (offset) alone slides it: its low (flattest) fifth is `controlWindowLo(center)`.
  * The default (center +1) lands on `l_min = −3..+8` = E♭..G♯ = byte-for-byte music21's default MIDI
- * spelling (C C♯ D E♭ E F F♯ G G♯ A B♭ B) — the canonical control. (Parity/skew is a property of the
+ * spelling (C C♯ D E♭ E F F♯ G G♯ A B♭ B), the canonical control. (Parity/skew is a property of the
  * venturing SPIRAL, not of this frozen window, so it plays no part here.)
  */
 export function controlWindowLo(center: number): number {
@@ -174,7 +176,7 @@ export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitc
 }
 
 /** Onsets in event order, each with a resolution direction for look-ahead (next onset a semitone away
- *  in any octave, within `horizon` upcoming onsets) — the forward buffer a near-real-time caller feeds. */
+ *  in any octave, within `horizon` upcoming onsets): the forward buffer a near-real-time caller feeds. */
 function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
     const dir = new Map<number, number>();
     const ons = events.map((e, i) => ({ e, i })).filter(x => x.e.type === 'on');
@@ -196,13 +198,14 @@ function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
 export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[], spiral: SpiralOpts = {}, twoPassSideMemory = true, sideOverrides: readonly TwoPassSideOverride[] = []): Replay {
     const snapshots: Snapshot[] = [];
     const respells: RespellEvent[] = [];
-    // Effective spiral params: the engine floors range at 6, so mirror that for the wheel drawing.
-    const spiralRange = Math.max(6, spiral.spiralRange ?? 6);
+    // Effective spiral params: `range` maps straight to the clamp radius, so the default is 7 (the shipped
+    // RT_PRESET foldRadius); it can be dialled down to 6 (a tighter 13-key fold) or wider.
+    const spiralRange = Math.max(6, spiral.spiralRange ?? 7);
     const spiralCenter = spiral.spiralCenter ?? 1;
     const spiralEven = spiral.spiralEven ?? false;         // false = symmetric odd window (shipped behaviour)
     const ctrlTable = controlTable(spiralCenter);          // the fixed-LoF control's window (control mode)
 
-    // Batch two-pass (rung 4): the shipped offline speller decides the whole piece at once.
+    // Batch two-pass: the shipped offline speller decides the whole piece at once.
     let tpOut: (Pitch | null)[] | null = null;
     let tpTrace: TwoPassTrace | null = null;
     if (mode === 'tp') {
@@ -218,7 +221,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         }
         // The shipped offline resolver (forward + time-reversed backward, wolf-cost reconciled).
         // TODO: re-wire editorial side overrides. `sideOverrides` (the toolbar ♯/♭/auto markers) is
-        // accepted but NOT consumed here or in the streaming path below — the engine port dropped the
+        // accepted but NOT consumed here or in the streaming path below: the engine port dropped the
         // old substrate's per-onset comma hook, so the markers currently don't change any spelling. The
         // toolbar buttons are hidden (viz/public/index.html) until the SpellingEngine grows a side hook.
         void twoPassSideMemory; void sideOverrides;
@@ -226,23 +229,24 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         tpOut = tpTrace.spellings as (Pitch | null)[];
     }
 
-    // Core (rung 1) is a separate persistent, frameless speller. It has no spiral or decision trace,
+    // Core is a separate persistent, frameless speller. It has no spiral or decision trace,
     // but its seven-slot resolved scale is useful to show in the same surface panel as the shipped
-    // streaming rungs.
+    // streaming modes.
     const core: CoreLike | null = mode === 'core' ? new CoreSpeller() : null;
     const isCore = mode === 'core';
     const isControl = mode === 'control';   // fixed-LoF window (music21 default): context-free, no state
 
     // The shipped streaming engine (rt = real-time preset, la = look-ahead preset). The wheel's what-if
     // steppers drive the spiral-fold clamp: the clamp centre sits on the 7-slot MEAN (a major key = tonic
-    // + 2), so it is spiralCenter + 2, and its radius is spiralRange + 1. The defaults (centre +1, range 6)
+    // + 2), so it is spiralCenter + 2, and its radius IS spiralRange. The defaults (centre +1, range 7)
     // land on the preset's own clamp (centre 3, radius 7), so at rest the viz is byte-identical to the
     // shipped `Speller`; widening the range or nudging the centre digs to deeper enharmonics live.
     const engine = (mode === 'rt' || mode === 'la')
         ? new SpellingEngine({
             ...(mode === 'la' ? LA_PRESET : RT_PRESET),
             foldCenter: spiralCenter + 2,
-            foldRadius: spiralRange + 1,
+            foldRadius: spiralRange,               // range IS the clamp radius; default 7 = the shipped foldRadius
+            foldRepairScale: spiral.repair ?? false,
         })
         : null;
     const dirs = onsetDirs(events);
@@ -262,10 +266,10 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             continue;
         }
         if (e.type === 'off') {
-            // Read back the FINAL committed spelling at note-off — the shipped Speller's read-back
+            // Read back the FINAL committed spelling at note-off: the shipped Speller's read-back
             // discipline (bench `drive()` reads at off, not on). A note respelled mid-sustain is thus
             // scored/coloured by its final spelling, and a doubled pitch-class the speller splits is
-            // paired to onset slots the same FIFO way — so the viz tally matches the library's accuracy
+            // paired to onset slots the same FIFO way, so the viz tally matches the library's accuracy
             // metric exactly (caught by test/viz.test.ts on the chopin_15 m13 doubled C♭).
             const final = isCore ? core!.getSpelling(e.midi!)
                 : isControl ? controlSpell(e.midi!, ctrlTable)
@@ -288,6 +292,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         let resolvedScale: PitchClass[] | null = null;
         let frame: PitchClass[] | null = null;
         let frameLofTonic: number | undefined;
+        let frameMeanTonic: number | undefined;
+        let keyCenterLof: number | undefined;
         let frameKeyLof: number | undefined;
         let decision: DecisionTrace | null = null;
         const twoPass = mode === 'tp' ? tpTrace!.notes[idx]! : null;
@@ -303,27 +309,28 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             frame = resolvedScale.map(p => ({ ...p }));
             decision = coreDecision(before, e.midi!, committed);
         } else if (isControl) {
-            // Fixed-LoF window: a pure lookup, no state. No frame, no drift, no decision trace — the
+            // Fixed-LoF window: a pure lookup, no state. No frame, no drift, no decision trace; the
             // panels (state table, spiral, tonnetz, scoring) render their empty/"no trace" states, which
             // is the honest picture of a context-free control. Only the committed spelling is meaningful.
             committed = controlSpell(e.midi!, ctrlTable);
         } else {
-            // rt / la — the shipped streaming engine.
+            // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
             engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0);
             committed = engine!.getSpelling(e.midi!);
             resolvedScale = engine!.getResolvedScale();
-            if (mode === 'rt') {
-                // The leash's diatonic collection is the stable frame; the resolved surface carries the
-                // live alterations. Major tonic = collection centre − 2.
-                frame = engine!.getCollection();
-                frameLofTonic = engine!.getAnchor() - 2;
-            } else {
-                // Look-ahead runs no leash, so read the frame side off the drifting resolved scale itself
-                // (a major scale's mean line-of-fifths sits at tonic + 2).
-                frame = resolvedScale.map(p => ({ ...p }));
-                frameLofTonic = Math.round(resolvedScale.reduce((s, p) => s + fifths(p), 0) / resolvedScale.length) - 2;
-            }
+            // Read the frame side off the resolved scale's MEAN, the quantity the spiral fold actually
+            // clamps (a major scale's mean line-of-fifths sits at tonic + 2). Both rt and la use the mean
+            // so the lit key on the wheel matches what range/offset control; the stable collection (leash)
+            // is still shown as the `frame` band.
+            frame = mode === 'rt' ? engine!.getCollection() : resolvedScale.map(p => ({ ...p }));
+            // The lit key = the centre the clamp fold actually tests (slot mean after recency + repair), so
+            // it reflects the repair toggle; falls back to the raw surface mean if the fold never ran.
+            frameLofTonic = Math.round(engine!.getFoldCentre()) - 2;
+            frameMeanTonic = engine!.getFoldCentre() - 2;   // unrounded, for the between-cells dot
+            // The leash's detected local key (collection centre − 2), shown next to the mean tonic so the
+            // gap between "where the fold thinks the key is" and the detected collection is visible. rt only.
+            if (mode === 'rt') keyCenterLof = engine!.getAnchor() - 2;
             const gd = engine!.decision();
             decision = gd
                 ? {
@@ -345,7 +352,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         snapshots.push({
             onIndex: idx, midi: e.midi!, t: e.t_ms, durMs: 0, committed,
             expected: exp ? { step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'], octave } : null,
-            resolvedScale, frame, frameLofTonic, frameKeyLof, decision, twoPass,
+            resolvedScale, frame, frameLofTonic, frameMeanTonic, keyCenterLof, frameKeyLof, decision, twoPass,
             localColl, stableColl,
             sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch })).sort((a, b) => a.midi - b.midi),
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
@@ -362,7 +369,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     const tiers = classifyOnsets(
         snapshots.map(s => s.committed),
         snapshots.map(s => expected[s.onIndex] ?? null),
-        snapshots.map(s => s.t), // onset time groups co-struck notes — same key the bench uses
+        snapshots.map(s => s.t), // onset time groups co-struck notes: same key the bench uses
     );
     snapshots.forEach((s, k) => { s.tier = tiers[k]!; s.durMs = notes[k]!.offT - notes[k]!.onT; });
     notes.forEach((n, k) => { n.tier = tiers[k]!; });

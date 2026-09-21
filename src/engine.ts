@@ -46,7 +46,7 @@ const ENHARMONIC_COMMA = 12;
  *   d = 1        P5 / P4                 → +1     d = 3, 4   3rds / 6ths            → +1
  *   d = 0, 2, 5  unison / 2nds / 7ths    →  0     d = 6..12  augmented / diminished → −1
  *   d ≥ 13       doubly aug / dim        → −2
- * The interval NUMBER is never computed — the line of fifths already encodes quality and number.
+ * The interval NUMBER is never computed: the line of fifths already encodes quality and number.
  */
 function consonance(a: PitchClass, b: PitchClass): number {
     const d = Math.abs(lofOf(a) - lofOf(b));
@@ -68,10 +68,10 @@ function intervalScore(candidate: PitchClass, resolved: ReadonlyMap<Letter, Pitc
 }
 
 /**
- * Is the pair {a, b} a MISSPELLED THIRD — a diminished fourth (should be a major third, C–F♭ ⇒ C–E) or
+ * Is the pair {a, b} a MISSPELLED THIRD: a diminished fourth (should be a major third, C–F♭ ⇒ C–E) or
  * an augmented second (should be a minor third, C–D♯ ⇒ C–E♭), in either direction? This is the exact
  * vertical tell: a note off the sheet where an in-sheet third neighbour was available. It deliberately
- * does NOT flag an augmented sixth or a diminished seventh — legitimate chromatic sonorities the
+ * does NOT flag an augmented sixth or a diminished seventh, legitimate chromatic sonorities the
  * resolution decides, not the vertical.
  */
 function isMisspelledThird(a: PitchClass, b: PitchClass): boolean {
@@ -99,11 +99,15 @@ function spellNearest(pcv: number, c: number): PitchClass {
 }
 
 /** Spell a FIXED letter `L` with the accidental that lands it nearest LoF centre `c` (clamped to
- *  [−2, +2]) — the letter-locked twin of {@link spellNearest}, used to re-anchor the 7 slots after a fold. */
+ *  [−2, +2]): the letter-locked twin of {@link spellNearest}, used to re-anchor the 7 slots after a fold. */
 function spellLetterAt(L: Letter, c: number): PitchClass {
     const alter = Math.max(-2, Math.min(2, Math.round((c - LETTER_CHROMA[L]) / 7)));
     return { step: L, alter: alter as Accidental };
 }
+
+/** The 7-letter diatonic collection whose line-of-fifths centre is `c`, e.g. `collectionAt(2)` is C
+ *  major (a major key's centre = tonic + 2), `collectionAt(−3)` is D♭ major. A supplied-key seed. */
+export function collectionAt(c: number): PitchClass[] { return LETTERS.map(L => spellLetterAt(L, c)); }
 
 // ── Options + presets ──────────────────────────────────────────────────────────
 
@@ -149,24 +153,39 @@ export interface EngineOptions {
     /** LOOK-AHEAD reward/penalty magnitude. */
     lookAheadWeight?: number;
     /** LEADING-TONE BOOST: extra look-ahead magnitude applied ONLY to an UP-resolution into a NATURAL
-     *  (diatonic) target — the genuine leading tone (A♯→B), where the frame slot the note resolves to is
+     *  (diatonic) target: the genuine leading tone (A♯→B), where the frame slot the note resolves to is
      *  unaltered. Leaves up-into-chromatic (C→C♯) and all down-resolutions at the base weight, so it flips
      *  margin-1 leading tones without over-sharpening same-letter chromatic inflections (0 = off). */
     leadingToneBoost?: number;
     /** DRIFT LEASH: penalty for a double-accidental (|alter| ≥ 2) spelling (0 = off). */
     doubleAccPenalty?: number;
     /** VERTICAL GUARD weight: penalty per misspelled third (dim4/aug2) a candidate forms with a
-     *  co-sounding note, but only inside a PERFECT (major/minor) triad — a P5 in the sonority (0 = off). */
+     *  co-sounding note, but only inside a PERFECT (major/minor) triad, a P5 in the sonority (0 = off). */
     verticalWeight?: number;
     /** COLLISION REPAIR: after a commit, move a non-sounding letter that now spells the same pitch class
      *  as the committed note back to a distinct spelling, keeping 7 distinct pitch classes. */
     collisionRepair?: boolean;
+    /** Drop STALE slots from the CLAMP fold's centre mean: a letter not committed within this many onsets
+     *  holds an outdated spelling (a degree the music has not used for a while) that should not anchor the
+     *  key centre. Averaging only the recently-sounded letters keeps the fold centre on the live key.
+     *  0 = off (all 7 slots). */
+    foldSlotRecency?: number;
+    /** REPAIR the scale before the clamp centre mean: fit the best contiguous 7-fifth window to the slots
+     *  and snap any outlier (>3 off the window centre, a chromatic alteration) to its diatonic member, so
+     *  the centre reads the underlying key rather than the drifted surface. Off by default. */
+    foldRepairScale?: boolean;
+    /** PROBE: gate the CLAMP fold by accidental economy — once the frame has drifted past a deadzone edge,
+     *  only actually fold if the target comma-side spells the recent raw pitch classes no dearer than the
+     *  current side. Clamp picks WHEN, economy picks WHETHER. Off by default. */
+    foldEconomyGate?: boolean;
 }
 
-/** REAL-TIME tier (`new Speller()`): recency guard + spiral-CLAMP fold + diatonic-anchor leash. */
+/** REAL-TIME tier (`new Speller()`): recency guard + spiral-CLAMP fold + diatonic-anchor leash. The fold
+ *  centre averages only recently-sounded letters (foldSlotRecency), so a stale degree's spelling doesn't
+ *  drag the side: Meredith clean wrong 922→909 (exact unchanged), lab exact +0.41. */
 export const RT_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 3,
-    fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
+    fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8, foldSlotRecency: 32,
     sideWeight: 1, sideRadius: 6, anchorWindow: 32,
 };
 
@@ -179,7 +198,7 @@ export const LA_PRESET: EngineOptions = {
     // natural target (a genuine leading tone A♯→B), so it doesn't over-sharpen same-letter chromatic
     // inflections (C→C♯, C♯→C). A blunt weight-3 bump could not make that distinction and regressed the
     // golden chorales (+5 each); the gate keeps those clean. Net: Meredith clean 563→557, noisy 567→554, and
-    // it recovers true leading tones (Moonlight A♯). One residual — E♭→E, a lowered borrowed degree rising to
+    // it recovers true leading tones (Moonlight A♯). One residual: E♭→E, a lowered borrowed degree rising to
     // the natural 3rd, is unseparable from a leading tone without harmonic context (bach_wtc1 +2). See
     // handoffs/HANDOFF_leading_tone_vs_chromatic.md.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
@@ -193,8 +212,8 @@ export const TP_PASS_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'economy', foldWindow: 24, foldMargin: 7, foldMaxChroma: 0, foldDebounce: 8,
     // lookAheadWeight stays 2 here (NOT 3 like the real-time LA tier): a stronger per-pass look-ahead makes
-    // both passes commit a side harder, shrinking the forward/backward disagreement the reconciliation needs
-    // — measured net-worse (clean 278→300, noisy 384→394). Same reason the passes use the economy fold, not
+    // both passes commit a side harder, shrinking the forward/backward disagreement the reconciliation needs:
+    // measured net-worse (clean 278→300, noisy 384→394). Same reason the passes use the economy fold, not
     // the clamp: the two-pass's own reconciliation is the better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
@@ -226,7 +245,7 @@ export class SpellingEngine {
     private readonly recencyGuard: number;
     private readonly guardWindow: number;
     private readonly fold: FoldMode;
-    private readonly foldCenter: number;
+    private foldCenter: number;   // mutable: a supplied key can re-centre the fold basin mid-stream (setKey)
     private readonly foldRadius: number;
     private readonly foldWindow: number;
     private readonly foldMargin: number;
@@ -241,19 +260,22 @@ export class SpellingEngine {
     private readonly doubleAccPenalty: number;
     private readonly verticalWeight: number;
     private readonly collisionRepair: boolean;
+    private readonly foldSlotRecency: number;
+    private readonly foldRepairScale: boolean;
+    private readonly foldEconomyGate: boolean;
 
-    /** One spelling per letter A–G — the drifting scale. Starts at C major. */
+    /** One spelling per letter A–G: the drifting scale. Starts at C major. */
     private resolved = new Map<Letter, PitchClass>();
     /** midi → the spelling committed while that note is sounding, so read-back at note-off returns the
      *  note's OWN spelling even if a later same-letter note has since overwritten the slot. */
     private active = new Map<number, PitchClass>();
-    /** letter → the onset and accidental last committed to that letter — the recency guard's memory. */
+    /** letter → the onset and accidental last committed to that letter, the recency guard's memory. */
     private lastByLetter = new Map<Letter, { onset: number; alter: Accidental }>();
     /** Running onset counter (co-struck notes share one onset); −1 before the first note. */
     private onset = -1;
     /** The `t` of the current onset, so co-struck notes (same `t`) don't each bump `onset`. */
     private lastT = NaN;
-    /** Sliding window of recent onsets' RAW pitch classes (one entry per onset) — the economy fold's evidence. */
+    /** Sliding window of recent onsets' RAW pitch classes (one entry per onset), the economy fold's evidence. */
     private pcWindow: number[][] = [];
     /** The current onset's raw pcs, flushed into pcWindow when the onset advances. */
     private curOnsetPcs: number[] = [];
@@ -264,9 +286,11 @@ export class SpellingEngine {
     private committedLof: number[] = [];
     /** LEASH penalty centre: the running median-of-core line-of-fifths. */
     private anchor = 1;
-    /** LEASH display: the diatonic COLLECTION's centre — the best-fit contiguous 7-fifth window over
+    /** LEASH display: the diatonic COLLECTION's centre: the best-fit contiguous 7-fifth window over
      *  recent commits, moved only when a rival window strictly covers more (hysteresis). +2 = C major. */
     private collectionCentre = 2;
+    /** The line-of-fifths centre the clamp fold last tested (recency + repair applied) — a viz read-out. */
+    private foldCentre = 2;
     /** Introspection only: the most recent note's per-candidate scoring. */
     private lastDecision: Decision | null = null;
 
@@ -289,6 +313,9 @@ export class SpellingEngine {
         this.doubleAccPenalty = opts.doubleAccPenalty ?? 0;
         this.verticalWeight = opts.verticalWeight ?? 0;
         this.collisionRepair = opts.collisionRepair ?? false;
+        this.foldSlotRecency = opts.foldSlotRecency ?? 0;
+        this.foldRepairScale = opts.foldRepairScale ?? false;
+        this.foldEconomyGate = opts.foldEconomyGate ?? false;
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
     }
 
@@ -326,14 +353,14 @@ export class SpellingEngine {
                 if (((LETTER_BASE[p.step] + p.alter) % 12 + 12) % 12 === targetPc) { laTarget = L; break; }
             }
             if (laTarget) laStep = LETTERS[(LETTERS.indexOf(laTarget) - resolveDir + 7) % 7]!;
-            // LEADING-TONE BOOST: only for an UP-resolution into a NATURAL (unaltered) target — a genuine
+            // LEADING-TONE BOOST: only for an UP-resolution into a NATURAL (unaltered) target: a genuine
             // leading tone (A♯→B). Up-into-chromatic (C→C♯) and down-resolutions keep the base weight, so
             // the boost never over-sharpens a same-letter chromatic inflection of a degree.
             if (laTarget && resolveDir === 1 && this.resolved.get(laTarget)!.alter === 0) laWeight += this.leadingToneBoost;
         }
 
         const scale = LETTERS.map(L => ({ ...this.resolved.get(L)! }));   // the surface scored against
-        // VERTICAL GUARD context: the notes still ringing. The guard only fires inside a PERFECT triad —
+        // VERTICAL GUARD context: the notes still ringing. The guard only fires inside a PERFECT triad:
         // a dim4/aug2 is a valid interval elsewhere. The triad's tell is a P5 (LoF distance 1); a dim7 /
         // aug6 has no P5, so they don't qualify.
         const coSounding = this.verticalWeight > 0 ? [...this.active.values()] : [];
@@ -379,7 +406,7 @@ export class SpellingEngine {
     /**
      * Collision repair: after committing `just`, if another (non-sounding) letter now spells the SAME
      * pitch class, move it to its nearest sensible spelling so the scale keeps 7 distinct pitch classes.
-     * A letter whose note is currently sounding is left alone — a genuine enharmonic doubling, not drift.
+     * A letter whose note is currently sounding is left alone: a genuine enharmonic doubling, not drift.
      */
     private repairCollision(just: PitchClass): void {
         const pc = ((LETTER_BASE[just.step] + just.alter) % 12 + 12) % 12;
@@ -396,19 +423,56 @@ export class SpellingEngine {
 
     /**
      * The spiral fold-back. Measure the frame's side as the mean line-of-fifths of its 7 slots, decide a
-     * fold direction (by the range clamp or the accidental economy), debounce it, and — once it fires —
+     * fold direction (by the range clamp or the accidental economy), debounce it, and (once it fires)
      * re-anchor the 7 slots one comma toward the cheaper side. Sounding notes keep their committed spelling.
      */
     private maybeFold(): void {
-        const slots = [...this.resolved.values()];
-        const cFrame = slots.reduce((s, pc) => s + lofOf(pc), 0) / slots.length;
+        // TODO(side/flip): the fold centre is the INSTANTANEOUS 7-slot MEAN. This is a bench optimum but the
+        // wrong substrate for the FLIP on modulating pieces: the mean is yanked by every chromatic note and
+        // mis-fires at modulation SEAMS (op28/15 nudged: 13 -> 120 wrong). Restore an EVIDENCE-BASED frame —
+        // a detected key-signature / diatonic collection that holds until new evidence overturns it (lags a
+        // little, robust across modulation) — as the side substrate, replacing or gating this mean. See the
+        // `handoff-restore-evidence-frame` memory.
+        // Centre entries [letter, lof] for the 7 slots.
+        let entries = [...this.resolved.entries()].map(([L, pc]) => [L, lofOf(pc)] as [Letter, number]);
+        // Drop STALE slots (letters not committed within N onsets): a degree the music has not used for a
+        // while holds an outdated spelling that should not anchor the fold centre. Fall back to all 7.
+        if (this.foldSlotRecency > 0) {
+            const fresh = entries.filter(([L]) => { const last = this.lastByLetter.get(L); return last != null && this.onset - last.onset <= this.foldSlotRecency; });
+            if (fresh.length) entries = fresh;
+        }
+        if (this.foldRepairScale) {
+            const vals = entries.map(([, v]) => v); const med = this.median(vals);
+            let bestK = med, bestCov = -1;
+            for (let k = med - 6; k <= med + 6; k++) { const cov = vals.reduce((n, v) => n + (Math.abs(v - k) <= 3 ? 1 : 0), 0); if (cov > bestCov || (cov === bestCov && Math.abs(k - med) < Math.abs(bestK - med))) { bestCov = cov; bestK = k; } }
+            entries = entries.map(([L, v]) => [L, Math.abs(v - bestK) <= 3 ? v : lofOf(spellLetterAt(L, bestK))] as [Letter, number]);
+        }
+        const cFrame = entries.reduce((s, [, v]) => s + v, 0) / entries.length;
+        this.foldCentre = cFrame;   // the actual quantity the clamp tests (recency + repair applied), for the viz
 
         let favoured = 0;
         if (this.fold === 'clamp') {
-            // Fold only when the frame drifts PAST an edge of the deadzone — far-sharp ⇒ flat, far-flat ⇒
-            // sharp — never touching central keys. The surface economy is deliberately not consulted.
+            // Fold only when the frame drifts PAST an edge of the deadzone: far-sharp ⇒ flat, far-flat ⇒
+            // sharp, never touching central keys.
             if (cFrame > this.foldCenter + this.foldRadius) favoured = -ENHARMONIC_COMMA;
             else if (cFrame < this.foldCenter - this.foldRadius) favoured = +ENHARMONIC_COMMA;
+            // TODO(fold): economy-gated clamp is a clean, landable win (Meredith neutral, lab +0.16pp/-31
+            // wrong, debussy 49.4->62.5 exact) but only VETOES over-folds; it can't fix UNDER-firing where
+            // the fold that should happen never triggers (op28/15 Dbm middle: centre stuck at Gb, never
+            // reaches the edge, so it stays flipped instead of folding to Chopin's C#m). Investigate landing
+            // this (needs bench:update — debussy is a gate fixture) AND a separate fix for under-fire:
+            // better deep-flat DETECTION (push the centre past the edge) or an economy TRIGGER that creates
+            // folds (careful — that reintroduces full-economy's aggregate cost). See fold-center memory.
+            // PROBE: ECONOMY GATE. The clamp says WHEN (far out); economy says WHETHER — only fold if the
+            // target side spells the recent raw pcs at least as cheaply (vetoes over-folding a moderate flat
+            // like Db major, confirms folding a deep flat like Db minor). Position triggers, economy confirms.
+            if (favoured !== 0 && this.foldEconomyGate) {
+                const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
+                if (heard.length) {
+                    const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(spellNearest(pc, c).alter), 0);
+                    if (costAt(cFrame + favoured) > costAt(cFrame)) favoured = 0;   // target dearer ⇒ veto
+                }
+            }
         } else {
             // Accidental economy over every raw pc heard across the window (repeats kept, so a
             // key-defining note pulls harder for free). Fold toward a comma-neighbour that notates it
@@ -437,10 +501,10 @@ export class SpellingEngine {
 
     /**
      * The diatonic-collection anchor. Take the recent committed line-of-fifths, find its median, DROP the
-     * alterations (anything more than 3 fifths off — the raised/lowered degrees), and re-take the median
+     * alterations (anything more than 3 fifths off, the raised/lowered degrees), and re-take the median
      * of the remaining diatonic CORE. That "un-alter to reveal the diatonic" step stops a run of chromatic
      * raises (a leading tone, a tonicisation) from dragging the centre sharp. The result is the collection's
-     * line-of-fifths centre — a frameless, emergent local key-centre (no key is ever detected).
+     * line-of-fifths centre: a frameless, emergent local key-centre (no key is ever detected).
      */
     private diatonicAnchor(): number {
         const w = this.committedLof;
@@ -492,7 +556,7 @@ export class SpellingEngine {
     /**
      * Re-seed the frame. No-arg / empty-scale clears all state to a cold C-major start. A scale of
      * pitch classes seeds the matching letter slots (a soft key-signature hint); other letters keep
-     * their natural. The engine has no hard pin — the frame is always free to drift — so `hard` is
+     * their natural. The engine has no hard pin (the frame is always free to drift), so `hard` is
      * accepted for API compatibility but treated the same as a soft seed.
      */
     reset(scale: readonly PitchClass[] = [], _hard = false): void {
@@ -510,8 +574,20 @@ export class SpellingEngine {
         this.committedLof = [];
         this.anchor = 1;
         this.collectionCentre = 2;
+        this.foldCentre = 2;
         this.lastDecision = null;
     }
+
+    /**
+     * Re-centre the spiral CLAMP fold basin on a supplied key mid-stream, WITHOUT wiping the running
+     * memory, for a notated key-signature change (a modulation, or a new piece in a concatenation). The
+     * clamp deadzone moves to the key's diatonic mean (foldCenter = keyTonic + 2), so the next few onsets
+     * fold the frame onto the new side instead of clinging to the old one. `keyTonic` is the signed
+     * line-of-fifths of the MAJOR tonic (minor: its relative major; C=0, G=+1, F=−1, D♭=−5, …). Only the
+     * CLAMP fold reads foldCenter, so this is inert under the economy fold / fold `'off'`. Call `reset`
+     * instead when the boundary is a hard restart that should also clear the frame and side memory.
+     */
+    setKey(keyTonic: number): void { this.foldCenter = keyTonic + 2; }
 
     /** Read-only snapshot of the current 7-letter scale (introspection). */
     getResolvedScale(): PitchClass[] {
@@ -522,7 +598,11 @@ export class SpellingEngine {
      *  tonic + 2, so the implied major tonic = this − 2). Meaningful only when the leash is enabled. */
     getAnchor(): number { return this.collectionCentre; }
 
-    /** The 7-letter diatonic COLLECTION — the un-altered substrate, each letter spelled within the current
+    /** The line-of-fifths centre the clamp fold actually tests (the slot mean after recency + repair). The
+     *  fold's tonic is this − 2. Reflects the shipped default unless recency drops slots or repair is on. */
+    getFoldCentre(): number { return this.foldCentre; }
+
+    /** The 7-letter diatonic COLLECTION: the un-altered substrate, each letter spelled within the current
      *  collection window. The stable "frame" against the altered surface (leash display). */
     getCollection(): PitchClass[] { return LETTERS.map(L => spellLetterAt(L, this.collectionCentre)); }
 

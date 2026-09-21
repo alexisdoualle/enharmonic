@@ -24,10 +24,10 @@ const MIME = {
 };
 
 // Fail LOUDLY on a port collision instead of crashing with a raw stack (or, worse, leaving a stale
-// server from another checkout serving an old page at this port — which reads as "the wrong viz came up").
+// server from another checkout serving an old page at this port (which reads as "the wrong viz came up").
 process.on('uncaughtException', (err) => {
     if (err && err.code === 'EADDRINUSE') {
-        console.error(`\n[viz] PORT ${PORT} IS ALREADY IN USE — another server is holding it (e.g. a leftover`
+        console.error(`\n[viz] PORT ${PORT} IS ALREADY IN USE: another server is holding it (e.g. a leftover`
             + ` viz from another checkout). Nothing was served from THIS build.\n`
             + `      Free it:  lsof -nP -iTCP:${PORT} -sTCP:LISTEN   then  kill <PID>\n`
             + `      Or pick another port:  VIZ_PORT=5199 npm run viz\n`);

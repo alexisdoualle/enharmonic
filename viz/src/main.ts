@@ -131,7 +131,7 @@ const MODE_NAME: Record<Mode, string> = {
     rt: '② real-time',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
-    control: '⊘ control — fixed-LoF window (music21)',
+    control: '⊘ control: fixed-LoF window (music21)',
 };
 
 async function listFixtures(): Promise<string[]> {
@@ -160,7 +160,7 @@ function effMode(): Mode {
 function recompute() {
     if (!state.fixtureId) return;
     state.replay = buildReplay(effMode(), rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven },
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
@@ -181,6 +181,12 @@ function setSideOverride(comma: number) {
 }
 
 /** Change the spiral what-if params (from the wheel steppers), rebuild, and persist to the URL. */
+function setRepair(v: boolean) {
+    state.repair = v;
+    recompute();
+    syncUrl();
+}
+
 function setSpiral(range: number, center: number, even: boolean) {
     state.spiralRange = clampRange(range);
     state.spiralCenter = clampCenter(center);
@@ -212,6 +218,7 @@ function render() {
         streaming: state.mode === 'rt' || state.mode === 'la',
         control: state.mode === 'control',
         showKeyLanes: state.showKeyLanes, onChange: setSpiral,
+        repair: state.repair, onRepair: setRepair,
     });
     // Feed the shared live model always: the 2D panel subscribes, and so does the 3D panel (see the
     // subscription in the boot block), so whichever view is on tracks both playback and live input.
@@ -237,7 +244,7 @@ function render() {
     }
 }
 
-/** A thin ribbon of every onset, coloured by tier, with the cursor marked — click to seek. */
+/** A thin ribbon of every onset, coloured by tier, with the cursor marked; click to seek. */
 function renderStrip() {
     return;
     const strip = $('strip');
@@ -263,7 +270,7 @@ function renderStrip() {
     }
 }
 
-/** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there —
+/** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there:
  *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
  *  slider, which seeks continuously while dragged and resumes once on release instead. */
 function seek(i: number, audible = false, resume = true) {
@@ -286,13 +293,13 @@ function seek(i: number, audible = false, resume = true) {
 
 // --- playback: a real wall-clock MIDI player -----------------------------------------------------
 // The playhead is driven by performance.now() and audio is scheduled AHEAD on the AudioContext clock,
-// so timing stays sample-accurate and doesn't drift when a dense texture makes rendering lag — under
+// so timing stays sample-accurate and doesn't drift when a dense texture makes rendering lag; under
 // load the visual playhead simply skips events (drops frames) instead of falling behind, while every
 // note still rings on time. Adapted from the lab viz's player.
 let soundOn = true;
 let tempoRate = 1;                 // playback speed multiplier (tempo slider); >1 faster
 // Extra playhead delay (ms) ADDED on top of the auto-measured output latency, for setups the browser
-// under-reports — chiefly Bluetooth headphones, whose latency getOutputTimestamp misses. Applied to
+// under-reports (chiefly Bluetooth headphones, whose latency getOutputTimestamp misses). Applied to
 // the VISUAL playhead only (never to when audio is scheduled), so raising it lets sight catch up to
 // late sound. Persisted per-browser.
 const LATENCY_KEY = 'viz.audioOffsetMs';
@@ -306,7 +313,7 @@ const TEMPO_SPAN = 4;
 const posToRate = (p: number) => Math.pow(TEMPO_SPAN, p);
 const rateToPos = (r: number) => Math.log(r) / Math.log(TEMPO_SPAN);
 
-// Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS — honours the
+// Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS: honours the
 // score's rhythm but never lets a huge rest stall the player. Rebuilt only when the replay changes.
 let timeline: number[] = [];
 let noteDurMs: number[] = [];
@@ -355,7 +362,7 @@ function startClocks() {
     audioIdx = state.step;
     if (soundOn) {
         // Schedule the first onset START_LEAD_MS ahead on the audio clock (future → never clamped), and
-        // anchor the visual playhead to when that onset actually reaches the SPEAKERS — scheduleAnchor
+        // anchor the visual playhead to when that onset actually reaches the SPEAKERS: scheduleAnchor
         // folds in the output latency, so sight and sound start together even on the cold first play.
         const a = scheduleAnchor(START_LEAD_MS / 1000);
         t0Ctx = a.ctx;
@@ -384,7 +391,7 @@ function frame() {
     }
     // The playhead trails the audio position by the user's extra offset (sound arrives that much later
     // than the browser reports, e.g. Bluetooth) so sight and sound line up. Audio scheduling above is
-    // untouched — only the visual cursor is delayed.
+    // untouched; only the visual cursor is delayed.
     const nowVisual = nowPlay - (soundOn ? audioOffsetMs : 0) * tempoRate;
     // Advance the visual playhead to the latest onset whose time has arrived (may jump several under load).
     let i = state.step;
@@ -416,7 +423,7 @@ function setTempo(rate: number) {
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
 
 /** ⌘/Ctrl+C dumps the current onset (⇧ adds the whole run) as agent-pasteable text. A real text
- *  selection still copies natively — the shortcut only claims the keystroke when nothing is selected. */
+ *  selection still copies natively; the shortcut only claims the keystroke when nothing is selected. */
 function copyContext(ev: KeyboardEvent) {
     if (!state.replay) return;
     if ((window.getSelection()?.toString() ?? '').trim()) return;
@@ -439,6 +446,8 @@ function syncUrl() {
     else u.searchParams.delete('sc');
     if (state.spiralEven !== SPIRAL_EVEN_DEFAULT) u.searchParams.set('sk', '1');
     else u.searchParams.delete('sk');
+    if (state.repair) u.searchParams.set('rp', '1');
+    else u.searchParams.delete('rp');
     // experimental key lanes are off by default; only record when enabled
     if (state.lookAhead) u.searchParams.set('la', '1');
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
@@ -521,8 +530,8 @@ function wire() {
         const tag = (ev.target as HTMLElement)?.tagName ?? '';
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
-        // Spacebar always plays/pauses — even while a <select> (e.g. the fixture picker) holds
-        // focus after a change — except in real text fields where a space is literal input.
+        // Spacebar always plays/pauses, even while a <select> (e.g. the fixture picker) holds
+        // focus after a change, except in real text fields where a space is literal input.
         if (ev.key === ' ' && !/INPUT|TEXTAREA/.test(tag)) { ev.preventDefault(); togglePlay(); return; }
         if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
@@ -553,6 +562,7 @@ async function boot() {
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
     if (p.get('sk')) state.spiralEven = p.get('sk') === '1';
+    if (p.get('rp')) state.repair = p.get('rp') === '1';
     if (p.get('keys') === '1') state.showKeyLanes = true;
     state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;

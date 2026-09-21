@@ -1,8 +1,8 @@
 /**
  * Clipboard export: dump what the panels are showing as plain text, for pasting into an agent chat.
  *
- * ⌘/Ctrl+C copies the CURRENT onset — settings, the note, the engine surface it was decided against,
- * and the scoring trace. ⌘/Ctrl+Shift+C copies the RUN — the tally plus every mis-spelled onset. Both
+ * ⌘/Ctrl+C copies the CURRENT onset: settings, the note, the engine surface it was decided against,
+ * and the scoring trace. ⌘/Ctrl+Shift+C copies the RUN: the tally plus every mis-spelled onset. Both
  * read the same snapshot the panels render, so the text can't drift from the screen. Spellings are
  * ASCII (Gb / F#), not the unicode glyphs, so they survive a paste into any terminal or issue box.
  */
@@ -12,14 +12,20 @@ import type { Snapshot, ReplayNote, Mode } from './replay.js';
 import type { DecisionCandidate } from './decision.js';
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { ascii } from './format.js';
+import { collectionSegments } from './music/pianoroll.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+// Major key name at signed line-of-fifths `lof` (C=0), ASCII accidentals (Gb / F#) per the copy convention.
+const LOF_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+const keyName = (lof: number) => LOF_ORDER[((lof + 1) % 7 + 7) % 7] + ((a) => a > 0 ? '#'.repeat(a) : a < 0 ? 'b'.repeat(-a) : '')(Math.floor((lof + 1) / 7));
+// "major/relminor" pair for a tonic LoF, e.g. -6 → "Gb/Ebm".
+const keyPair = (lof: number) => `${keyName(lof)}/${keyName(lof + 3)}m`;
 const MODE_LONG: Record<Mode, string> = {
-    core: 'Core speller (rung 1)',
+    core: 'Core speller',
     rt: 'real-time',
     la: 'real-time + look-ahead',
     tp: 'two-pass (offline batch)',
-    control: 'fixed-LoF control — context-free window (music21 default MIDI spelling)',
+    control: 'fixed-LoF control: context-free window (music21 default MIDI spelling)',
 };
 const MAX_ROWS = 300;   // a badly-failing fixture shouldn't paste thousands of lines into a chat
 
@@ -35,14 +41,14 @@ function place(n: ReplayNote | undefined): string {
     return e?.measure != null ? `m${e.measure}${e.beat != null ? ` b${e.beat}` : ''}` : '';
 }
 
-/** Settings header — shared by both reports, so a paste always says what produced it. */
+/** Settings header: shared by both reports, so a paste always says what produced it. */
 function header(s: AppState): string[] {
     const r = s.replay;
     const out = [
         `fixture: ${s.fixtureId}`,
         `speller: ${MODE_LONG[s.mode]} [${s.mode}]`,
-        `spiral:  range ±${s.spiralRange}, centre ${sgn(s.spiralCenter)}`
-        + (s.spiralRange === SPIRAL_RANGE_DEFAULT && s.spiralCenter === SPIRAL_CENTER_DEFAULT
+        `spiral:  range ±${s.spiralRange}, centre ${sgn(s.spiralCenter)}${s.repair ? ', repair ON' : ''}`
+        + (s.spiralRange === SPIRAL_RANGE_DEFAULT && s.spiralCenter === SPIRAL_CENTER_DEFAULT && !s.repair
             ? '  (shipped default)'
             : `  (what-if; shipped default is ±${SPIRAL_RANGE_DEFAULT}, ${sgn(SPIRAL_CENTER_DEFAULT)})`),
     ];
@@ -64,7 +70,7 @@ export function contextReport(s: AppState): string {
     const at = place(note);
     const L: string[] = [];
 
-    L.push(`# enharmonic viz — onset ${snap.onIndex} of ${s.replay.snapshots.length}${at ? ` (${at})` : ''}`, '');
+    L.push(`# enharmonic viz: onset ${snap.onIndex} of ${s.replay.snapshots.length}${at ? ` (${at})` : ''}`, '');
     L.push(...header(s), '');
 
     L.push('## note');
@@ -88,9 +94,10 @@ export function contextReport(s: AppState): string {
                 .map(p => `${pitch(fm.get(p.step)!)}→${pitch(p)}`);
             if (diff.length) L.push(`overlays: ${diff.join(', ')}`);
         }
-        if (snap.frameLofTonic != null) L.push(`spiral:   LoF ${sgn(snap.frameLofTonic)} tonic`);
+        if (snap.frameLofTonic != null) L.push(`spiral:   LoF ${sgn(snap.frameLofTonic)} tonic (${keyPair(snap.frameLofTonic)}; frame mean, what the fold clamps)`);
+        if (snap.keyCenterLof != null) L.push(`key ctr:  LoF ${sgn(snap.keyCenterLof)} tonic (${keyPair(snap.keyCenterLof)}; detected collection / diatonic anchor)`);
     } else {
-        L.push('(batch two-pass — whole-piece decision, no streaming frame)');
+        L.push('(batch two-pass: whole-piece decision, no streaming frame)');
     }
     if (s.showKeyLanes && snap.localColl) L.push(`local key: ${snap.localColl.name}  (tonicizations; margin ${snap.localColl.margin.toFixed(1)}, EXPERIMENTAL display-only)`);
     if (s.showKeyLanes && snap.stableColl) L.push(`stable key: ${snap.stableColl.name}  (home; margin ${snap.stableColl.margin.toFixed(1)}, EXPERIMENTAL display-only)`);
@@ -106,12 +113,12 @@ export function contextReport(s: AppState): string {
 
 function decisionLines(snap: Snapshot, laActive: boolean): string[] {
     const dec = snap.decision;
-    if (!dec) return ['(batch two-pass — no per-onset scoring trace)'];
+    if (!dec) return ['(batch two-pass: no per-onset scoring trace)'];
     const hasSide = dec.candidates.some(c => c.sideDelta !== undefined);
     const hasGuard = dec.candidates.some(c => c.guardDelta !== undefined);
     const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
     // Columns are STRUCTURAL (per speller), not per-onset, so the table never gains/loses a column between
-    // notes: the real-time preset shows Side + Grd (+ LA when it looks ahead); the streaming rungs
+    // notes: the real-time preset shows Side + Grd (+ LA when it looks ahead); the streaming modes
     // show LA + NS. Same layout as the scoring panel.
     const cols: { h: string; val: (c: DecisionCandidate) => number }[] = [];
     if (hasSide) cols.push({ h: 'Side', val: c => c.sideDelta ?? 0 });
@@ -133,14 +140,47 @@ function decisionLines(snap: Snapshot, laActive: boolean): string[] {
 }
 
 /** The whole run: settings, tally, and every onset the speller did not get exactly right. */
+// ASCII the unicode accidentals in a collection name (E / C♯m → E / C#m), per the copy convention.
+const asciiKey = (name: string) => name.replace(/♯/g, '#').replace(/♭/g, 'b');
+const MAX_SEQ = 40;   // cap the printed key sequence so a wildly-modulating piece stays legible
+
+/**
+ * The two EXPERIMENTAL, display-only key-detection lanes (local = tonicizations, stable = home),
+ * summarised per piece the same way the piano-roll captions them: change count, per-100-onset rate,
+ * and the sequence of distinct collections. Reuses the piano-roll's own segmenter so the copy text
+ * can't drift from what the lanes draw. Empty unless the key-lanes toggle is on.
+ */
+function keyLaneLines(s: AppState): string[] {
+    if (!s.showKeyLanes || !s.replay) return [];
+    const onsets = s.replay.snapshots.length;
+    const lane = (which: 'local' | 'stable', label: string): string[] => {
+        const segs = collectionSegments(s.replay!, which);
+        if (!segs.length) return [`${label}: no key read`];
+        const changes = Math.max(0, segs.length - 1);
+        const rate = onsets ? (changes / onsets * 100).toFixed(2) : '0.00';
+        const names = segs.map(g => asciiKey(g.name));
+        const seq = names.length > MAX_SEQ
+            ? names.slice(0, MAX_SEQ).join(' → ') + ` → … (+${names.length - MAX_SEQ})`
+            : names.join(' → ');
+        return [`${label}: ${changes} change${changes === 1 ? '' : 's'} · ${rate} per 100 onsets`, `  ${seq}`];
+    };
+    return [
+        '## experimental key detection (display-only)',
+        ...lane('local', 'local key (tonicizations)'),
+        ...lane('stable', 'stable key (home)'),
+        '',
+    ];
+}
+
 export function runReport(s: AppState): string {
     if (!s.replay) return '(no fixture loaded)';
     const bad = s.replay.snapshots.filter(x => x.tier === 'flipped' || x.tier === 'wrong');
-    const L: string[] = [`# enharmonic viz — run report`, ''];
+    const L: string[] = [`# enharmonic viz: run report`, ''];
     L.push(...header(s), '');
+    L.push(...keyLaneLines(s));
     L.push(`## not-exactly-right onsets (${bad.length})`);
     if (!bad.length) {
-        L.push('(none — every scored onset matched the ground truth)');
+        L.push('(none: every scored onset matched the ground truth)');
     } else {
         L.push('onset  midi  got    exp    tier     where');
         for (const x of bad.slice(0, MAX_ROWS)) {
@@ -172,7 +212,7 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 let toastEl: HTMLElement | null = null, toastT = 0;
-/** The little "copied" flash — the only feedback the shortcut gives. */
+/** The little "copied" flash: the only feedback the shortcut gives. */
 export function flash(msg: string): void {
     if (!toastEl) {
         toastEl = document.createElement('div');

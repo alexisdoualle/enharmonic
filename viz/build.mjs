@@ -1,15 +1,15 @@
 /**
- * Build the viz into a self-contained, host-agnostic `viz-dist/` (static — no backend).
+ * Build the viz into a self-contained, host-agnostic `viz-dist/` (static, no backend).
  *
  *   node viz/build.mjs           one-shot build
  *   node viz/build.mjs --watch   rebuild on change (used by serve.mjs)
  *
  * esbuild bundles `viz/src/main.ts` (which imports the REAL shipped kernel from `src/` by path, so
- * the viz shows exactly what the library does — zero drift). The library itself is never modified and
+ * the viz shows exactly what the library does: zero drift). The library itself is never modified and
  * stays zero-dependency: esbuild is a dev-only tool, and `viz/` sits outside npm's `files` allowlist.
  *
  * Fixtures are copied in and a `fixtures/manifest.json` is written, so the built page fetches its data
- * with plain relative requests and needs no directory API — it drops onto GitHub Pages (or any static
+ * with plain relative requests and needs no directory API; it drops onto GitHub Pages (or any static
  * host) as-is.
  */
 import * as esbuild from 'esbuild';
@@ -28,7 +28,7 @@ const LOCAL_FIXTURES = join(REPO, 'local-fixtures');
 const buildOpts = {
     entryPoints: [join(here, 'src/main.ts')],
     // Code-splitting (outdir + splitting) so the 3D tonnetz panel's three.js only downloads as a
-    // separate chunk when the user opens that view — it stays out of the app.js everyone loads. The
+    // separate chunk when the user opens that view; it stays out of the app.js everyone loads. The
     // entry still emits as app.js (index.html references it); lazy chunks land under chunks/.
     outdir: VIZ,
     entryNames: 'app',
@@ -85,7 +85,7 @@ export async function build({ watch = false } = {}) {
         const ctx = await esbuild.context(buildOpts);
         const liveCtx = await esbuild.context(liveBuildOpts);
         await Promise.all([ctx.watch(), liveCtx.watch()]);
-        console.log('[viz] esbuild watching — saves rebuild app.js and live.js (hard-refresh the browser).');
+        console.log('[viz] esbuild watching: saves rebuild app.js and live.js (hard-refresh the browser).');
     } else {
         await esbuild.build(buildOpts);
         await esbuild.build(liveBuildOpts);

@@ -1,7 +1,7 @@
 /**
  * Scoring table: WHY the speller spelled this note the way it did. For each enharmonic candidate it
  * shows the base interval score against the current frame (broken down per frame slot), the additive
- * look-ahead / recency-guard / side-anchor deltas, the total the argmax used, and the winner — then a
+ * look-ahead / recency-guard / side-anchor deltas, the total the argmax used, and the winner, then a
  * plain-language note when a post-total mechanism (sounding tie-break, rel-minor leading tone, a
  * look-ahead gate) overrode that argmax. The numbers come straight from the engine's record-only
  * decision trace (`decision()`), so the table is exactly the decision the shipped speller made.
@@ -14,11 +14,11 @@ import { label } from '../format.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
-// Max enharmonic candidates for any pitch class (see src/candidates.ts) — the table reserves this many
+// Max enharmonic candidates for any pitch class (see src/candidates.ts): the table reserves this many
 // rows so stepping between a 2-candidate and a 3-candidate onset does not resize the panel.
 const MAX_CANDIDATES = 3;
 
-// Mirror of src/scoring.ts `scoreFor` — the per-interval contribution to a candidate's base score.
+// Mirror of src/scoring.ts `scoreFor`: the per-interval contribution to a candidate's base score.
 function scoreFor(quality: number, number: number): number {
     if (quality === 0) return (number === 4 || number === 5) ? 1 : 0;
     const a = Math.abs(quality);
@@ -32,17 +32,17 @@ const sgn = (n: number) => (n > 0 ? '+' + n : n < 0 ? '−' + -n : '0');
 const numCls = (n: number) => (n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero');
 
 const OVERRIDE_TEXT: Record<string, string> = {
-    'sounding-tiebreak': '⊚ sounding tie-break — the frame tied, so the co-onset chord decided',
-    'rel-minor-lt': '△ rel-minor leading tone — took the ♯7 over the lowered tonic under a sounding V',
-    'lookahead-vertical-gate': '⊥ look-ahead vertical gate — reverted a look-ahead pick that wolfed the chord',
-    'lookahead-coherence-gate': '↔ look-ahead coherence gate — reverted a look-ahead pick that broke the passage side',
+    'sounding-tiebreak': '⊚ sounding tie-break: the frame tied, so the co-onset chord decided',
+    'rel-minor-lt': '△ rel-minor leading tone: took the ♯7 over the lowered tonic under a sounding V',
+    'lookahead-vertical-gate': '⊥ look-ahead vertical gate: reverted a look-ahead pick that wolfed the chord',
+    'lookahead-coherence-gate': '↔ look-ahead coherence gate: reverted a look-ahead pick that broke the passage side',
 };
 
 export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive = false): void {
     host.innerHTML = '';
     const title = document.createElement('div');
     title.className = 'panel-title';
-    title.textContent = 'scoring — why this spelling';
+    title.textContent = 'scoring: why this spelling';
     host.appendChild(title);
     if (!snap) { host.appendChild(dim('—')); return; }
 
@@ -56,7 +56,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
 
     // The speller's surface, compact: the bare diatonic frame (collection) and the resolved surface it
     // feeds (the collection plus its live alterations). A resolved cell changed from the frame is
-    // marked. Two 7-cell rows — the state that the scoring below reasons against.
+    // marked. Two 7-cell rows: the state that the scoring below reasons against.
     if (snap.frame || snap.resolvedScale) {
         const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
         const surfByLetter = new Map(snap.resolvedScale?.map(p => [p.step, p]) ?? []);
@@ -72,8 +72,8 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     if (!snap.decision) {
         host.appendChild(dim(
             snap.twoPass ? 'selected pass has no per-candidate trace'
-            : snap.frame ? 'Core speller — no per-candidate scoring trace'
-            : 'fixed-LoF control (music21 default) — context-free window, no per-candidate scoring trace',
+            : snap.frame ? 'Core speller: no per-candidate scoring trace'
+            : 'fixed-LoF control (music21 default): context-free window, no per-candidate scoring trace',
         ));
         return;
     }
@@ -85,12 +85,12 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
     // Delta columns depend on the SPELLER (structural), not on this onset's values, so the table never gains
     // or loses a column between notes: the real-time preset shows Side (anchor) + Grd (guard), + LA
-    // when it looks ahead (`laActive`); the streaming rungs show LA/NS. Columns compose.
+    // when it looks ahead (`laActive`); the streaming modes show LA/NS. Columns compose.
     const deltaCols: { label: string; title: string; val: (c: DecisionCandidate) => number }[] = [];
     if (hasSide) deltaCols.push({ label: 'Side', title: 'side-anchor penalty: −anchor × fifths outside the collection', val: c => c.sideDelta ?? 0 });
     if (hasGuard) deltaCols.push({ label: 'Grd', title: 'recency-guard penalty', val: c => c.guardDelta ?? 0 });
     if ((hasSide || hasGuard) && laActive) deltaCols.push({ label: 'LA', title: 'look-ahead: step toward the resolution', val: c => c.laDelta });
-    // Look-ahead preset (Grd but no Side): nsDelta carries its drift-leash + vertical-guard penalty — show it
+    // Look-ahead preset (Grd but no Side): nsDelta carries its drift-leash + vertical-guard penalty; show it
     // so the total reconciles (otherwise a candidate can win with no visible reason, e.g. the op28/4 dim7).
     if (hasGuard && !hasSide) deltaCols.push({ label: 'Vrt', title: 'drift-leash + vertical-guard penalty', val: c => c.nsDelta });
     if (!hasSide && !hasGuard) deltaCols.push(
@@ -101,7 +101,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     const baseWin = dec.candidates.reduce((b, c) => (c.base > b.base ? c : b), dec.candidates[0]!);
     const totalWin = dec.candidates.reduce((b, c) => (total(c) > total(b) ? c : b), dec.candidates[0]!);
 
-    // table — fixed geometry: every column is always present and every onset draws MAX_CANDIDATES rows,
+    // table: fixed geometry, every column is always present and every onset draws MAX_CANDIDATES rows,
     // so the layout stays put while scrubbing.
     const scroll = document.createElement('div');
     scroll.className = 'score-scroll';
@@ -156,10 +156,10 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     } else if (hasSide) {
         notes.push(baseWin !== totalWin
             ? `collection tie-break took ${label(totalWin.c)} over the equally-near ${label(baseWin.c)} (sharp side)`
-            : `nearest rep to the collection — ${label(totalWin.c)} sits fewest fifths outside the key`);
+            : `nearest rep to the collection: ${label(totalWin.c)} sits fewest fifths outside the key`);
         notes.push('base = −(fifths outside the collection); the letter columns show each rep’s intervals with the collection');
     } else if (baseWin !== totalWin) {
-        // Name the mechanism(s) that actually moved the pick — the delta terms on which the winner beats the
+        // Name the mechanism(s) that actually moved the pick: the delta terms on which the winner beats the
         // base-only winner. For the guarded speller LA / vertical / guard COMPOSE, so more than one can apply.
         const movers: string[] = [];
         if (totalWin.laDelta - baseWin.laDelta > 0) movers.push('look-ahead');
@@ -168,7 +168,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
         const mech = movers.length ? movers.join(' + ') : 'the deltas';
         notes.push(`${mech} moved the pick ${label(baseWin.c)} → ${label(totalWin.c)}`);
     } else {
-        notes.push(`frame decided — ${label(totalWin.c)} has the top interval score`);
+        notes.push(`frame decided: ${label(totalWin.c)} has the top interval score`);
     }
     const nd = document.createElement('div');
     nd.className = 'decision-note';

@@ -11,15 +11,17 @@ export interface AppState {
     spiralRange: number;      // engine spiralRange override (digging-depth cap; floor 6, up to 8)
     spiralCenter: number;     // engine spiralCenter override (LoF writability bias; default +1)
     spiralEven: boolean;      // engine spiralEven: window parity (false = odd/symmetric; true = 12-slot even)
+    repair: boolean;          // PROBE: repair the fold-centre scale (snap outliers to the diatonic window)
     lookAhead: boolean;       // real-time mode option: near-real-time letter look-ahead (Speller({ lookAhead }))
     showKeyLanes: boolean;    // EXPERIMENTAL, display-only: the local + stable collection lanes (default off)
     sideOverrides: SideOverride[]; // editorial comma orientation markers for two-pass replay
 }
 
-export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 6, spiralCenter: 1, spiralEven: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
+export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
 
-/** Shipped-preset defaults — the spiral controls reset to these, and the URL omits them when unchanged. */
-export const SPIRAL_RANGE_DEFAULT = 6;
+/** Shipped-preset defaults: the spiral controls reset to these, and the URL omits them when unchanged.
+ *  `range` is the clamp radius directly, so the default is 7 (= RT_PRESET foldRadius); min 6 = a tighter fold. */
+export const SPIRAL_RANGE_DEFAULT = 7;
 export const SPIRAL_CENTER_DEFAULT = 1;
 export const SPIRAL_EVEN_DEFAULT = false;
 export const SPIRAL_RANGE_MIN = 6, SPIRAL_RANGE_MAX = 12;
@@ -77,7 +79,7 @@ export function writeSideOverrides(p: URLSearchParams, markers: readonly SideOve
 }
 
 /** `URLSearchParams` form-encodes commas to `%2C`, which makes the onset lists unreadable. A comma is
- *  a legal query character, so restore it — the parser decodes both spellings identically. */
+ *  a legal query character, so restore it: the parser decodes both spellings identically. */
 export function readableSearch(p: URLSearchParams): string {
     const q = p.toString().replace(/%2C/g, ',');
     return q ? `?${q}` : '';

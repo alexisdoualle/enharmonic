@@ -1,21 +1,21 @@
 /**
- * Structural COLLECTION reader — DISPLAY ONLY (never touches spelling).
+ * Structural COLLECTION reader: DISPLAY ONLY (never touches spelling).
  *
  * A collection is a key-signature region taken as ONE unit: a major key AND its relative minor together
- * (C major / A minor share a collection). We report the COLLECTION, not the mode — mode is only a hint
+ * (C major / A minor share a collection). We report the COLLECTION, not the mode; mode is only a hint
  * toward the collection. What identifies a collection is its STRUCTURAL tones: the tonic/3rd/5th of both
  * centres, i.e. the two tonic triads combined = {tonic, 3rd, 5th, 6th} of the major. The 2nd/4th/7th are
- * OPTIONAL (a real surface is uneven — degrees go missing), and chromatic notes (a passing dim7, a
+ * OPTIONAL (a real surface is uneven, degrees go missing), and chromatic notes (a passing dim7, a
  * secondary dominant) are NORMAL: they carry almost no weight against a collection, and a chromatic that
  * happens to be a STRUCTURAL tone of a neighbour is a gentle clue toward it.
  *
  * Scored over a recency-DECAYED pitch-class window. TWO instances give the two lanes the ear wants:
- *   - LOCAL (short half-life): chases tonicizations — the most informative moment-to-moment tonal centre.
+ *   - LOCAL (short half-life): chases tonicizations, the most informative moment-to-moment tonal centre.
  *   - STABLE (long half-life + more hysteresis): the home key that only a SUSTAINED shift can move.
- * The line between them is not fixed — a local tonic that persists eventually migrates the stable lane
+ * The line between them is not fixed; a local tonic that persists eventually migrates the stable lane
  * (a real modulation), which the two window lengths express for free.
  *
- * Cf the lab's local-key work: [[frame-vs-surface-key-inference]], [[handoff-local-key-signals]] — the
+ * Cf the lab's local-key work: [[frame-vs-surface-key-inference]], [[handoff-local-key-signals]]: the
  * "local vs global key, the truth is between them" two-band conclusion, here rebuilt structurally so an
  * uneven surface and normal chromaticism don't derail it.
  */
@@ -23,12 +23,12 @@
 // weight of a pitch class at scale-degree `d` (semitones above the major tonic) within a collection
 function degreeWeight(d: number): number {
     if (d === 0 || d === 4 || d === 7 || d === 9) return 3;   // tonic, 3rd, 5th, 6th (= both tonic triads)
-    if (d === 2 || d === 5 || d === 11) return 1;             // 2nd, 4th, 7th — optional
-    return 0;                                                  // chromatic — normal, a clue only if structural elsewhere
+    if (d === 2 || d === 5 || d === 11) return 1;             // 2nd, 4th, 7th: optional
+    return 0;                                                  // chromatic: normal, a clue only if structural elsewhere
 }
 
 export interface Collection {
-    relMajorPc: number;   // 0..11 — the collection's relative-MAJOR tonic pitch class (C major / A minor → 0)
+    relMajorPc: number;   // 0..11: the collection's relative-MAJOR tonic pitch class (C major / A minor → 0)
     score: number;        // structural fit of the winner
     margin: number;       // winner − runner-up (confidence that it's THIS collection, not a neighbour)
 }
@@ -40,14 +40,14 @@ export class CollectionReader {
     private prev: number | null = null;
     /** @param halfLifeMs recency half-life; @param hysteresis stickiness bonus for holding the previous
      *  collection; @param altThreshold minimum decayed weight of an OUT-OF-COLLECTION pitch class required
-     *  to leave the current collection — the "new alteration" gate (a plain diatonic chord, e.g. the ii7,
+     *  to leave the current collection: the "new alteration" gate (a plain diatonic chord, e.g. the ii7,
      *  carries no alteration, so it can never steal the key; a real tonicization brings its accidental and
      *  passes). 0 disables the gate. */
     constructor(private readonly halfLifeMs = 4000, private readonly hysteresis = 1.0, private readonly altThreshold = 1.0) {}
 
     observe(midi: number, t: number): void {
         this.win.push({ pc: ((midi % 12) + 12) % 12, t });
-        const cutoff = t - this.halfLifeMs * 8;   // 8 half-lives back is <0.4% weight — drop it
+        const cutoff = t - this.halfLifeMs * 8;   // 8 half-lives back is <0.4% weight: drop it
         while (this.win.length && this.win[0]!.t < cutoff) this.win.shift();
     }
 
@@ -99,7 +99,7 @@ function pcToLofNear(pc: number, sideLof: number): number {
     for (let k = -2; k <= 2; k++) { const c = base + 12 * k; const d = Math.abs(c - sideLof); if (d < bd) { bd = d; best = c; } }
     return best;
 }
-/** "E / C♯m" — the collection as major/relative-minor, spelled on the frame's enharmonic side. */
+/** "E / C♯m": the collection as major/relative-minor, spelled on the frame's enharmonic side. */
 export function collectionName(relMajorPc: number, sideLof: number | undefined): string {
     const side = sideLof ?? 0;
     return `${lofName(pcToLofNear(relMajorPc, side))} / ${lofName(pcToLofNear((relMajorPc + 9) % 12, side))}m`;

@@ -10,13 +10,13 @@ import {
     computeScalePathV2,
     classifyEdgeInterval,
     extendedFifthsPos,
-    // computeStartFifths not used — grid anchor is fixed to C major naturals
+    // computeStartFifths not used: grid anchor is fixed to C major naturals
     X_SPACING, Y_SPACING, Z_SPACING, ROW_SHIFT,
     LatticeNode,
 } from './LatticeGeometry';
 import { computeArrowLit, hasNonPerfectFifth, LETTER_INDICES, LIT_THRESHOLD } from './arrowLogic';
 
-// ── Config interface (simplified — no getNoteAt, getTriadType, getTriadActivation) ──
+// ── Config interface (simplified: no getNoteAt, getTriadType, getTriadActivation) ──
 
 export interface TonnetzSceneConfig {
     getThirds: () => PitchClass[];          // current scale (7 notes) for highlighting
@@ -48,7 +48,7 @@ export interface TonnetzSceneConfig {
     /**
      * When the diatonic anchor toggle is on, returns the 7 anchor pitch classes
      * (natural major or natural minor of the current root) that triangles are
-     * classified against — anchor (full opacity) vs alteration (faded overlay).
+     * classified against: anchor (full opacity) vs alteration (faded overlay).
      */
     getDiatonicAnchor?: () => PitchClass[];
 }
@@ -74,13 +74,13 @@ const TRI_WIRE_ACTIVE = 0.02;      // wireframe boost when activated (not held)
 const TRI_WIRE_HELD = 0.45;        // wireframe boost when all 3 notes held
 const ALTERATION_OPACITY_FACTOR = 0.4; // diatonic anchor overlay dim factor
 
-// Visual smoothing time constants (seconds) — reduces flicker during fast MIDI playback.
+// Visual smoothing time constants (seconds): reduces flicker during fast MIDI playback.
 // Deliberately heavier than the 2D grid so the 3D scene shows "average" state during fast passages
 // rather than tracking every individual note pulse (trades reactivity for smoothness).
-const SMOOTH_ATTACK_TAU = 0.060;       // 60ms rise — absorbs rapid repeated notes
-const SMOOTH_RELEASE_TAU = 0.150;      // 150ms fall — smooths out rapid on/off flicker
-const SMOOTH_HELD_ATTACK_TAU = 0.030;  // 30ms held rise — quick but not instant
-const SMOOTH_HELD_RELEASE_TAU = 0.100; // 100ms held fade — prevents white↔blue flicker
+const SMOOTH_ATTACK_TAU = 0.060;       // 60ms rise: absorbs rapid repeated notes
+const SMOOTH_RELEASE_TAU = 0.150;      // 150ms fall: smooths out rapid on/off flicker
+const SMOOTH_HELD_ATTACK_TAU = 0.030;  // 30ms held rise: quick but not instant
+const SMOOTH_HELD_RELEASE_TAU = 0.100; // 100ms held fade: prevents white↔blue flicker
 const Z_ANIM_TAU = 0.15;               // 150ms accidental-slide time constant (smoother motion)
 const Z_ANIM_MIN_STEP = 1 / 60;        // update z buffers at most once per display frame
 const Z_ANIM_HEAVY_GEOMETRY_EVERY = 2; // while audio is active: triangle/wire z every N z-steps
@@ -105,7 +105,7 @@ const EXTRA_NODE_OPACITY_FOCUSED = 0.55;  // non-scale nodes in focused mode
 const EXTRA_NODE_GRAY = 0x7a7a88;          // base gray for enharmonic/extra notes
 const EXTRA_NODE_GRAY_DIM = 0x666674;      // dim gray for inactive extra notes
 
-// Label billboard shaders — single draw call for all node labels
+// Label billboard shaders: single draw call for all node labels
 const LABEL_VERTEX_SHADER = /* glsl */`
 attribute vec2 labelOffset;
 attribute float labelOpacity;
@@ -241,7 +241,7 @@ export class TonnetzSceneV2 {
     private nodeData: { pc: PitchClass; layer: number; isScaleNote: boolean; isEnharmonicNote: boolean; x: number; y: number; z: number; midiPC: number; nodeKey: string }[] = [];
     private nodeIndexMap = new Map<string, number>(); // "gridRow:layer:gridCol" → instanced mesh index
     private sphereGeo: THREE.SphereGeometry;
-    // Cached node material — created once, reused across rebuilds to skip shader setup.
+    // Cached node material: created once, reused across rebuilds to skip shader setup.
     private _nodeMaterial: THREE.MeshStandardMaterial | null = null;
 
     // Merged triangle buffers
@@ -259,7 +259,7 @@ export class TonnetzSceneV2 {
         color: string;        // per-triangle color (may vary within same triadType)
         edgeIntervals: Set<string>;
         edgeMapping: { interval: string; wireIdx: number }[];
-        hasSecond: boolean;  // true if any edge is M2 or m2 — not a valid triad
+        hasSecond: boolean;  // true if any edge is M2 or m2: not a valid triad
         isMisspelled: boolean; // A5 edge in a major/minor/dim triad (enharmonic misspelling)
         meshIdx: number; // index into the mesh group geometry
         meshGroup: TriMeshGroup;
@@ -304,7 +304,7 @@ export class TonnetzSceneV2 {
     // Last spectrum colour applied per PC. A held/active node's colour is key- and
     // spelling-driven, so it can change with NO activation change (e.g. the key settles
     // from a transient tonic to the real one). Without tracking this, the node freezes
-    // on the colour it had when its PC last changed activation — the piano has no such
+    // on the colour it had when its PC last changed activation; the piano has no such
     // gate, so the two disagree (a held D shows the settled cyan on the keys but a
     // stale degree colour on the node). Comparing this each frame re-dirties the PC.
     private _lastHeldColorByPC: (string | null)[] = new Array(12).fill(null);
@@ -407,12 +407,12 @@ export class TonnetzSceneV2 {
         dir.position.set(5, 10, 7);
         this.scene.add(dir);
 
-        // Controls (no damping — on-demand rendering)
+        // Controls (no damping; on-demand rendering)
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = false;
         this.controls.addEventListener('change', () => this.render());
 
-        // Shared geometry (reduced segments — these are small nodes, 12×8 is plenty)
+        // Shared geometry (reduced segments; these are small nodes, 12×8 is plenty)
         this.sphereGeo = new THREE.SphereGeometry(0.11, 12, 8);
 
         // Label atlas
@@ -536,7 +536,7 @@ export class TonnetzSceneV2 {
 
     /**
      * Fast path for spelling-only changes (same MIDI pitch classes, different
-     * accidental spellings). Reuses triangle and wireframe geometry — only
+     * accidental spellings). Reuses triangle and wireframe geometry: only
      * rebuilds nodes, labels, scale path, and arrows. Triangle colors update
      * on the next updateActivations() via the existing per-frame logic.
      *
@@ -548,7 +548,7 @@ export class TonnetzSceneV2 {
     updateSpellings(): void {
         if (!this.visible) return;
         // Safety: if no prior rebuild has populated triangle geometry,
-        // we have no geometry to reuse — fall back to full rebuild.
+        // we have no geometry to reuse: fall back to full rebuild.
         if (!this.triMesh && !this.triMeshTiltedPerfect && !this.triMeshTiltedNonPerfect) {
             this.rebuild();
             return;
@@ -620,7 +620,7 @@ export class TonnetzSceneV2 {
         this.enhArrowTargetPCs = this.computeEnharmonicTargetPCs();
 
         // Rebuild only the groups that depend on the current scale's spelling.
-        // Triangles and wireframes stay intact — their geometry is grid-bound
+        // Triangles and wireframes stay intact; their geometry is grid-bound
         // and updateTriangleActivations() will re-derive isExactMatch next frame.
         this.clearNodeGroup();
         this.clearLabelGroup();
@@ -651,7 +651,7 @@ export class TonnetzSceneV2 {
         if (!this.visible) return;
         const dirty = this.computeSmoothedActivations();
         const zDirty = this.animateZOffsets();
-        if (!dirty && !zDirty) return; // nothing changed — skip GPU updates and render
+        if (!dirty && !zDirty) return; // nothing changed: skip GPU updates and render
         if (!dirty && zDirty) {
             // Keep accidental slide rendering lightweight: skip color/triad/arrow work
             // when only z-offset geometry changed.
@@ -731,7 +731,7 @@ export class TonnetzSceneV2 {
             }
         }
 
-        // Re-dirty a PC whose spectrum colour changed even if its activation didn't —
+        // Re-dirty a PC whose spectrum colour changed even if its activation didn't:
         // otherwise a held node freezes on a transient key's degree colour (see
         // _lastHeldColorByPC). Only tracked for lit PCs (held/active/resonating) so a
         // key change doesn't churn the dozen inactive nodes.
@@ -828,12 +828,12 @@ export class TonnetzSceneV2 {
     }
 
     /** Apply current z-offsets to triangle and wireframe vertex positions.
-     *  Nodes stay fixed at their grid positions — only triangle vertices and
+     *  Nodes stay fixed at their grid positions; only triangle vertices and
      *  wire endpoints animate between the old and new accidental layers. */
     private applyZOffsets(updateHeavyGeometry = true): void {
         if (!updateHeavyGeometry) return;
 
-        // Triangle fill — update position buffer z-component
+        // Triangle fill: update position buffer z-component
         if (this.triMesh || this.triMeshTiltedPerfect || this.triMeshTiltedNonPerfect) {
             const flatPosAttr = this.triMesh?.geometry.getAttribute('position') as THREE.BufferAttribute | null;
             const tiltedPerfectPosAttr = this.triMeshTiltedPerfect?.geometry.getAttribute('position') as THREE.BufferAttribute | null;
@@ -857,7 +857,7 @@ export class TonnetzSceneV2 {
             if (tiltedNonPerfectPosAttr) tiltedNonPerfectPosAttr.needsUpdate = true;
         }
 
-        // Wireframe edges — update position buffer z-component per interval
+        // Wireframe edges: update position buffer z-component per interval
         for (const [letter, offset] of this._letterZOffset) {
             const byInterval = this._letterToWireVerts.get(letter);
             if (!byInterval) continue;
@@ -993,7 +993,7 @@ export class TonnetzSceneV2 {
 
     setDiatonicAnchor(on: boolean): void {
         this.diatonicAnchor = on;
-        // No rebuild needed — classification happens per frame in updateTriangleActivations
+        // No rebuild needed: classification happens per frame in updateTriangleActivations
         // from triData.spellings/letters which are already populated.
         this.updateActivations();
     }
@@ -1271,7 +1271,7 @@ export class TonnetzSceneV2 {
     private clearNodeGroup(): void {
         if (this.nodeInstanced) {
             this.nodeInstanced.geometry?.dispose();
-            // NOTE: do NOT dispose the material — it's cached across rebuilds in _nodeMaterial.
+            // NOTE: do NOT dispose the material: it's cached across rebuilds in _nodeMaterial.
             this.nodeInstanced = null;
         }
         this.nodeData = [];
@@ -1467,7 +1467,7 @@ export class TonnetzSceneV2 {
                             'vec3 glowColor = diffuseColor.rgb * (1.0 + 1.1 * nodeRim);',
                             'vec3 nodeFinal = mix(outgoingLight, glowColor, clamp(vInstanceGlow, 0.0, 1.0));',
                             // NOTE: alpha intentionally ignores vInstanceOpacity to preserve the
-                            // current (all-opaque) look — the old opacity replace targeted a chunk
+                            // current (all-opaque) look; the old opacity replace targeted a chunk
                             // name that no longer exists in three r170, so it was already a no-op.
                             'gl_FragColor = vec4( nodeFinal, diffuseColor.a );',
                         ].join('\n'),
@@ -1518,7 +1518,7 @@ export class TonnetzSceneV2 {
 
             // Color
             if (isHeld) {
-                color.setRGB(2, 2, 2);   // HDR white — glows past lighting cap
+                color.setRGB(2, 2, 2);   // HDR white: glows past lighting cap
             } else if (node.isScaleNote) {
                 color.set(0x90caf9);         // light blue
             } else if (isEnharmonic) {
@@ -1722,7 +1722,7 @@ export class TonnetzSceneV2 {
                 // Actively held: show the EXACT scale-degree spectrum colour (the same
                 // key/spelling-driven palette the piano keys + spectrum panel use), fully
                 // self-illuminated. No blue blend and glow pinned to 1 so the hue matches
-                // exactly — the smoothed-held blend used to freeze ~5-8% short of 1 (the
+                // exactly: the smoothed-held blend used to freeze ~5-8% short of 1 (the
                 // dirty gate stops updates once Δheld < threshold), leaving a residual
                 // blue/shading tint that shifted saturated hues. Bead-grow still animates
                 // via heldSmooth on the scale below.
@@ -1831,7 +1831,7 @@ export class TonnetzSceneV2 {
         // Track letter + z for each wire vertex (parallel to wireBuckets positions)
         const wireLetterData = new Map<string, { letter: string; z: number }[]>();
 
-        // Layer-0 grid wires (P5 + M3) — shown when Z=0 toggle is active
+        // Layer-0 grid wires (P5 + M3): shown when Z=0 toggle is active
         const layerZeroWirePos: number[] = [];
         const layerZeroWireColor: number[] = [];
         const LAYER_ZERO_GRID_INTERVALS = new Set(['P5', 'M3']);
@@ -1848,7 +1848,7 @@ export class TonnetzSceneV2 {
             const isExactMatch = triSpellings.every(s => exactSpellings.has(s));
 
             // Never allow enharmonic triads to span 3+ layers, regardless of
-            // settings — except when suspensionTilt is on. Cadential 6/4 needs
+            // settings, except when suspensionTilt is on. Cadential 6/4 needs
             // the 3-layer C-E♯-G𝄪 triangle, and it's enharmonic by construction.
             if (!isExactMatch && distinctLayers >= 3 && !this.suspensionTilt) continue;
 
@@ -1862,14 +1862,14 @@ export class TonnetzSceneV2 {
                     const scaleCount = tri.vertices.filter(v => v.isScaleNote).length;
                     if (scaleCount < 2) continue;
                 } else if (!this.showTiltedPerfect && !this.suspensionTilt) {
-                    // "Fill Tilted" off — hide perfect triads, show all others.
+                    // "Fill Tilted" off: hide perfect triads, show all others.
                     // suspensionTilt overrides the cull so 6/4's tilted major
                     // (C-E♯-G𝄪) reaches triData and the bias can light it.
                     const isPerfect = tri.triadType === 'major' || tri.triadType === 'minor';
                     if (isPerfect) continue;
                 }
             } else {
-                // Flat same-layer — exotic types still need 2+ scale notes
+                // Flat same-layer: exotic types still need 2+ scale notes
                 if (EXOTIC_TRIAD_TYPES.has(tri.triadType)) {
                     const scaleCount = tri.vertices.filter(v => v.isScaleNote).length;
                     if (scaleCount < 2) continue;
@@ -1888,7 +1888,7 @@ export class TonnetzSceneV2 {
                 edgeIntervals.add(interval);
             }
 
-            // Triangles containing a second (M2 or m2) are not valid triads — never activate
+            // Triangles containing a second (M2 or m2) are not valid triads: never activate
             const hasSecond = edgeIntervals.has('M2') || edgeIntervals.has('m2');
             // A5 edge in a major/minor/dim triad means enharmonic misspelling (e.g. E-G-B# for C major)
             const isMisspelled = edgeIntervals.has('A5') &&
@@ -1946,7 +1946,7 @@ export class TonnetzSceneV2 {
             for (let vi = 0; vi < 3; vi++) {
                 targetPos.push(v[vi].x, v[vi].y, v[vi].z);
 
-                // UV from world position — z offset shifts pattern between layers
+                // UV from world position: z offset shifts pattern between layers
                 const uvScale = 0.8;
                 targetUv.push(v[vi].x * uvScale, (v[vi].y + v[vi].z * 0.37) * uvScale);
 
@@ -1956,7 +1956,7 @@ export class TonnetzSceneV2 {
                 targetColor.push(triColor.r * fillOpacity * shade, triColor.g * fillOpacity * shade, triColor.b * fillOpacity * shade);
             }
 
-            // Accumulate wireframe edges by interval type (skip seconds — not real edges)
+            // Accumulate wireframe edges by interval type (skip seconds: not real edges)
             edgeIntervals.clear();
             for (const [a, b] of edges) {
                 const interval = classifyEdgeInterval(v[a].pc, v[b].pc);
@@ -1964,7 +1964,7 @@ export class TonnetzSceneV2 {
 
                 // Don't create wire segments for seconds
                 if (interval === 'M2' || interval === 'm2') continue;
-                // Mesh shows only same-layer edges — skip cross-layer wires
+                // Mesh shows only same-layer edges: skip cross-layer wires
                 if (v[a].layer !== v[b].layer) continue;
 
                 // Collect layer-0 P5/M3 edges for the Z=0 grid overlay
@@ -2051,7 +2051,7 @@ export class TonnetzSceneV2 {
             }
         }
 
-        // Flat triangles — never get hatched pattern unless "All" is on
+        // Flat triangles: never get hatched pattern unless "All" is on
         if (flatCount > 0) {
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flatPos), 3));
@@ -2067,7 +2067,7 @@ export class TonnetzSceneV2 {
             this.triangleGroup.add(this.triMesh);
         }
 
-        // Tilted perfect triangles — get hatched pattern when enabled
+        // Tilted perfect triangles: get hatched pattern when enabled
         if (tiltedPerfectCount > 0) {
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tiltedPerfectPos), 3));
@@ -2083,7 +2083,7 @@ export class TonnetzSceneV2 {
             this.triangleGroup.add(this.triMeshTiltedPerfect);
         }
 
-        // Tilted non-perfect triangles — filled by default, optional mesh with dedicated toggle
+        // Tilted non-perfect triangles: filled by default, optional mesh with dedicated toggle
         if (tiltedNonPerfectCount > 0) {
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tiltedNonPerfectPos), 3));
@@ -2244,7 +2244,7 @@ export class TonnetzSceneV2 {
                 // Diatonic anchor: an alteration of letter L (e.g., B♮ at PC 11)
                 // should also light the anchor triangle for L (Bb-D-F at PC 10).
                 // Only propagate ±1 when the played PC is NOT itself an anchor
-                // PC — playing a diatonic note shouldn't pull in extra anchor
+                // PC: playing a diatonic note shouldn't pull in extra anchor
                 // triangles via spurious neighbor activation.
                 if (anchorPCSet && !anchorPCSet.has(pc)) {
                     const listUp = this._pcToTriangles.get((pc + 1) % 12);
@@ -2266,10 +2266,10 @@ export class TonnetzSceneV2 {
 
             const isExactMatch = spellings.every(s => exactSpellings.has(s));
 
-            // Diatonic anchor classification — priority: anchor > alteration > exact > null.
+            // Diatonic anchor classification, priority: anchor > alteration > exact > null.
             //   - 'anchor': all 3 spellings match the natural-baseline anchor (letter-based activation, full opacity)
             //   - 'alteration': exactly ONE letter's accidental differs from anchor, by exactly ±1 (faded overlay, PC-based activation)
-            //   - 'exact': matches the selected scale's spellings (PC-based, full opacity) — falls through when anchor doesn't apply
+            //   - 'exact': matches the selected scale's spellings (PC-based, full opacity); falls through when anchor doesn't apply
             //   - null: not in any of the above categories
             let displayClass: 'exact' | 'anchor' | 'alteration' | null = null;
             if (anchorPCByLetter && anchorAccByLetter) {
@@ -2308,7 +2308,7 @@ export class TonnetzSceneV2 {
             }
 
             // Activation source:
-            //   - anchor: letter-based — played PC contributes to letter L if PC == L's
+            //   - anchor: letter-based, played PC contributes to letter L if PC == L's
             //     anchor PC, OR PC is ±1 from L's anchor AND PC is not another letter's
             //     anchor PC (so playing C doesn't spuriously activate letter B's slot
             //     in C major where C and B are 1 semitone apart).
@@ -2354,7 +2354,7 @@ export class TonnetzSceneV2 {
                 this._resonanceByPC[pcs[0]], this._resonanceByPC[pcs[1]], this._resonanceByPC[pcs[2]]);
             const resStrength = rawRes * rawRes;
             const fillLerp = TRI_OPACITY_BASE * TRI_FILL_SCALE + resStrength * (TRI_OPACITY_HELD - TRI_OPACITY_BASE * TRI_FILL_SCALE);
-            // Alteration overlay dim factor — preferred-spelling triangles (sus/6-4) win and skip dim
+            // Alteration overlay dim factor: preferred-spelling triangles (sus/6-4) win and skip dim
             const opacityScale = (displayClass === 'alteration' && !matchesPreferred) ? ALTERATION_OPACITY_FACTOR : 1.0;
             const fillOpacity = activation * quality * fillLerp * opacityScale;
             const shade = entry.shade;
@@ -2536,7 +2536,7 @@ export class TonnetzSceneV2 {
                 const targetLo = (loMidi + 11) % 12;
                 if (scaleMidis.has(targetLo)) resolutionSet.set(loMidi, targetLo);
 
-                // Enharmonic of hi resolves DOWN (opposite) — no scale check,
+                // Enharmonic of hi resolves DOWN (opposite); no scale check,
                 // target just needs to exist as a node on the adjacent layer
                 enharmonicResolutionSet.set(hiMidi, (hiMidi + 11) % 12);
 
@@ -2564,7 +2564,7 @@ export class TonnetzSceneV2 {
         // For each source node with a resolution, find the target
         // on an adjacent layer in the SAME ROW (along the P5 axis only).
         // Scale nodes use resolutionSet; enharmonic nodes use enharmonicResolutionSet
-        // (opposite direction — e.g. G# → A but Ab → G).
+        // (opposite direction, e.g. G# → A but Ab → G).
         const allSourceMidis = new Set([...resolutionSet.keys(), ...enharmonicResolutionSet.keys()]);
         for (const sourceMidi of allSourceMidis) {
             const scaleTarget = resolutionSet.get(sourceMidi);
@@ -2616,13 +2616,13 @@ export class TonnetzSceneV2 {
         const start = sourcePos.clone().addScaledVector(dir, NODE_RADIUS);
         const end = targetPos.clone().addScaledVector(dir, -NODE_RADIUS - ARROW_HEAD_LENGTH * 0.5);
 
-        // Shaft — use a cylinder mesh instead of Line (WebGL clamps linewidth to 1px)
+        // Shaft: use a cylinder mesh instead of Line (WebGL clamps linewidth to 1px)
         const shaftLen = start.distanceTo(end);
         const shaftGeo = new THREE.CylinderGeometry(ARROW_SHAFT_RADIUS, ARROW_SHAFT_RADIUS, shaftLen, 6, 1);
         const shaftMat = new THREE.MeshBasicMaterial({
             color: ARROW_COLOR_DIM,
             transparent: true,
-            opacity: 0, // start invisible — only shown when source is active
+            opacity: 0, // start invisible: only shown when source is active
             depthTest: false,
         });
         const shaft = new THREE.Mesh(shaftGeo, shaftMat);
@@ -2669,7 +2669,7 @@ export class TonnetzSceneV2 {
         const heldPCs = getHeldPCs();
         const activePCs = getActivePCs();
 
-        // Build activation field (may be empty in key mode — that's OK,
+        // Build activation field (may be empty in key mode; that's OK,
         // computeArrowLit falls back to heldPCs/activePCs)
         const activationField = new Map<number, number>();
         for (let pc = 0; pc < 12; pc++) {
@@ -2689,7 +2689,7 @@ export class TonnetzSceneV2 {
 
         const noteOnTimestamps = this.config.getNoteOnTimestamps?.() ?? new Map<number, number>();
         const resolvedMidi = this.config.getResolvedMidi?.() ?? null;
-        // A5 is a scale-level relationship — check both short-term and long-term fields
+        // A5 is a scale-level relationship: check both short-term and long-term fields
         const isActive = (pc: number) => heldPCs.has(pc) || activePCs.has(pc)
             || (shortTermField ? (shortTermField.get(pc) ?? 0) > LIT_THRESHOLD : false)
             || (activationField.size > 0 ? (activationField.get(pc) ?? 0) > LIT_THRESHOLD : false);
@@ -2745,7 +2745,7 @@ export class TonnetzSceneV2 {
             ad.coneMat.color.set(ARROW_COLOR_LIT);
             ad.coneMat.opacity = opacity;
 
-            // (Gold target highlight removed — arrows alone mark targets;
+            // (Gold target highlight removed; arrows alone mark targets;
             //  gold ring now applied to held notes in updateNodeActivations.)
         }
 
@@ -2879,7 +2879,7 @@ export class TonnetzSceneV2 {
                 this.axisGroup.add(new THREE.LineSegments(tickGeo, tickMat));
             }
 
-            // Label at positive end — offset perpendicular so it doesn't overlap nodes
+            // Label at positive end: offset perpendicular so it doesn't overlap nodes
             const labelSprite = this.createLabel(axis.label, 0.7);
             const labelPos = axis.dir.clone().multiplyScalar(axis.to + 0.4);
             labelPos.add(axis.tickDir.clone().multiplyScalar(-0.5));
@@ -2913,7 +2913,7 @@ export class TonnetzSceneV2 {
         this.controls.target.set(cx + panX, cy, cz);
 
         const maxExtent = Math.max(numCols * X_SPACING, numRows * Y_SPACING, 3 * this.zSpacing);
-        const dist = maxExtent * 0.5; // enharmonic viz: closer default framing (was 1.15) — zoom in more
+        const dist = maxExtent * 0.5; // enharmonic viz: closer default framing (was 1.15), zoom in more
         this.camera.position.set(cx + panX, cy - dist * 1.0, cz + dist * 0.45);
         this.camera.updateProjectionMatrix();
         this.controls.update();

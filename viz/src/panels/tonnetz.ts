@@ -1,9 +1,9 @@
 /**
- * 3D Tonnetz panel — the harmonic space the shipped speller reasons about, drawn as a lattice of
+ * 3D Tonnetz panel: the harmonic space the shipped speller reasons about, drawn as a lattice of
  * fifths (x), major/minor thirds (y) and accidental layers (z). Ported from the standalone tonnetz app
  * (`TonnetzSceneV2`, vendored under `viz/src/tonnetz3d/`), driven here purely by the enharmonic engine's
  * per-onset output: the resolved 7-letter surface becomes the lit scale, and the notes ringing at the
- * onset — spelled exactly as the library committed them — light their lattice nodes. So the Tonnetz is a
+ * onset (spelled exactly as the library committed them) light their lattice nodes. So the Tonnetz is a
  * DISPLAY of the speller's choices (every spelling still comes from `src/`), not a second speller.
  *
  * Unlike the SVG panels, a WebGL scene is expensive to build and must persist across steps, so this
@@ -20,7 +20,7 @@ import { extendedFifthsPos } from '../tonnetz3d/LatticeGeometry.js';
 import type { LetterName } from '../tonnetz3d/types.js';
 
 // Grid footprint: wide enough along the fifths chain to hold a key's neighbourhood, a few third-rows
-// deep so triads read as triangles. Kept modest — this is a debugger panel, not the full app's lattice.
+// deep so triads read as triangles. Kept modest: this is a debugger panel, not the full app's lattice.
 const COLS = 15;
 const ROWS = 5;
 
@@ -30,7 +30,7 @@ const DEFAULT_SCALE_SPEC: [LetterName, number][] = [
 ];
 const defaultScale = (): PitchClass[] => DEFAULT_SCALE_SPEC.map(([l, a]) => new PitchClass(l, a));
 
-// Triangle colouring — ported verbatim from the tonnetz app's getTriadColor so the hues match. Major and
+// Triangle colouring, ported verbatim from the tonnetz app's getTriadColor so the hues match. Major and
 // minor triads take a hue GRADIENT along the fifths chain (the triad's mean fifths-position within the
 // current scale range), which is the app's "hue offset" look; other qualities use fixed fallback colours.
 const MAJOR_HUE_LOW = 65, MAJOR_HUE_HIGH = 10;   // major gradient endpoints
@@ -56,7 +56,7 @@ function hslToHex(h: number, s: number, l: number): string {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-/** getTriadColor for the scene config — matches the tonnetz app. `scale` (the current surface) sets the
+/** getTriadColor for the scene config: matches the tonnetz app. `scale` (the current surface) sets the
  *  fifths range the major/minor gradient normalises against. */
 function triadColor(type: string, notes?: PitchClass[]): string {
     if (notes && notes.length === 3 && (type === 'major' || type === 'minor') && scale.length >= 7) {
@@ -75,15 +75,15 @@ function triadColor(type: string, notes?: PitchClass[]): string {
 
 // A lightweight stand-in for the tonnetz app's accumulator, enough to keep the harmony readable without
 // porting the real thing. Two decays feed `getNoteActivation(pc)`:
-//   • SCALE FLOOR — the 7 surface pitch-classes idle at a baseline so their triangles always tile the
+//   • SCALE FLOOR: the 7 surface pitch-classes idle at a baseline so their triangles always tile the
 //     lattice (the "scale shape"), instead of flashing only when a full triad happens to sound.
-//   • CHORD DECAY — a note that stops sounding fades over CHORD_DECAY_TAU seconds rather than snapping
+//   • CHORD DECAY: a note that stops sounding fades over CHORD_DECAY_TAU seconds rather than snapping
 //     off, so a struck chord lingers as a glowing triad (the app's "chord decay").
 const SCALE_FLOOR = 0.3;       // idle activation of an in-scale pitch-class (0..1)
 const CHORD_DECAY_TAU = 1.8;   // seconds; larger = chords linger longer after release
 // Diatonic-STEP lateral inhibition on the RESONANCE channel (fill brightness only, not node activation).
-// The tonnetz app's accumulator suppresses a note by a stronger neighbour a scale STEP away — adjacent
-// LETTERS, so A–B and B–C both count (a step, whole or half) — not a chromatic semitone. So a lingering/
+// The tonnetz app's accumulator suppresses a note by a stronger neighbour a scale STEP away: adjacent
+// LETTERS, so A–B and B–C both count (a step, whole or half), not a chromatic semitone. So a lingering/
 // floor note can't team up with a strong onset a step away to light spurious triangles. We mimic just that:
 // res[pc] loses STEP_INHIBIT × (how much its loudest step-neighbour outweighs it). A note as loud as its
 // step-neighbours is untouched; a faint one beside a loud one is pushed toward zero and its triads dim.
@@ -96,7 +96,7 @@ let lastPcSig = '';                     // MIDI-pc set of the surface; a change 
 let scalePCs = new Set<number>();       // pitch-classes of the current surface (for the scale floor)
 let soundingPCs = new Set<number>();    // pitch-classes ringing at the current onset
 const level = new Float32Array(12);     // decaying per-PC activation returned by getNoteActivation
-const res = new Float32Array(12);       // level after semitone inhibition — drives triad fill brightness
+const res = new Float32Array(12);       // level after semitone inhibition: drives triad fill brightness
 let lastTick = 0;
 
 let scene: TonnetzSceneV2 | null = null;
@@ -120,7 +120,7 @@ export function initTonnetz(container: HTMLElement): void {
         // Resonance drives the triad FILL brightness: a triangle interpolates from a dim floor toward full
         // opacity by the (squared) min resonance of its three vertices. Feeding the same decaying `level`
         // makes a full triad flare bright the instant all three notes sound, then fade over CHORD_DECAY_TAU
-        // as the chord decays — while a diatonic triad whose notes only idle at the scale floor stays faint.
+        // as the chord decays, while a diatonic triad whose notes only idle at the scale floor stays faint.
         getResonanceActivation: pc => res[pc] ?? 0,
         freeMode: () => false,
         cols: () => COLS,
@@ -129,23 +129,23 @@ export function initTonnetz(container: HTMLElement): void {
     scene = new TonnetzSceneV2(container, config);
     scene.setVisible(true);
     // Pull the camera back from the scene's default framing so the whole lattice neighbourhood is in view
-    // on load — the panel is smaller than the standalone app's full-window canvas, so the default sits too
+    // on load: the panel is smaller than the standalone app's full-window canvas, so the default sits too
     // close. The user can still orbit/scroll to taste; this only sets the initial distance.
     // Pull further back on a phone-sized panel so the lattice neighbourhood fits the smaller viewport.
     scene.setCameraDistance(window.matchMedia('(max-width: 720px)').matches ? 2.7 : 1.7);
     // The scene's default z-gap (0.1) is tiny next to the in-plane grid (~1.4), so the accidental layers
-    // stack almost flat. Spread them to distinct depths — 0.8 matches the tonnetz app's default.
+    // stack almost flat. Spread them to distinct depths: 0.8 matches the tonnetz app's default.
     scene.setZSpacing(0.8);
     // Match the tonnetz app's look: bent (tilted, cross-layer chromatic) triads render with the hatched
     // "chickenwire" mesh texture instead of a solid fill, while flat diatonic triads stay solid. This is
     // the app's default (showTrianglePattern + meshTiltedNonPerfect on, meshAll off), so a chromatic chord
-    // reads as a mesh triangle bridging accidental layers — the depth cue, no ghost nodes needed.
+    // reads as a mesh triangle bridging accidental layers: the depth cue, no ghost nodes needed.
     scene.setTrianglePattern(true);
     scene.setMeshTiltedNonPerfect(true);
-    // Hide the leading-tone / semitone resolution arrows — that overlay is driven by the app's
+    // Hide the leading-tone / semitone resolution arrows: that overlay is driven by the app's
     // accumulator (note-on timestamps + resolved-midi logic) we don't feed, so it isn't meaningful here.
     scene.setShowArrows(false);
-    // The vendored scene hardcodes a debug (x, y, z) label under every node; hide them — the note names
+    // The vendored scene hardcodes a debug (x, y, z) label under every node; hide them: the note names
     // are the labels that matter here.
     scene.setShowCoords(false);
     lastScaleSig = scaleSig(scale);
@@ -184,8 +184,8 @@ export function initTonnetz(container: HTMLElement): void {
 /** Playback: retarget the lit nodes from a captured onset snapshot. */
 export function renderTonnetz(snap: Snapshot | null): void {
     if (!scene) return;
-    // The resolved 7-letter surface (streaming rungs) is the harmonic frame; batch two-pass has none, so
-    // fall back to C-major naturals — the notes still light at their committed spellings on that grid.
+    // The resolved 7-letter surface (streaming modes) is the harmonic frame; batch two-pass has none, so
+    // fall back to C-major naturals: the notes still light at their committed spellings on that grid.
     const surface = snap?.resolvedScale && snap.resolvedScale.length === 7
         ? snap.resolvedScale.map(p => new PitchClass(p.step as LetterName, p.alter))
         : defaultScale();
@@ -216,7 +216,7 @@ function applyScene(surface: PitchClass[], sounding: Set<number>): void {
     // Choosing the scene update, mirroring the standalone app's syncScene3D (spellingOnly vs full rebuild):
     //   • surface PC-SET changed  → a genuinely new chord. The triangle SET must be recomputed, because the
     //     cross-layer "is this an exact triad?" cull (TonnetzSceneV2 ~line 1844) depends on the surface's
-    //     spellings — e.g. Death of Åse's aug6 needs E# in the surface for its 3-layer G–B–E# triangle to
+    //     spellings, e.g. Death of Åse's aug6 needs E# in the surface for its 3-layer G–B–E# triangle to
     //     survive the cull. rebuild() re-runs that cull; clearSmoothing() then forces a triangle-fill
     //     refresh (a paused step has no note stream to make the new triangles "dirty" on its own).
     //   • only the SPELLING changed (same pcs, e.g. Gb→F#) → topology is unchanged, so the fast path is safe.
@@ -230,7 +230,7 @@ function applyScene(surface: PitchClass[], sounding: Set<number>): void {
     else if (scaleChanged) scene.updateSpellings();
 }
 
-/** Tear down the WebGL context and stop the loop — for completeness; the panel currently lives for the
+/** Tear down the WebGL context and stop the loop, for completeness; the panel currently lives for the
  *  whole session, but this keeps the port from leaking a GL context if it is ever unmounted. */
 export function disposeTonnetz(): void {
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
