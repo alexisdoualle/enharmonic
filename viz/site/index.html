@@ -67,13 +67,16 @@
   .note { font-family: 'Newsreader', Georgia, serif; }
   .glyph { font-variant-ligatures: none; }
   mono, .mono, code { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; }
-  /* stat groups: two corpora + footprint, each a captioned column of tiles */
-  .stats { display: flex; flex-wrap: wrap; gap: 1.6rem 3rem; margin: 1.4rem 0 0; padding: 1.2rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .statgroup { display: flex; flex-direction: column; gap: .7rem; }
-  .statgroup .cap { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.04em; text-transform: uppercase; }
-  .statgroup .row { display: flex; flex-wrap: wrap; gap: 1.2rem 2.4rem; }
-  .stat .n { font-family: 'IBM Plex Mono', monospace; font-size: 1.5rem; font-weight: 500; letter-spacing: -0.02em; }
-  .stat .l { display: block; color: var(--muted); font-size: 0.85rem; letter-spacing: 0.04em; text-transform: uppercase; margin-top: .15rem; }
+  /* accuracy table: mode down, corpus across, exact vs coherent */
+  .scores { border-collapse: collapse; margin: 1.4rem 0 .8rem; font-size: .95rem; }
+  .scores th, .scores td { padding: .5rem .95rem; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .scores th:first-child, .scores td:first-child { text-align: left; padding-left: 0; }
+  .scores thead th { color: var(--muted); font-weight: 500; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; }
+  .scores thead tr:first-child th { border-bottom: none; padding-bottom: .12rem; }
+  .scores tbody td { font-family: 'IBM Plex Mono', monospace; }
+  .scores tbody td:first-child { font-family: inherit; }
+  .scores .grp { border-left: 1px solid var(--line); }
+  @media (max-width: 430px) { .scores { font-size: .85rem; } .scores th, .scores td { padding: .45rem .6rem; } }
   /* buttons */
   .cta { display: flex; flex-wrap: wrap; gap: .8rem; margin: 2.4rem 0 0; }
   .btn {
@@ -123,34 +126,31 @@
       resolves. An offline <strong>two-pass</strong> option reads the whole piece forward and backward,
       then reconciles the two to repair the modulation boundaries the streaming pass spells late.</p>
 
-      <div class="stats" aria-label="accuracy on two corpora: Meredith and the curated corpus">
-        <div class="statgroup">
-          <span class="cap">Standard benchmark · Meredith, 195,972 notes</span>
-          <div class="row">
-            <div class="stat"><span class="n">99.52%</span><span class="l">real-time, exact</span></div>
-            <div class="stat"><span class="n">99.86%</span><span class="l">two-pass, exact</span></div>
-          </div>
-        </div>
-        <div class="statgroup">
-          <span class="cap">Harder curated corpus · 59 pieces</span>
-          <div class="row">
-            <div class="stat"><span class="n">94.73%</span><span class="l">two-pass, exact</span></div>
-            <div class="stat"><span class="n">98.66%</span><span class="l">two-pass, coherent</span></div>
-          </div>
-        </div>
-        <div class="statgroup">
-          <span class="cap">Footprint</span>
-          <div class="row">
-            <div class="stat"><span class="n">0</span><span class="l">runtime dependencies</span></div>
-          </div>
-        </div>
-      </div>
-      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact means a
-      composer-spelling match. Meredith's held-out 8×25000 corpus (195,972 notes) is the standard
-      pitch-spelling benchmark; here the library is level with the best deterministic and neural spellers.
-      The 59-piece curated corpus is harder and less overfit: it stresses the side (comma) choice Meredith
-      mostly avoids. Coherent also counts a whole-passage flip to the other side of the spiral as correct,
-      since it is the same music transposed, not a wrong note.</p>
+      <table class="scores" aria-label="accuracy on the Meredith and curated corpora">
+        <thead>
+          <tr>
+            <th rowspan="2">Mode</th>
+            <th>Meredith</th>
+            <th class="grp" colspan="2">Curated corpus, harder</th>
+          </tr>
+          <tr>
+            <th>exact</th>
+            <th class="grp">exact</th>
+            <th>coherent</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Real-time</td><td>99.52%</td><td class="grp">94.49%</td><td>98.06%</td></tr>
+          <tr><td>Two-pass</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
+        </tbody>
+      </table>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact is a
+      composer-spelling match. On Meredith's held-out corpus (195,972 notes), the standard pitch-spelling
+      benchmark, the library is level with the best deterministic and neural spellers. The 59-piece curated
+      corpus is harder and less overfit: it stresses the side (comma) choice Meredith mostly avoids. There
+      the exact rate falls, but coherent stays near 99%. Coherent counts a whole-passage flip to the other
+      side of the spiral as correct, since it is the same music transposed, not a wrong note. Almost every
+      miss is a flip, not an error.</p>
 
       <div class="cta">
         <a class="btn primary" href="viz/">Open the visualiser →</a>

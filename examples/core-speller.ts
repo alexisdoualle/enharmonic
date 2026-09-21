@@ -61,11 +61,20 @@ function spellingAt(n: number): PitchClass {
 }
 
 /**
- * The 35 spellings bucketed by pitch class. Walk the line of fifths from F♭♭(-15) to
- * B♯♯(+19) and wrap it onto 12 pitch classes: position `n` sounds pitch class
- * 7n mod 12, so two or three spellings fall on each class. Sort each pile plainest
- * first (smallest accidental, sharp before flat on a tie) so noteOn's argmax reaches
- * the natural or nearest accidental first.
+ * The 35 spellings bucketed by pitch class. Cut the line of fifths (F♭♭ at -15 to
+ * B♯♯ at +19) into rows of 12 and stack: a fifth adds 7 to the pitch class (mod 12),
+ * so spellings 12 fifths apart share a class and align in a column.
+ *
+ *   F♭♭ C♭♭ G♭♭ D♭♭ A♭♭ E♭♭ B♭♭ F♭  C♭  G♭  D♭  A♭    more flat
+ *   E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯    naturals in the middle
+ *   D♯  A♯  E♯  B♯  F♯♯ C♯♯ G♯♯ D♯♯ A♯♯ E♯♯ B♯♯       more sharp
+ *   3   10  5   0   7   2   9   4   11  6   1   8    pitch class (ordered by fifths)
+ *
+ * Each column is one class holding two or three spellings (pc 8 has only A♭, G♯).
+ * Reading by letter, each accidental step moves the class by one (E♭ 3, E 4, E♯ 5).
+ * buildCandidates fills the columns, then sorts each plainest first (smallest
+ * accidental, sharp before flat on a tie) so noteOn's argmax reaches the natural or
+ * nearest accidental first.
  */
 function buildCandidates(): PitchClass[][] {
     const byPc: PitchClass[][] = Array.from({ length: 12 }, () => []);
