@@ -22,9 +22,9 @@ s.noteOn(67, { t: 0 });
 console.log(s.getSpelling(64)); // { step: 'E', alter: 0, octave: 4 }
 s.noteOff(60); s.noteOff(64); s.noteOff(67);
 
-// Near-real-time — feed resolveDir from a small forward buffer
+// Near-real-time: feed resolveDir from a small forward buffer
 const nrt = new Speller({ lookAhead: true });
-nrt.noteOn(61, { t: 0, resolveDir: 1 }); // e.g. resolves up → prefer E♯ over F
+nrt.noteOn(61, { t: 0, resolveDir: 1 }); // e.g. resolves up → prefer C♯ over D♭
 
 // Offline ceiling (whole piece in hand)
 const spelled = spellTwoPass([
@@ -62,10 +62,11 @@ time-windowed design and are kept only so existing callers compile.
 ## Status
 
 Extracted from a larger research codebase; the algorithm's development history and the full
-benchmark corpora live in a separate research repository. The shipped library is the two spellers above.
+benchmark corpora live in a separate research repository. The shipped library is the speller above,
+with its look-ahead setting and offline two-pass function.
 
-Held-out Meredith (216 movements, 195,972 notes), exact composer-spelling match — the standard
-pitch-spelling benchmark, where it is level with the best deterministic and neural spellers
+Held-out Meredith (216 movements, 195,972 notes), the standard pitch-spelling benchmark: exact
+composer-spelling match, level with the best deterministic and neural spellers
 (ps13, Temperley, Chew & Chen, PKSpell, scored on the same notes in `test/eval/meredith-baselines.json`):
 
 | Mode | clean | noisy |
