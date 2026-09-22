@@ -3,12 +3,16 @@
   --accent: #6ea8fe; --correct: #57caa0; --flipped: #d8b35a; --wrong: #e06c75;
   --coll: #2a3550; --tonic: #3a5bd0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* Base UI zoom: the desktop debugger renders at 80% so the whole layout breathes (this was the density
+     that read well at 80% browser zoom). Browser zoom still stacks on top. The phone layout resets to 1:1. */
+  --ui-scale: 0.8;
 }
 * { box-sizing: border-box; }
-html { height: 100%; }
+html { height: 100%; zoom: var(--ui-scale); }
 /* The app fills the viewport: fixed toolbars top and bottom, the music and panel regions splitting the
-   space between them and scrolling inside their own boxes, so the page itself never scrolls. */
-body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+   space between them and scrolling inside their own boxes, so the page itself never scrolls. The height is
+   divided by the zoom so the scaled body still fills exactly 100vh (0.8 * 100vh/0.8 = 100vh). */
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; height: calc(100vh / var(--ui-scale)); display: flex; flex-direction: column; overflow: hidden; }
 
 #toolbar {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -76,6 +80,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 
 /* --- Phone layout: the page scrolls, and the side panels switch one-at-a-time from the tab bar --- */
 @media (max-width: 720px) {
+  html { zoom: normal; }   /* the phone layout is touch-sized already; render it 1:1, not scaled down */
   body { height: auto; overflow-y: auto; }
   #toolbar, #transport { flex-wrap: wrap; row-gap: 8px; }
   #music { flex: none; }
