@@ -1,19 +1,14 @@
 /**
  * RealtimeSpeller: the demo real-time speller, in one file, ~210 loc.
  *
- * CoreSpeller (core-speller.ts) plus four mechanisms; same style, zero imports.
+ * CoreSpeller (core-speller.ts) plus three mechanisms; same style, zero imports.
  * On a held-out corpus of ~196k notes (Meredith 8×25000, clean): 99.53% exact, up
  * from Core's 92.94%.
  *
- * Core's two pillars (7-letter limit + interval scoring) solve COHERENCE but drift
- * on the SIDE. The four additions fix both:
+ * Core's three principles (7-letter limit + interval scoring + recency guard) solve
+ * COHERENCE but drift on the SIDE. The three additions fix both:
  *
- *   1. RECENCY GUARD (coherence). Core scores a candidate against the OTHER letters,
- *      so it misses a same-letter clash (A♭ right after A♮). The guard penalises a
- *      candidate whose letter was committed at a different accidental within K onsets.
- *      Bounded on purpose: it blocks flicker, not real modulation.
- *
- *   2. DIATONIC FRAME (side). The 7 slots ARE a diatonic collection, not the drifting
+ *   1. DIATONIC FRAME (side). The 7 slots ARE a diatonic collection, not the drifting
  *      surface: every onset it is re-chosen by COVERAGE over the recent RAW pitch classes
  *      (recency-weighted, half-life H), so it tracks the key without lag or self-poison.
  *      The collection is placed on the spiral of fifths at the comma nearest the held frame
@@ -23,13 +18,13 @@
  *      moves. A soft leash also penalises a spelling stranded more than sideRadius fifths
  *      from the frame centre. This replaces the old mean-fold + median leash with one frame.
  *
- *   3. VERTICAL GUARD (coherence). Inside a PERFECT triad (a P5 is sounding), penalise a
+ *   2. VERTICAL GUARD (coherence). Inside a PERFECT triad (a P5 is sounding), penalise a
  *      candidate that forms a misspelled third — a diminished 4th (should be a major 3rd,
  *      C–F♭ ⇒ C–E) or an augmented 2nd (should be a minor 3rd, C–D♯ ⇒ C–E♭). This breaks
  *      the F♯/G♭ side tie by chord consonance where a P5 is co-sounding. A dim7 / aug6 has
  *      no P5, so it is left alone.
  *
- *   4. CHROMATIC SHARP-LEAN (side). For a note OUTSIDE the frame collection (a true
+ *   3. CHROMATIC SHARP-LEAN (side). For a note OUTSIDE the frame collection (a true
  *      chromatic) with no co-sounding P5 for the vertical guard, reward the SHARPER of its
  *      two single-accidental spellings (F♯ over G♭, E♯ over F, B over C♭): the leading-tone
  *      / raised-degree asymmetry (a chromatic is ~3.4× more often a raise). A line-of-fifths
