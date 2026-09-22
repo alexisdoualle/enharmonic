@@ -526,14 +526,19 @@ function wire() {
     // The staff scales to fit its panel width, so re-render (debounced) when the window resizes.
     let resizeT = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = window.setTimeout(render, 120); });
+    // Transport keys are GLOBAL: space plays/pauses and the arrows move the playhead no matter which
+    // control was last clicked — a focused button, checkbox or <select> must not swallow them (clicking
+    // "look-ahead" then pressing space should play, not re-toggle the box). Only a genuine text field
+    // (none in this app today) keeps a key as literal input.
+    const isTextField = (el: HTMLElement | null): boolean => !!el && (el.isContentEditable
+        || el.tagName === 'TEXTAREA'
+        || (el.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/i.test((el as HTMLInputElement).type)));
     window.addEventListener('keydown', ev => {
-        const tag = (ev.target as HTMLElement)?.tagName ?? '';
+        const target = ev.target as HTMLElement | null;
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
-        // Spacebar always plays/pauses, even while a <select> (e.g. the fixture picker) holds
-        // focus after a change, except in real text fields where a space is literal input.
-        if (ev.key === ' ' && !/INPUT|TEXTAREA/.test(tag)) { ev.preventDefault(); togglePlay(); return; }
-        if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
+        if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
+        if (ev.key === ' ') { ev.preventDefault(); togglePlay(); return; }
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
