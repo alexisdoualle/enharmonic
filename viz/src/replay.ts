@@ -36,10 +36,10 @@ import { intervalScore } from '../../src/scoring.js';
 
 export type Mode = 'core' | 'rt' | 'la' | 'tp' | 'control';
 
-/** The CoreSpeller's structural shape. CoreSpeller's 1-arg noteOn is assignable to this
- *  2-arg signature (the extra onset time is ignored). */
+/** The CoreSpeller's structural shape. `noteOn` takes the onset time via `ctx.t`, which groups
+ *  co-struck notes into one onset for the recency guard's window. */
 interface CoreLike {
-    noteOn(midi: number, t?: number): void;
+    noteOn(midi: number, ctx?: { t?: number }): void;
     noteOff(midi: number): void;
     getSpelling(midi: number): Pitch | null;
     getResolvedScale(): PitchClass[];
@@ -303,7 +303,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             committed = tpOut![idx] ?? null;
         } else if (isCore) {
             const before = core!.getResolvedScale();               // the scale the candidates are scored against
-            core!.noteOn(e.midi!, e.t_ms);
+            core!.noteOn(e.midi!, { t: e.t_ms });
             committed = core!.getSpelling(e.midi!);
             resolvedScale = core!.getResolvedScale();
             frame = resolvedScale.map(p => ({ ...p }));
