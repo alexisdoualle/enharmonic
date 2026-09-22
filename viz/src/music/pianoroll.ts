@@ -149,10 +149,13 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     playhead.setAttribute('stroke', '#6ea8fe'); playhead.setAttribute('stroke-width', '1.5');   // literal: var() is invalid in an SVG presentation attribute
     svg.appendChild(playhead);
 
-    // click background → seek to the onset nearest the clicked time
+    // click background → seek to the onset nearest the clicked time. Map the click through the svg's
+    // rendered rect (rect.width is the on-screen width, `width` its internal px), so the position stays
+    // correct under the page zoom; `e.offsetX` is skewed by CSS `zoom`.
     svg.addEventListener('click', e => {
-        const t = (e.offsetX - PAD) / pxPerMs;
-        onSeek(nearestNoteAtTime(replay, t));
+        const rect = svg.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (width / rect.width);
+        onSeek(nearestNoteAtTime(replay, (x - PAD) / pxPerMs));
     });
 
     host.appendChild(svg);
