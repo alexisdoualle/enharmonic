@@ -1,7 +1,7 @@
 /**
  * Standalone ↔ shipped-model parity guard.
  *
- * `examples/core-speller.ts` is the self-contained reference copy: the entire two-pillar speller in one
+ * `examples/core-speller.ts` is the self-contained reference copy: the entire three-principle speller in one
  * file (zero imports, ~100 effective lines). It is a DERIVED copy: `src/core.ts` is the
  * source of truth (the bench drives it as Core and shares its primitives with the rest of the speller). This test
  * pins the copy to the original: for every curated fixture the standalone must produce byte-identical
@@ -20,7 +20,7 @@ function driveStandalone(events: BatchEv[]): (Pitch | null)[] {
     const pending = new Map<number, number[]>();
     for (const e of events) {
         if (e.type === 'on') {
-            s.noteOn(e.midi);
+            s.noteOn(e.midi, e.t);   // pass `t` so onset grouping matches the shipped CoreSpeller's guard
             const idx = out.length; out.push(null);
             (pending.get(e.midi) ?? pending.set(e.midi, []).get(e.midi)!).push(idx);
         } else {

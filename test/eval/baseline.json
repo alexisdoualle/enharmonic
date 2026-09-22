@@ -27,9 +27,9 @@
   },
   "mozart_k545": {
     "core": {
-      "correct": 1274,
+      "correct": 1279,
       "flipped": 0,
-      "wrong": 8,
+      "wrong": 3,
       "total": 1282
     },
     "rt": {
@@ -53,9 +53,9 @@
   },
   "chopin_prelude_op28_no4": {
     "core": {
-      "correct": 552,
+      "correct": 574,
       "flipped": 0,
-      "wrong": 52,
+      "wrong": 30,
       "total": 604
     },
     "rt": {
@@ -80,8 +80,8 @@
   "chopin_prelude_op28_no15": {
     "core": {
       "correct": 934,
-      "flipped": 612,
-      "wrong": 20,
+      "flipped": 614,
+      "wrong": 18,
       "total": 1566
     },
     "rt": {
@@ -105,9 +105,9 @@
   },
   "grieg_death_of_ase": {
     "core": {
-      "correct": 588,
+      "correct": 592,
       "flipped": 0,
-      "wrong": 18,
+      "wrong": 14,
       "total": 606
     },
     "rt": {
@@ -131,9 +131,9 @@
   },
   "bach_jesu_meine_freude": {
     "core": {
-      "correct": 7370,
+      "correct": 7366,
       "flipped": 0,
-      "wrong": 4,
+      "wrong": 8,
       "total": 7374
     },
     "rt": {
@@ -158,8 +158,8 @@
   "debussy_clair_de_lune": {
     "core": {
       "correct": 182,
-      "flipped": 1416,
-      "wrong": 25,
+      "flipped": 1421,
+      "wrong": 20,
       "total": 1623
     },
     "rt": {
