@@ -13,6 +13,7 @@ import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
+import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -242,6 +243,7 @@ function render() {
     for (const [id, comma] of [['side-sharp', 1], ['side-flat', -1], ['side-auto', 0]] as const) {
         $(id).classList.toggle('active', active?.comma === comma);
     }
+    mountInfoButtons();   // the panels wipe their innerHTML on render, so re-add each panel's help `i`
 }
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked; click to seek. */
@@ -534,6 +536,7 @@ function wire() {
         || el.tagName === 'TEXTAREA'
         || (el.tagName === 'INPUT' && /^(text|search|email|url|tel|password|number)$/i.test((el as HTMLInputElement).type)));
     window.addEventListener('keydown', ev => {
+        if (isHelpOpen()) return;   // the help overlay owns the keyboard while it is up (Esc closes it)
         const target = ev.target as HTMLElement | null;
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
@@ -582,6 +585,7 @@ async function boot() {
     applyStaffVisible();
     applyPanelVisibility();
     render();
+    initHelp();   // overlay + toolbar button + panel `i`s; opens itself on the first visit
 }
 
 boot().catch(err => { $('status').textContent = 'ERROR: ' + err.message; console.error(err); });

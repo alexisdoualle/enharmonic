@@ -252,3 +252,59 @@ footer code, footer b { color: var(--ink); }
 }
 .toast.show { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* --- Help / tutorial -------------------------------------------------------------------------- */
+/* The `? help` button in the toolbar, styled like the other toolbar controls. */
+.help-open { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 9px; font-size: 12px; cursor: pointer; }
+.help-open:hover { border-color: var(--accent); color: var(--accent); }
+
+/* The small `i` pinned to a panel's top-right corner. Panels are made position:relative in JS. */
+.help-i { position: absolute; top: 6px; right: 6px; z-index: 5; width: 18px; height: 18px; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--dim);
+  font-size: 11px; font-style: italic; font-weight: 700; line-height: 1; cursor: pointer; opacity: .65; }
+.help-i:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+
+/* The overlay: a dim backdrop and a centred dialog with a page list on the left and the page on the right. */
+#help-overlay { position: fixed; inset: 0; z-index: 1000; }
+#help-overlay[hidden] { display: none; }
+.help-backdrop { position: absolute; inset: 0; background: rgba(6, 8, 12, .66); }
+.help-dialog { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(880px, 92vw); height: min(660px, 88vh); display: grid; grid-template-columns: 180px 1fr;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+.help-nav { border-right: 1px solid var(--line); padding: 12px 8px; overflow-y: auto; background: var(--bg); }
+.help-nav button { display: block; width: 100%; text-align: left; background: transparent; color: var(--dim);
+  border: 0; border-radius: 6px; padding: 7px 10px; font-size: 13px; cursor: pointer; }
+.help-nav button:hover { color: var(--ink); background: var(--panel); }
+.help-nav button.active { color: var(--ink); background: var(--tonic); }
+.help-content { padding: 22px 26px; overflow-y: auto; color: var(--ink); line-height: 1.55; font-size: 13.5px; }
+.help-content h2 { margin: 0 0 14px; font-size: 19px; letter-spacing: .2px; }
+.help-content p { margin: 0 0 11px; }
+.help-content ul, .help-content ol { margin: 0 0 12px; padding-left: 20px; }
+.help-content li { margin-bottom: 6px; }
+.help-content code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+  padding: 1px 5px; font-size: 12px; }
+.help-content b { color: #fff; }
+.help-eq { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 17px; text-align: center;
+  color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px; margin: 4px 0 14px; letter-spacing: 1px; }
+/* Inline tier chips reused from the legend. */
+.help-content .k { font-weight: 700; padding: 0 4px; border-radius: 3px; }
+.help-content .k.correct { color: var(--correct); }
+.help-content .k.flipped { color: var(--flipped); }
+.help-content .k.wrong { color: var(--wrong); }
+.help-close { position: absolute; top: 8px; right: 10px; background: transparent; border: 0; color: var(--dim);
+  font-size: 26px; line-height: 1; cursor: pointer; padding: 2px 6px; }
+.help-close:hover { color: var(--ink); }
+@media (max-width: 720px) {
+  .help-dialog { grid-template-columns: 1fr; height: 90vh; width: 94vw; }
+  .help-nav { display: flex; gap: 4px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .help-nav button { white-space: nowrap; width: auto; }
+}
+/* The transport `i` sits inline at the end of the control row; override the #transport button sizing. */
+#transport button.help-i { position: static; width: 18px; height: 18px; padding: 0; font-size: 11px;
+  margin-left: 2px; }
+.help-content .help-quote { margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid var(--accent);
+  background: var(--bg); border-radius: 0 6px 6px 0; }
+.help-content a, .help-content a code { color: var(--accent); text-decoration: underline; }
