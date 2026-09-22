@@ -2,7 +2,7 @@
  * SpellingEngine: the shipped speller. One engine; the latency modes are presets over it
  * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). No key detection anywhere.
  *
- * Two pillars do the base work:
+ * Two principles do the base work:
  *   1. 7-LETTER LIMIT. A resolved scale holds one spelling per letter A–G. A note is spelled by
  *      choosing which letter to claim; that overwrites the letter's slot.
  *   2. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the rest of the
@@ -39,7 +39,7 @@ const lofOf = lineOfFifths;
  *  note one turn around the spiral (C↔B♯, D♭↔C♯, …). Folding a comma is the fold's one and only move. */
 const ENHARMONIC_COMMA = 12;
 
-// ── Interval scoring (pillar 2) ────────────────────────────────────────────────
+// ── Interval scoring (principle 2) ────────────────────────────────────────────────
 
 /**
  * Consonance of the interval between two spellings, read straight off their line-of-fifths distance:
@@ -178,6 +178,41 @@ export interface EngineOptions {
      *  only actually fold if the target comma-side spells the recent raw pitch classes no dearer than the
      *  current side. Clamp picks WHEN, economy picks WHETHER. Off by default. */
     foldEconomyGate?: boolean;
+    /** FRAME MODE (default 'mean'). 'mean' = the shipped drift-and-fold (the frame is the committed slots'
+     *  mean, corrected past a deadzone edge). 'diatonic' = a principled explicit frame: every onset the
+     *  collection is chosen by COVERAGE over the recent RAW pitch classes (anti-poison, mode-blind), placed
+     *  on the spiral at the comma nearest the held frame (continuity + range fold), and held by hysteresis;
+     *  the 7 slots ARE that collection, so a chromatic is a raised/lowered degree of a slot, never drift.
+     *  Replaces the mean AND the committed anchor with one moving diatonic frame. No functional/mode logic. */
+    frameMode?: 'mean' | 'diatonic';
+    /** 'diatonic' frame: recency half-life (onsets) of the raw-pc coverage window. Default 64. */
+    frameHalfLife?: number;
+    /** 'diatonic' frame: hysteresis — hold the current collection unless a rival's coverage beats it by more
+     *  than this (in decayed pc weight). Default 1. */
+    frameMargin?: number;
+    /** 'diatonic' frame: KEEP-ALIVE. A committed chromatic (a spelling that differs from its collection slot,
+     *  e.g. a raised leading tone A♯ over a collection whose A-slot is A♮) stays in its slot on the surface
+     *  until the collection MOVES (which pulls it back) or a different accidental of that letter is committed.
+     *  Without it every onset re-derives the pure collection, so a recurring chromatic re-flattens to the
+     *  nearest rep (A♯→B♭), the frame's biggest coherence loss vs the mean's drift. Default true. */
+    frameKeepAlive?: boolean;
+    /** 'diatonic' frame: how the spiral places the collection's SIDE (comma). 'continuity' (default) = the
+     *  comma nearest the held frame; 'drift' = nearest the recent committed notes' median LoF (the notated
+     *  side). A/B lever; continuity is the clean default. */
+    frameSide?: 'continuity' | 'drift';
+    /** 'diatonic' frame: raw-pc coverage window in onsets (the memory length that defines the collection).
+     *  Too short churns the collection on dense music (Meredith side-thrash); this is the frame's one real
+     *  tuning, the equivalent of the mean fold's. Default 128. */
+    frameWindow?: number;
+    /** CHROMATIC SHARP-LEAN: for a note whose pitch class is OUTSIDE the frame collection (a true
+     *  chromatic), reward the SHARPER of its two single-accidental enharmonic spellings (F♯ over G♭,
+     *  E♯ over F, B over C♭) by this many points. The leading-tone / raised-degree asymmetry — a chromatic
+     *  is ~3.4× more often a raise than a lowering — so the ambiguous melodic/isolated chromatic (no
+     *  co-sounding P5 for the vertical guard to break the F♯/G♭ tie) leans to the raise. A LoF-DIRECTION
+     *  preference (higher LoF), NOT accidental economy: F♯/G♭ have equal accidental count and it still
+     *  picks F♯. Gated to out-of-collection pcs, so a diatonic flat (D♭ in D♭ major) is never touched.
+     *  Risk: worsens a chromatic already side-locked sharp (D♭→C♯). 0 = off. */
+    chromaticSharpLean?: number;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard + spiral-CLAMP fold + diatonic-anchor leash. The fold
@@ -185,8 +220,15 @@ export interface EngineOptions {
  *  drag the side: Meredith clean wrong 922→909 (exact unchanged), lab exact +0.41. */
 export const RT_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 3,
-    fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8, foldSlotRecency: 32,
+    fold: 'clamp', foldCenter: 3, foldRadius: 7,
     sideWeight: 1, sideRadius: 6, anchorWindow: 32,
+    // The principled diatonic frame: the 7 slots are the coverage collection (recency-weighted raw pcs),
+    // placed on the spiral (continuity + range fold) and held by hysteresis, with keep-alive for chromatics.
+    // Replaces the mean drift-and-fold. verticalWeight breaks the F♯/G♭ side ties by chord consonance.
+    // chromaticSharpLean handles the melodic/isolated leading tones the vertical guard can't (no co-sounding
+    // P5): a chromatic leans to its raise. Meredith clean wrong 961→823, noisy 1017→817, fixtures ~neutral.
+    // NOT in LA: look-ahead already resolves these by direction, so the lean fights it (clean 547→578).
+    frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1,
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
@@ -203,6 +245,7 @@ export const LA_PRESET: EngineOptions = {
     // handoffs/HANDOFF_leading_tone_vs_chromatic.md.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
+    frameMode: 'diatonic',
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
@@ -217,12 +260,15 @@ export const TP_PASS_PRESET: EngineOptions = {
     // the clamp: the two-pass's own reconciliation is the better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
+    // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
+    // it is tuned to that fold — the diatonic frame breaks the reconciliation (exact 96.8->87.8). The
+    // streaming tiers (rt/la) use the diatonic frame; the offline tier keeps its own proven mechanism.
 };
 
 // ── Decision trace (introspection only) ────────────────────────────────────────
 
 /** One candidate's scoring breakdown for a note (introspection / visualiser only). The argmax is
- *  `base + guardDelta + laDelta + daDelta + vertDelta + sideDelta`. */
+ *  `base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta`. */
 export interface DecisionCandidate {
     readonly c: PitchClass;
     readonly base: number;
@@ -231,6 +277,7 @@ export interface DecisionCandidate {
     readonly daDelta: number;
     readonly vertDelta: number;
     readonly sideDelta: number;
+    readonly leanDelta: number;
 }
 /** The most recent note's full scoring trace (introspection / visualiser only). */
 export interface Decision {
@@ -263,6 +310,15 @@ export class SpellingEngine {
     private readonly foldSlotRecency: number;
     private readonly foldRepairScale: boolean;
     private readonly foldEconomyGate: boolean;
+    private readonly frameMode: 'mean' | 'diatonic';
+    private readonly frameHalfLife: number;
+    private readonly frameMargin: number;
+    private readonly frameKeepAlive: boolean;
+    private readonly frameSide: 'continuity' | 'drift';
+    private readonly frameWindow: number;
+    private readonly chromaticSharpLean: number;
+    /** 'diatonic' keep-alive: letters currently holding a committed chromatic alteration over the collection. */
+    private kept = new Map<Letter, PitchClass>();
 
     /** One spelling per letter A–G: the drifting scale. Starts at C major. */
     private resolved = new Map<Letter, PitchClass>();
@@ -291,6 +347,8 @@ export class SpellingEngine {
     private collectionCentre = 2;
     /** The line-of-fifths centre the clamp fold last tested (recency + repair applied) — a viz read-out. */
     private foldCentre = 2;
+    /** 'diatonic' frame: the current collection's segment CENTRE on the line of fifths (tonic + 2). */
+    private frameCentre = 2;
     /** Introspection only: the most recent note's per-candidate scoring. */
     private lastDecision: Decision | null = null;
 
@@ -316,6 +374,13 @@ export class SpellingEngine {
         this.foldSlotRecency = opts.foldSlotRecency ?? 0;
         this.foldRepairScale = opts.foldRepairScale ?? false;
         this.foldEconomyGate = opts.foldEconomyGate ?? false;
+        this.frameMode = opts.frameMode ?? 'mean';
+        this.frameHalfLife = opts.frameHalfLife ?? 64;
+        this.frameMargin = opts.frameMargin ?? 1;
+        this.frameKeepAlive = opts.frameKeepAlive ?? true;
+        this.frameSide = opts.frameSide ?? 'continuity';
+        this.frameWindow = opts.frameWindow ?? 128;
+        this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
     }
 
@@ -330,7 +395,10 @@ export class SpellingEngine {
         if (t === undefined || t !== this.lastT) {
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
-                if (this.pcWindow.length > this.foldWindow) this.pcWindow.shift();
+                // Keep enough onsets for whichever consumer needs the most: the economy fold (foldWindow) or
+                // the diatonic frame's coverage (frameWindow). Recency weighting inside handles the rest.
+                const cap = this.frameMode === 'diatonic' ? Math.max(this.foldWindow, this.frameWindow) : this.foldWindow;
+                if (this.pcWindow.length > cap) this.pcWindow.shift();
                 this.curOnsetPcs = [];
             }
             if (t !== undefined) this.lastT = t;
@@ -338,9 +406,31 @@ export class SpellingEngine {
         }
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
 
+        // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
+        // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
+        // window moves it. This replaces the mean drift-and-fold AND the committed anchor.
+        if (this.frameMode === 'diatonic') {
+            const prevCentre = this.frameCentre;
+            this.frameCentre = this.computeFrameCentre();
+            this.foldCentre = this.frameCentre;         // viz read-outs track the live frame
+            this.collectionCentre = this.frameCentre;
+            this.anchor = this.frameCentre;
+            // The collection moving PULLS BACK the held alterations (they belonged to the old collection).
+            if (this.frameKeepAlive && this.frameCentre !== prevCentre) this.kept.clear();
+            for (const L of LETTERS) this.resolved.set(L, spellLetterAt(L, this.frameCentre));
+            // KEEP-ALIVE overlay: a committed chromatic rides its slot until the collection pulls it back.
+            if (this.frameKeepAlive) {
+                for (const [L, sp] of this.kept) {
+                    if (this.resolved.get(L)!.alter !== sp.alter) this.resolved.set(L, sp);
+                    else this.kept.delete(L);   // the collection now spells this letter the same way; drop it
+                }
+            }
+        }
+
         // LEASH: refresh the diatonic anchor from recent commits, so a candidate far from the local
-        // collection can be penalised. Off (weight 0) leaves the anchor un-consulted.
-        if (this.sideWeight > 0) this.anchor = this.diatonicAnchor();
+        // collection can be penalised. Off (weight 0) leaves the anchor un-consulted. Skipped in the
+        // diatonic frame (the collection IS the frame; nothing to leash toward).
+        if (this.sideWeight > 0 && this.frameMode !== 'diatonic') this.anchor = this.diatonicAnchor();
 
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
@@ -365,6 +455,19 @@ export class SpellingEngine {
         // aug6 has no P5, so they don't qualify.
         const coSounding = this.verticalWeight > 0 ? [...this.active.values()] : [];
         const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(lofOf(p) - lofOf(q)) === 1));
+        // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
+        // (higher-LoF) of its single-accidental spellings — the raised leading tone / raised degree.
+        let leanTarget: number | null = null;
+        if (this.chromaticSharpLean > 0) {
+            const centre = this.frameMode === 'diatonic' ? this.frameCentre : this.collectionCentre;
+            const collectionPcs = new Set(LETTERS.map(L => { const s = spellLetterAt(L, centre); return ((LETTER_BASE[s.step] + s.alter) % 12 + 12) % 12; }));
+            const pc = ((midi % 12) + 12) % 12;
+            if (!collectionPcs.has(pc)) {
+                let m = -Infinity;
+                for (const c of enharmonicCandidatesFor(midi)) if (Math.abs(c.alter) <= 1) m = Math.max(m, lofOf(c));
+                if (m !== -Infinity) leanTarget = m;
+            }
+        }
         const cands: DecisionCandidate[] = [];
         let best: PitchClass | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
@@ -384,15 +487,28 @@ export class SpellingEngine {
             const sideDelta = this.sideWeight > 0
                 ? -this.sideWeight * Math.max(0, Math.abs(lofOf(c) - this.anchor) - this.sideRadius)
                 : 0;
-            const s = base + guardDelta + laDelta + daDelta + vertDelta + sideDelta;
-            cands.push({ c, base, guardDelta, laDelta, daDelta, vertDelta, sideDelta });
+            const leanDelta = (leanTarget !== null && Math.abs(c.alter) <= 1 && lofOf(c) === leanTarget) ? this.chromaticSharpLean : 0;
+            const s = base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta;
+            cands.push({ c, base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
             if (s > bestScore) { bestScore = s; best = c; }
         }
         if (best === null) return;
         this.lastDecision = { scale, candidates: cands, chosen: best };
-        this.resolved.set(best.step, best);
         this.active.set(midi, best);
         this.lastByLetter.set(best.step, { onset: this.onset, alter: best.alter });
+        if (this.frameMode === 'diatonic') {
+            // The frame is the collection; a commit never drifts the SLOTS. But it does record the committed
+            // line-of-fifths (the 'drift' side anchor reads its recent median) and keeps a chromatic alive.
+            this.committedLof.push(lofOf(best));
+            if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
+            if (this.frameKeepAlive) {
+                if (best.alter !== spellLetterAt(best.step, this.frameCentre).alter) this.kept.set(best.step, best);
+                else this.kept.delete(best.step);
+            }
+            return;
+        }
+
+        this.resolved.set(best.step, best);
         if (this.sideWeight > 0) {
             this.committedLof.push(lofOf(best));
             if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
@@ -506,6 +622,44 @@ export class SpellingEngine {
      * raises (a leading tone, a tonicisation) from dragging the centre sharp. The result is the collection's
      * line-of-fifths centre: a frameless, emergent local key-centre (no key is ever detected).
      */
+    /**
+     * The principled frame centre ('diatonic' mode): the diatonic COLLECTION as one contiguous 7-fifth
+     * segment centred at the returned line-of-fifths position (tonic + 2). Chosen by COVERAGE over the
+     * recent RAW pitch classes — recency-weighted (half-life {@link frameHalfLife}), anti-poison (never the
+     * speller's own spellings), so it fixes the collection without lag or drift. The comma (SIDE) is the
+     * spiral: among the equal-best-coverage commas, take the one nearest the held frame (continuity), with a
+     * hard barrier past the writable band [foldCenter ± foldRadius] (the fold). Hysteresis holds the current
+     * collection unless a rival's coverage beats it by more than {@link frameMargin}. One number, no drift.
+     */
+    private computeFrameCentre(): number {
+        // Recency-weighted raw-pc histogram over the frame window: the current onset weighs 1, each older
+        // onset × decay^age (half-life {@link frameHalfLife}). Anti-poison — raw pcs, never our own spellings.
+        const decay = Math.pow(0.5, 1 / this.frameHalfLife);
+        const counts = new Array(12).fill(0);
+        let w = 1;
+        for (const pc of this.curOnsetPcs) counts[pc] += w;
+        for (let j = this.pcWindow.length - 1; j >= 0; j--) { w *= decay; for (const pc of this.pcWindow[j]!) counts[pc] += w; }
+        let total = 0; for (const c of counts) total += c;
+        if (total === 0) return this.frameCentre;
+        // Coverage of the 7-fifth collection centred at c (recency-weighted mass of its pitch classes).
+        const coverage = (c: number): number => { let s = 0; for (let i = -3; i <= 3; i++) s += counts[(((7 * (c + i)) % 12) + 12) % 12]!; return s; };
+        const prev = this.frameCentre;
+        // SIDE anchor for the spiral: 'drift' follows the recent committed notes' median LoF (the side the
+        // music has been notated on); 'continuity' (default) holds the previous comma.
+        const anchor = (this.frameSide === 'drift' && this.committedLof.length) ? this.median(this.committedLof) : prev;
+        // THE SPIRAL: pick the max-coverage collection, place its comma nearest the anchor (continuity),
+        // clamped to the writable range [foldCenter ± foldRadius] (a hard barrier = the fold). A collection
+        // hysteresis (frameMargin) holds the held comma unless a rival collection covers more than the margin.
+        const sideCost = (c: number) => Math.abs(c - anchor) + 1000 * Math.max(0, Math.abs(c - this.foldCenter) - this.foldRadius);
+        let bestC = prev, bestCov = -1, bestSide = Infinity;
+        for (let c = prev - 12; c <= prev + 12; c++) {
+            const cov = coverage(c), sc = sideCost(c);
+            if (cov > bestCov || (cov === bestCov && sc < bestSide)) { bestCov = cov; bestC = c; bestSide = sc; }
+        }
+        if (coverage(prev) >= bestCov - this.frameMargin && sideCost(prev) <= bestSide) return prev;
+        return bestC;
+    }
+
     private diatonicAnchor(): number {
         const w = this.committedLof;
         if (w.length === 0) return this.anchor;
@@ -575,6 +729,8 @@ export class SpellingEngine {
         this.anchor = 1;
         this.collectionCentre = 2;
         this.foldCentre = 2;
+        this.frameCentre = 2;
+        this.kept.clear();
         this.lastDecision = null;
     }
 
