@@ -26,7 +26,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build && npm run bench",
     "check": "tsc --noEmit",
     "test": "tsx test/run.ts && tsx test/eval/run.ts",
     "bench": "tsx test/eval/run.ts",
