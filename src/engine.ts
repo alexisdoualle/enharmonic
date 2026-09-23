@@ -25,6 +25,7 @@
 import { LETTER_BASE, type Accidental, type Letter, type Pitch, type PitchClass } from './pitch.js';
 import { enharmonicCandidatesFor } from './candidates.js';
 import { lineOfFifths, rawIntervalBetween } from './interval.js';
+import { intervalScore } from './scoring.js';
 
 // ── Constant tables ──────────────────────────────────────────────────────────
 
@@ -40,32 +41,7 @@ const lofOf = lineOfFifths;
 const ENHARMONIC_COMMA = 12;
 
 // ── Interval scoring (principle 2) ────────────────────────────────────────────────
-
-/**
- * Consonance of the interval between two spellings, read straight off their line-of-fifths distance:
- *   d = 1        P5 / P4                 → +1     d = 3, 4   3rds / 6ths            → +1
- *   d = 0, 2, 5  unison / 2nds / 7ths    →  0     d = 6..12  augmented / diminished → −1
- *   d ≥ 13       doubly aug / dim        → −2
- * The interval NUMBER is never computed: the line of fifths already encodes quality and number.
- */
-function consonance(a: PitchClass, b: PitchClass): number {
-    const d = Math.abs(lofOf(a) - lofOf(b));
-    if (d === 1 || d === 3 || d === 4) return 1;
-    if (d === 0 || d === 2 || d === 5) return 0;
-    if (d <= 12) return -1;
-    return -2;
-}
-
-/** Sum of a candidate's consonance against the rest of the resolved scale (its own slot excluded, since
- *  the candidate replaces it). Higher = better fit. */
-function intervalScore(candidate: PitchClass, resolved: ReadonlyMap<Letter, PitchClass>): number {
-    let total = 0;
-    for (const [letter, pc] of resolved) {
-        if (letter === candidate.step) continue;
-        total += consonance(candidate, pc);
-    }
-    return total;
-}
+// consonance + intervalScore live in src/scoring.ts (one source, shared with CoreSpeller).
 
 /**
  * Is the pair {a, b} a MISSPELLED THIRD: a diminished fourth (should be a major third, C–F♭ ⇒ C–E) or

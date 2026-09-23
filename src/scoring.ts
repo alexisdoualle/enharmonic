@@ -1,30 +1,31 @@
 /**
- * Interval scoring for CoreSpeller. A candidate is scored against the OTHER letters of the
- * resolved scale by summing per-interval consonance:
+ * Principle 2: interval scoring, the single source shared by CoreSpeller (src/core.ts) and the shipped
+ * SpellingEngine (src/engine.ts). A candidate is scored against the OTHER letters of the resolved scale
+ * by summing per-interval consonance, read straight off the line-of-fifths distance between the two
+ * spellings, so the interval never has to be named:
  *
- *   P4, P5, and 3rds / 6ths          +1   consonant
- *   P1, P8, 2nds / 7ths               0   neutral
- *   augmented / diminished           −1   dissonant
- *   doubly aug/dim and beyond        −2   extreme (clamped)
+ *   d = 1        P5 / P4                 → +1     d = 3, 4   3rds / 6ths            → +1
+ *   d = 0, 2, 5  unison / 2nds / 7ths    →  0     d = 6..12  augmented / diminished → −1
+ *   d ≥ 13       doubly aug / dim        → −2
  *
- * Higher wins. A candidate that forms consonant intervals with the existing scale is preferred, which
- * is what locks the scale into key. Derived from Andrew Milne's interval-relatedness model, adapted to
- * pitch spelling (the candidate replaces its own slot, so that self-relationship is not scored).
+ * Higher wins: a candidate that forms consonant intervals with the existing scale is preferred, which is
+ * what locks the scale into key with no explicit key detection.
  */
 
-import { rawIntervalBetween } from './interval.js';
+import { lineOfFifths } from './interval.js';
 import type { Letter, PitchClass } from './pitch.js';
 
-/** Signed quality + interval number → consonance score. */
-function scoreFor(quality: number, number: number): number {
-    if (quality === 0) return (number === 4 || number === 5) ? 1 : 0;   // P4/P5 vs P1/P8
-    const absQ = Math.abs(quality);
-    if (absQ === 1) return (number === 3 || number === 6) ? 1 : 0;      // 3rds/6ths vs 2nds/7ths
-    if (absQ === 2) return -1;                                          // augmented / diminished
-    return -2;                                                          // doubly aug/dim and beyond
+/** Consonance of the interval between two spellings, read off their line-of-fifths distance `d`. */
+export function consonance(a: PitchClass, b: PitchClass): number {
+    const d = Math.abs(lineOfFifths(a) - lineOfFifths(b));
+    if (d === 1 || d === 3 || d === 4) return 1;
+    if (d === 0 || d === 2 || d === 5) return 0;
+    if (d <= 12) return -1;
+    return -2;
 }
 
-/** Total interval score of a candidate against the other scale letters. Higher = better fit. */
+/** Total interval score of a candidate against the other scale letters (its own slot excluded, since the
+ *  candidate replaces it). Higher = better fit. */
 export function intervalScore(
     candidate: PitchClass,
     resolved: ReadonlyMap<Letter, PitchClass>,
@@ -32,8 +33,7 @@ export function intervalScore(
     let total = 0;
     for (const [letter, pc] of resolved) {
         if (letter === candidate.step) continue;
-        const { quality, number } = rawIntervalBetween(candidate, pc);
-        total += scoreFor(quality, number);
+        total += consonance(candidate, pc);
     }
     return total;
 }
