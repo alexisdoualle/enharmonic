@@ -192,12 +192,23 @@ export function renderTonnetz(snap: Snapshot | null): void {
     applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))));
 }
 
-/** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard). */
+/** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard).
+ *  The surface is the stable 7-letter frame, but each SOUNDING note is drawn at its own committed
+ *  spelling: a played chromatic (G♯ in C major) overrides its letter's slot (G→G♯) so it owns a lattice
+ *  node to light. The frame itself is unchanged — this is a per-onset display overlay, not a frame flip. */
 export function renderTonnetzLive(state: LiveState): void {
     if (!scene) return;
-    const surface = state.scaleSpellings.length === 7
-        ? state.scaleSpellings.map(p => new PitchClass(p.step as LetterName, p.alter))
-        : defaultScale();
+    const byLetter = new Map<string, { step: string; alter: number }>(
+        (state.scaleSpellings.length === 7
+            ? state.scaleSpellings
+            : DEFAULT_SCALE_SPEC.map(([step, alter]) => ({ step, alter })))
+            .map(p => [p.step, { step: p.step, alter: p.alter }]),
+    );
+    for (const key of state.heldSpellings) {
+        const [step, alter] = key.split(':') as [string, string];
+        byLetter.set(step, { step, alter: Number(alter) });
+    }
+    const surface = [...byLetter.values()].map(p => new PitchClass(p.step as LetterName, p.alter));
     applyScene(surface, new Set(state.heldPCs));
 }
 
