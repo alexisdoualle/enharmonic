@@ -6,7 +6,7 @@ Given a stream of MIDI note numbers, decides whether `61` should be spelled `Câ™
 from musical context. Zero runtime dependencies. ESM / TypeScript. Apache-2.0.
 
 ```bash
-npm install enharmonic   # not yet published
+npm install enharmonic
 ```
 
 ## Quickstart
