@@ -55,9 +55,20 @@ s.noteOn(60, { t: 0 }); s.noteOn(64, { t: 0 }); s.noteOn(67, { t: 0 }); // one c
 s.noteOn(69, { t: 500 });                                               // next onset
 ```
 
-For live input pass real timestamps; for batch replay pass an increasing `t` per onset. `SpellerOptions`
-still accepts `clock` and `baseWindowMs`, but they are no-ops: they parameterised an earlier
-time-windowed design and are kept only so existing callers compile.
+For live input pass real timestamps; for batch replay pass an increasing `t` per onset.
+
+### Optional key hint (experimental)
+
+Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
+sharp enharmonic (D♭ to C♯). Passing the key re-centres the fold and holds the notated side:
+
+```ts
+const s = new Speller({ keyTonic: -5 });   // D♭ major: signed line-of-fifths of the MAJOR tonic
+s.setKey(2);                                // re-centre mid-stream at a key change (here, D major)
+```
+
+`keyTonic` is the signed line-of-fifths of the major tonic (C=0, G=+1, F=−1, D♭=−5; for a minor key pass
+its relative major, A minor to C=0). Experimental; omit it for the default keyless behaviour above.
 
 ## Status
 
