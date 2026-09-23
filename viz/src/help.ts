@@ -177,7 +177,24 @@ on paper. And some is a matter of timing, where in a passage the side turns over
 commits as it goes, so at a modulation it can flip half a passage and leave an incoherent seam; only
 reading the whole piece offline (the two-pass mode) can place the flip where it belongs. Chopin's Prelude
 Op. 28 No. 15 is the stock case: from D&flat; major to its parallel minor he writes C&sharp; minor, not
-D&flat; minor, and only the whole phrase makes that clear.</blockquote>`,
+D&flat; minor, and only the whole phrase makes that clear.</blockquote>
+<p><b>Two ways to hold the side.</b> Both do the same job, place the collection on the spiral, fold it a
+comma when it drifts too far, and resist a single chromatic flipping it, but they hold it differently. The
+<code>mean</code> button in the spiral panel switches real-time and look-ahead between them:</p>
+<ul>
+<li><b>diatonic frame</b> (the shipped default): the frame is an explicit collection, re-read each onset
+from the recent raw pitch classes and held by hysteresis. It holds steady through passing chromatics, so
+it makes fewer incoherent slips; the price is that at a key change it holds the old collection longer and
+flips more of the new section (coherently) onto the other side. Here the frame, its collection, and the
+detected key are one and the same number, so the key lane sits exactly on the frame.</li>
+<li><b>mean</b>: the seven slots simply drift as notes commit, and the side is their running average
+position on the spiral, folded back a comma once that average crosses a deadzone. The average re-orients
+quickly at a key change, so on stitched multi-key material (Bach's WTC book II, dozens of keys back to
+back) it matches the composer's notated side markedly more often, at the cost of a few more incoherent
+slips. A second tell: the detected key (the key lane) is read separately from the drifting surface here,
+so the key lane no longer lines up with the frame the way it does under the diatonic frame. Turn
+<code>mean</code> on over Op. 28 No. 15 to watch the side move more freely where the frame holds it.</li>
+</ul>`,
     },
     {
         id: 'tonnetz', nav: '3D Tonnetz', title: 'The harmonic lattice',

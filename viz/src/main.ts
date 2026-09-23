@@ -161,7 +161,7 @@ function effMode(): Mode {
 function recompute() {
     if (!state.fixtureId) return;
     state.replay = buildReplay(effMode(), rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair },
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
@@ -184,6 +184,12 @@ function setSideOverride(comma: number) {
 /** Change the spiral what-if params (from the wheel steppers), rebuild, and persist to the URL. */
 function setRepair(v: boolean) {
     state.repair = v;
+    recompute();
+    syncUrl();
+}
+
+function setMeanFrame(v: boolean) {
+    state.meanFrame = v;
     recompute();
     syncUrl();
 }
@@ -220,6 +226,7 @@ function render() {
         control: state.mode === 'control',
         showKeyLanes: state.showKeyLanes, onChange: setSpiral,
         repair: state.repair, onRepair: setRepair,
+        meanFrame: state.meanFrame, onMeanFrame: setMeanFrame,
     });
     // Feed the shared live model always: the 2D panel subscribes, and so does the 3D panel (see the
     // subscription in the boot block), so whichever view is on tracks both playback and live input.
@@ -450,6 +457,8 @@ function syncUrl() {
     else u.searchParams.delete('sk');
     if (state.repair) u.searchParams.set('rp', '1');
     else u.searchParams.delete('rp');
+    if (state.meanFrame) u.searchParams.set('fm', '1');
+    else u.searchParams.delete('fm');
     // experimental key lanes are off by default; only record when enabled
     if (state.lookAhead) u.searchParams.set('la', '1');
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
@@ -571,6 +580,7 @@ async function boot() {
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
     if (p.get('sk')) state.spiralEven = p.get('sk') === '1';
     if (p.get('rp')) state.repair = p.get('rp') === '1';
+    if (p.get('fm')) state.meanFrame = p.get('fm') === '1';
     if (p.get('keys') === '1') state.showKeyLanes = true;
     state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;

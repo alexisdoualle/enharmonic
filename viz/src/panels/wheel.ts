@@ -35,6 +35,8 @@ export interface WheelOpts {
     onChange: (range: number, center: number, even: boolean) => void;
     repair: boolean;         // PROBE: repair the fold-centre scale (snap outliers to the diatonic window)
     onRepair: (v: boolean) => void;
+    meanFrame: boolean;      // A/B: run rt/la on the old 'mean' drift-and-fold instead of the diatonic frame
+    onMeanFrame: (v: boolean) => void;
 }
 
 // Spelling of a key at signed line-of-fifths position `lof` (…F=−1, C=0, G=1…, F♯=+6, C♯=+7…).
@@ -176,7 +178,7 @@ let lastPressed: string | null = null;
  *  (e.g. G♭…G♯) sit in the tooltip; widening the range digs to deeper enharmonics, the centre biases
  *  sharp/flat. */
 function renderControls(opts: WheelOpts): HTMLElement {
-    const { range, center, even, streaming, control, onChange, repair, onRepair } = opts;
+    const { range, center, even, streaming, control, onChange, repair, onRepair, meanFrame, onMeanFrame } = opts;
     const editable = streaming || control;   // control mode also drives its window from these steppers
     const wrap = document.createElement('div');
     wrap.className = 'spiral-ctl' + (editable ? '' : ' disabled');
@@ -268,11 +270,23 @@ function renderControls(opts: WheelOpts): HTMLElement {
         rep.className = 'ctl-reset' + (repair ? ' on' : '');
         rep.textContent = 'repair';
         rep.disabled = !streaming;
-        rep.title = 'snap the fold-centre scale to its best-fit diatonic window (probe)';
+        rep.title = 'snap the fold-centre scale to its best-fit diatonic window (experimental)';
         rep.dataset.k = 'repair';
         rep.addEventListener('click', () => { lastPressed = 'repair'; onRepair(!repair); });
         if (rep.dataset.k === lastPressed) focusLater.push(rep);
         wrap.appendChild(rep);
+
+        // A/B toggle: run the old 'mean' drift-and-fold side substrate instead of the shipped diatonic
+        // frame. Streaming rungs only (the two-pass tier has its own mean fold already).
+        const mf = document.createElement('button');
+        mf.className = 'ctl-reset' + (meanFrame ? ' on' : '');
+        mf.textContent = 'mean';
+        mf.disabled = !streaming;
+        mf.title = 'run the mean drift-and-fold side substrate instead of the diatonic frame: the slots drift and the side is their running average, so it re-orients faster at a key change and matches the notated side more often on stitched multi-key pieces (WTC2), at the cost of a few more incoherent slips. The frame holds steadier. The key lane also reads separately from the surface here. A/B';
+        mf.dataset.k = 'mean';
+        mf.addEventListener('click', () => { lastPressed = 'mean'; onMeanFrame(!meanFrame); });
+        if (mf.dataset.k === lastPressed) focusLater.push(mf);
+        wrap.appendChild(mf);
     }
 
     // preventScroll: refocusing must not nudge the page, which is the whole point of this panel change.

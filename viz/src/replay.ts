@@ -118,7 +118,7 @@ export interface Replay {
 
 /** What-if overrides for the streaming engine's spiral frame (rt/la only; the batch two-pass ignores
  *  them). Defaults reproduce the shipped preset (range 6, centre +1). */
-export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; repair?: boolean; }
+export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; repair?: boolean; meanFrame?: boolean; }
 
 /** Add `auto` releases where a stitched fixture's measure number restarts. These are a viz-session
  * convenience, not hidden production policy: library callers supply their own releases. */
@@ -247,6 +247,9 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             foldCenter: spiralCenter + 2,
             foldRadius: spiralRange,               // range IS the clamp radius; default 7 = the shipped foldRadius
             foldRepairScale: spiral.repair ?? false,
+            // A/B toggle: run the older 'mean' drift-and-fold side substrate instead of the shipped diatonic
+            // frame (over the same clamp fold + leash the preset already carries). Off = the shipped default.
+            ...(spiral.meanFrame ? { frameMode: 'mean' as const } : {}),
         })
         : null;
     const dirs = onsetDirs(events);

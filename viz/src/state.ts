@@ -12,12 +12,13 @@ export interface AppState {
     spiralCenter: number;     // engine spiralCenter override (LoF writability bias; default +1)
     spiralEven: boolean;      // engine spiralEven: window parity (false = odd/symmetric; true = 12-slot even)
     repair: boolean;          // PROBE: repair the fold-centre scale (snap outliers to the diatonic window)
+    meanFrame: boolean;       // A/B: run rt/la on the old 'mean' drift-and-fold instead of the diatonic frame
     lookAhead: boolean;       // real-time mode option: near-real-time letter look-ahead (Speller({ lookAhead }))
     showKeyLanes: boolean;    // EXPERIMENTAL, display-only: the local + stable collection lanes (default off)
     sideOverrides: SideOverride[]; // editorial comma orientation markers for two-pass replay
 }
 
-export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
+export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, meanFrame: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
 
 /** Shipped-preset defaults: the spiral controls reset to these, and the URL omits them when unchanged.
  *  `range` is the clamp radius directly, so the default is 7 (= RT_PRESET foldRadius); min 6 = a tighter fold. */
