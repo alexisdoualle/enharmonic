@@ -1,6 +1,6 @@
 {
   "name": "enharmonic",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Real-time enharmonic pitch-spelling for MIDI input",
   "license": "Apache-2.0",
   "homepage": "https://tonalmap.org",
