@@ -37,6 +37,7 @@
     "scoreboard": "node tools/figures/scoreboard.mjs",
     "scoreboard:guarded": "node tools/figures/scoreboard-guarded.mjs",
     "corpus": "tsx test/eval/corpus.ts",
+    "aug6-baselines": "tsx test/eval/aug6-baselines.ts",
     "wtc1:marker": "tsx test/eval/wtc1-marker.ts",
     "viz": "node viz/serve.mjs",
     "viz:build": "node viz/build.mjs"
