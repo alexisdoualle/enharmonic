@@ -7,10 +7,10 @@
  * sits at tonic + 2), which is exactly the quantity the spiral fold clamps, so the lit key tracks what
  * range/offset control. `range` IS the clamp radius, so the band spans exactly the tonics the fold ALLOWS,
  * [center−range … center+range]; the dashed red cell immediately beyond each end (±(range+1)) is the FIRST
- * folded tonic — the frame folds the moment the lit key reaches a red cell. Default range 7 = the shipped
+ * folded tonic: the frame folds the moment the lit key reaches a red cell. Default range 7 = the shipped
  * fold; dial it to 6 for a tighter 13-key fold.
  *
- * Ported from the lab viz (`music/wheel.ts` renderSpiral), stripped of the research local-key overlay.
+ * A simplified spiral view, without the local-key overlay.
  * The default range 7 / centre +1 map to the shipped `RT_PRESET` clamp (foldRadius 7, foldCenter 3).
  */
 import type { Snapshot } from '../replay.js';

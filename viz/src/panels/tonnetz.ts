@@ -195,7 +195,7 @@ export function renderTonnetz(snap: Snapshot | null): void {
 /** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard).
  *  The surface is the stable 7-letter frame, but each SOUNDING note is drawn at its own committed
  *  spelling: a played chromatic (G♯ in C major) overrides its letter's slot (G→G♯) so it owns a lattice
- *  node to light. The frame itself is unchanged — this is a per-onset display overlay, not a frame flip. */
+ *  node to light. The frame itself is unchanged: this is a per-onset display overlay, not a frame flip. */
 export function renderTonnetzLive(state: LiveState): void {
     if (!scene) return;
     const byLetter = new Map<string, { step: string; alter: number }>(

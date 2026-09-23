@@ -9,9 +9,9 @@
  * O(notes), no DOM, but only the rects inside (and a margin around) the visible scroll viewport are
  * ever materialized. Scrolling and seeking both just adjust which slice of `layouts` is live.
  *
- * Adapted from the lab's `tools/viz/src/music/pianoroll.ts`, stripped of every research lane
- * (tonal-center / local-key / analysis / cadence / chord / scale / music21 / portal / frame-override
- * badges): this viz has exactly one engine (the shipped spiral) so there is exactly one key lane.
+ * Kept deliberately minimal (no tonal-center / local-key / analysis / cadence / chord / scale /
+ * music21 / portal / frame-override badges): this viz has exactly one engine (the shipped spiral)
+ * so there is exactly one key lane.
  */
 import type { Replay, ReplayNote, Tier } from '../replay.js';
 import type { Letter, Accidental } from '../../../src/index.js';

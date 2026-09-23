@@ -1,9 +1,7 @@
 /**
  * The small shared surface the streaming API and the two-pass driver use: the look-ahead context
- * object and the resolution-step helper that fills it.
- *
- * (The composable substrate/kernel machinery this file once held was retired with the base speller;
- * the shipped speller is the self-contained {@link SpellingEngine} in engine.ts.)
+ * object and the resolution-step helper that fills it. The speller itself is the self-contained
+ * {@link SpellingEngine} in engine.ts.
  */
 
 /** Per-note context passed to the speller. */
@@ -19,9 +17,9 @@ export interface NoteContext {
  * Semitone step from `from` to `to` IGNORING the octave: +1 up, −1 down, 0 otherwise; the test a
  * look-ahead driver applies over its forward buffer to fill {@link NoteContext.resolveDir}.
  *
- * A resolution is a semitone on the line, and the voice that answers it need not be in the same octave:
- * Moonlight m19's E♯4 resolves to an F♯ two octaves down in the bass, which an exact-midi scan misses.
- * Ignoring the octave costs nothing measurable in false positives.
+ * A resolution is a semitone on the line, and the voice that answers it need not be in the same octave
+ * (an E♯ can resolve to an F♯ two octaves down in the bass), which an exact-midi scan misses. Ignoring
+ * the octave costs nothing measurable in false positives.
  */
 export function resolveStep(from: number, to: number): number {
     const iv = (((to - from) % 12) + 12) % 12;

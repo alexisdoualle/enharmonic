@@ -148,7 +148,7 @@ export function pcOf(p: { step: string; alter: number }): number {
 }
 
 /**
- * The fixed line-of-fifths CONTROL: Meredith's chance-level window: 12 consecutive fifths, so exactly
+ * The fixed line-of-fifths CONTROL: a chance-level window of 12 consecutive fifths, so exactly
  * one spelling per pitch class, applied with NO context (every occurrence of a pc gets the same letter
  * forever, regardless of key or neighbours). It never drifts, flips, or looks, which is exactly why
  * it's worth seeing beside the other modes.

@@ -6,7 +6,7 @@
  * Sourced entirely from THIS repo: our four shipped modes are scored live by
  * `test/eval/meredith.ts --json` (the real speller), and the third-party baselines come from the
  * committed snapshot `test/eval/meredith-baselines.json` (frozen external-tool scores; they can't
- * run in this zero-dep repo; see that file's _provenance). No dependency on the legacy lab.
+ * run in this zero-dep repo; see that file's _provenance). No external dependencies.
  *
  * Usage (normally via `npm run scoreboard`, which scores first):
  *   node tools/figures/three-tier.mjs <ours.json> <variant> <out.svg>

@@ -1,5 +1,5 @@
 {
-  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from enharmonic-lab (LEGACY repo, to be retired). These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here without the lab. Regenerate only if the corpus or a baseline tool changes.",
+  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from an external source. These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here. Regenerate only if the corpus or a baseline tool changes.",
   "corpus": "meredith-8x25000",
   "variants": {
     "clean": {

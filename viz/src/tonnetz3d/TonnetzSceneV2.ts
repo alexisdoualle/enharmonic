@@ -657,7 +657,7 @@ export class TonnetzSceneV2 {
             // sliding layer just like the triangles do: otherwise a held altered note (F♯) stays
             // lit at its pre-alteration node (F, one layer below) until the next PC change unfreezes
             // it on release. updateNodeActivations repositions the sliding-letter nodes (cheaply
-            // gated — see the slide check there); colour/triad/arrow work stays skipped since only
+            // gated, see the slide check there); colour/triad/arrow work stays skipped since only
             // the letter's geometry is moving.
             this.updateNodeActivations();
             this.renderDeferred();
@@ -1703,7 +1703,7 @@ export class TonnetzSceneV2 {
 
         for (let i = 0; i < this.nodeData.length; i++) {
             const data = this.nodeData[i];
-            // Skip nodes whose PC didn't change this frame — unless the node's letter is mid-slide
+            // Skip nodes whose PC didn't change this frame, unless the node's letter is mid-slide
             // (an animating accidental z-offset). A sliding node must follow its layer every frame
             // even though its activation is steady, so a held altered note tracks up to its new
             // spelling instead of staying lit at the pre-alteration layer.

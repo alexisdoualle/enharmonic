@@ -10,7 +10,7 @@
 import type { PitchClass } from '../../src/index.js';
 
 /** What (if anything) overrode the base-frame argmax for this note. Shipped presets only ever emit
- *  `'none'`; the other tags are kept so historical/research traces still render. */
+ *  `'none'`; the other tags are kept so older recorded traces still render. */
 export type DecisionOverride =
     | 'none' | 'lookahead-vertical-gate' | 'lookahead-coherence-gate' | 'sounding-tiebreak' | 'rel-minor-lt';
 

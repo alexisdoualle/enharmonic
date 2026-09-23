@@ -2,8 +2,6 @@
  * RealtimeSpeller: the demo real-time speller, in one file, ~210 loc.
  *
  * CoreSpeller (core-speller.ts) plus three mechanisms; same style, zero imports.
- * On a held-out corpus of ~196k notes (Meredith 8×25000, clean): 99.53% exact, up
- * from Core's 92.94%.
  *
  * Core's three principles (7-letter limit + interval scoring + recency guard) solve
  * COHERENCE but drift on the SIDE. The three additions fix both:
@@ -19,7 +17,7 @@
  *      from the frame centre. This replaces the old mean-fold + median leash with one frame.
  *
  *   2. VERTICAL GUARD (coherence). Inside a PERFECT triad (a P5 is sounding), penalise a
- *      candidate that forms a misspelled third — a diminished 4th (should be a major 3rd,
+ *      candidate that forms a misspelled third: a diminished 4th (should be a major 3rd,
  *      C–F♭ ⇒ C–E) or an augmented 2nd (should be a minor 3rd, C–D♯ ⇒ C–E♭). This breaks
  *      the F♯/G♭ side tie by chord consonance where a P5 is co-sounding. A dim7 / aug6 has
  *      no P5, so it is left alone.
@@ -27,8 +25,8 @@
  *   3. CHROMATIC SHARP-LEAN (side). For a note OUTSIDE the frame collection (a true
  *      chromatic) with no co-sounding P5 for the vertical guard, reward the SHARPER of its
  *      two single-accidental spellings (F♯ over G♭, E♯ over F, B over C♭): the leading-tone
- *      / raised-degree asymmetry (a chromatic is ~3.4× more often a raise). A line-of-fifths
- *      DIRECTION preference, not accidental economy — F♯/G♭ have equal accidental count and
+ *      / raised-degree asymmetry (a chromatic is far more often a raise). A line-of-fifths
+ *      DIRECTION preference, not accidental economy: F♯/G♭ have equal accidental count and
  *      it still picks F♯. Gated to out-of-collection pitch classes, so a diatonic flat
  *      (D♭ in D♭ major) is never touched.
  *

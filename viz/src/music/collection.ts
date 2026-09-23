@@ -15,9 +15,9 @@
  * The line between them is not fixed; a local tonic that persists eventually migrates the stable lane
  * (a real modulation), which the two window lengths express for free.
  *
- * Cf the lab's local-key work: [[frame-vs-surface-key-inference]], [[handoff-local-key-signals]]: the
- * "local vs global key, the truth is between them" two-band conclusion, here rebuilt structurally so an
- * uneven surface and normal chromaticism don't derail it.
+ * This follows the general local-vs-global-key idea, that the true key lives somewhere between a
+ * short-term local read and a long-term stable one, rebuilt here structurally so an uneven surface
+ * and normal chromaticism don't derail it.
  */
 
 // weight of a pitch class at scale-degree `d` (semitones above the major tonic) within a collection

@@ -32,8 +32,8 @@ const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
 const counts = process.argv.includes('--counts');
 // `--json <path>` also writes the aggregate tiers as machine-readable JSON (consumed by the
-// scoreboard figure generator, tools/figures/three-tier.mjs). Keeps the scoreboard sourced from
-// THIS repo's shipped modes, not a mirror of the legacy lab.
+// scoreboard figure generator, tools/figures/three-tier.mjs), so the scoreboard is sourced from
+// THIS repo's shipped modes.
 const jsonArg = process.argv.indexOf('--json');
 const jsonPath = jsonArg >= 0 ? process.argv[jsonArg + 1] : null;
 

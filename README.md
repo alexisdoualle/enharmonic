@@ -72,9 +72,8 @@ its relative major, A minor to C=0). Experimental; omit it for the default keyle
 
 ## Status
 
-Extracted from a larger research codebase; the algorithm's development history and the full
-benchmark corpora live in a separate research repository. The shipped library is the speller above,
-with its look-ahead setting and offline two-pass function.
+The shipped library is the speller above: the real-time `Speller`, its look-ahead setting, and the
+offline `spellTwoPass`.
 
 Held-out Meredith (216 movements, 195,972 notes), the standard pitch-spelling benchmark: exact
 composer-spelling match, level with the best deterministic and neural spellers

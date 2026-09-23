@@ -14,9 +14,9 @@
  *     tell). A COHERENT flip makes no wolves, so every change-point ties at 0; break that tie toward the
  *     side nearer the piece's committed line-of-fifths CENTRE (an emergent statistic, never a detected key).
  *
- * Both passes are the shipped engine at its two-pass preset (letter look-ahead + vertical guard, over the
- * accidental-economy fold). The reconciliation is pure array logic. On David Meredith's held-out 8×25000
- * corpus this scores 99.86% exact clean.
+ * Both passes are the shipped engine at its two-pass preset (letter look-ahead plus vertical guard, over
+ * the accidental-economy fold). The reconciliation is pure array logic. This is the highest-accuracy tier;
+ * see the README for benchmark figures.
  */
 
 import type { Letter, Pitch, PitchClass } from './pitch.js';

@@ -6,8 +6,7 @@
  * and writes results/RESULTS.md. Third-party baselines come from the committed snapshot
  * test/eval/meredith-baselines.json (frozen external-tool scores; see its _provenance).
  *
- * This REPLACES the old results/refresh.mjs lab-mirror: the numbers are now produced by the code
- * that ships here, not copied from the legacy enharmonic-lab. Everything lands in gitignored
+ * The numbers are produced by the code that ships here, scored live. Everything lands in gitignored
  * results/: copy a chosen figure out to a committed path (e.g. docs/assets/) to use it publicly.
  *
  *   npm run scoreboard          # clean + noisy (whichever corpora are fetched)
@@ -47,9 +46,9 @@ const ex = t => pct(t.correct, t.committed), co = t => pct(t.correct + t.flipped
 
 const md = [];
 md.push('# Results: Meredith scoreboard (this repo)\n');
-md.push('> **AUTO-GENERATED** by `npm run scoreboard` from THIS repo\'s shipped speller, not mirrored');
-md.push('> from the legacy `enharmonic-lab`. Third-party baselines are a frozen snapshot');
-md.push('> (`test/eval/meredith-baselines.json`); everything else is scored live here.');
+md.push('> **AUTO-GENERATED** by `npm run scoreboard` from THIS repo\'s shipped speller. Third-party');
+md.push('> baselines are a frozen snapshot (`test/eval/meredith-baselines.json`); everything else is');
+md.push('> scored live here.');
 md.push(`> Generated ${new Date().toISOString().slice(0, 10)}. Held-out corpus: Meredith 8×25000 (195,972 notes).\n`);
 
 for (const variant of done) {
@@ -69,7 +68,7 @@ for (const variant of done) {
     md.push(`![scoreboard ${variant}](figures/scoreboard_meredith_${variant}.svg)\n`);
 }
 md.push('_exact = strict composer-spelling match (ps13’s metric); coherent = exact + coherent enharmonic flip; wrong = 1 − coherent. ps13 published 99.31% exact on this corpus._\n');
-md.push('> Second corpus: the lab’s curated set can be scored with the SAME modes via `npm run lab-corpus` (reads `$ENHARMONIC_LAB` in place; never copied in). It is not part of this scoreboard.');
+md.push('> Second corpus: an external curated set can be scored with the SAME modes via `npm run corpus` (reads `$ENHARMONIC_LAB` in place; never copied in). It is not part of this scoreboard.');
 
 writeFileSync(join(REPO, 'results', 'RESULTS.md'), md.join('\n') + '\n');
 console.log(`\n✓ scoreboard complete → results/RESULTS.md + results/figures/scoreboard_meredith_{${done.join(',')}}.svg`);

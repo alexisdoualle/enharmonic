@@ -1,6 +1,6 @@
-# Lab ↔ viz parity notes
+# Bench and viz scoring-parity notes
 
-This note records details that affect whether benchmark numbers from the lab and
+This note records details that affect whether benchmark numbers from the offline bench and
 the browser viz are genuinely comparable.
 
 ## `(measure, beat)` onset keys (evaluation only)
@@ -27,7 +27,7 @@ inflating `wrong`.
 
 Real live MIDI/audio input does not provide `(measure, beat)` keys. The live
 speller must remain timestamp/event driven and use only information available at
-that moment—currently the active frame, sounding notes, recency-guard context,
+that moment: currently the active frame, sounding notes, recency-guard context,
 and (in `la`) a bounded look-ahead. Measure/beat keys must therefore never leak
 into the spelling decision.
 
@@ -44,7 +44,7 @@ fallback is less reliable for dense orchestral or choral fixtures.
 - **Raw:** every `on` event is scored. This is the browser viz's current
   `20,096`-onset view.
 - **Unique:** same-measure/same-beat unison duplicates with the same MIDI value
-  are collapsed. In the Requiem example this is `20,005` notes instead of
+  are collapsed. In one large fixture this is `20,005` notes instead of
   `20,096`; octave doublings remain distinct.
 
 Always label which denominator is being reported. `unique` is useful for
@@ -65,7 +65,7 @@ vertical guard, and collision repair, over the same spiral-CLAMP fold.
 
 ## Current parity warning
 
-The lab scorer groups by contiguous `(measure, beat)` positions. The current
+The offline scorer groups by contiguous `(measure, beat)` positions. The current
 viz replay path groups scorer input by exact event time. For fixture parity, make
 the viz's **scoring/display path** use the same `(measure, beat)` construction;
 do not add those keys to the live spelling algorithm.

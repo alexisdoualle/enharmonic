@@ -150,20 +150,22 @@ export interface EngineOptions {
      *  and snap any outlier (>3 off the window centre, a chromatic alteration) to its diatonic member, so
      *  the centre reads the underlying key rather than the drifted surface. Off by default. */
     foldRepairScale?: boolean;
-    /** PROBE: gate the CLAMP fold by accidental economy — once the frame has drifted past a deadzone edge,
-     *  only actually fold if the target comma-side spells the recent raw pitch classes no dearer than the
-     *  current side. Clamp picks WHEN, economy picks WHETHER. Off by default. */
+    /** Gate the CLAMP fold by accidental economy: once the frame has drifted past a deadzone edge, only
+     *  actually fold if the target comma-side spells the recent raw pitch classes no dearer than the current
+     *  side. Clamp picks WHEN, economy picks WHETHER. Off by default. */
     foldEconomyGate?: boolean;
     /** FRAME MODE (default 'mean'). 'mean' = the shipped drift-and-fold (the frame is the committed slots'
      *  mean, corrected past a deadzone edge). 'diatonic' = a principled explicit frame: every onset the
      *  collection is chosen by COVERAGE over the recent RAW pitch classes (anti-poison, mode-blind), placed
      *  on the spiral at the comma nearest the held frame (continuity + range fold), and held by hysteresis;
      *  the 7 slots ARE that collection, so a chromatic is a raised/lowered degree of a slot, never drift.
-     *  Replaces the mean AND the committed anchor with one moving diatonic frame. No functional/mode logic. */
+     *  Replaces the mean AND the committed anchor with one moving diatonic frame. No functional/mode logic.
+     *  This flag picks between the two side-substrates described on the SpellingEngine class doc: 'diatonic'
+     *  for the streaming tiers, 'mean' for the offline two-pass. */
     frameMode?: 'mean' | 'diatonic';
     /** 'diatonic' frame: recency half-life (onsets) of the raw-pc coverage window. Default 64. */
     frameHalfLife?: number;
-    /** 'diatonic' frame: hysteresis — hold the current collection unless a rival's coverage beats it by more
+    /** 'diatonic' frame: hysteresis: hold the current collection unless a rival's coverage beats it by more
      *  than this (in decayed pc weight). Default 1. */
     frameMargin?: number;
     /** 'diatonic' frame: KEEP-ALIVE. A committed chromatic (a spelling that differs from its collection slot,
@@ -177,13 +179,13 @@ export interface EngineOptions {
      *  side). A/B lever; continuity is the clean default. */
     frameSide?: 'continuity' | 'drift';
     /** 'diatonic' frame: raw-pc coverage window in onsets (the memory length that defines the collection).
-     *  Too short churns the collection on dense music (Meredith side-thrash); this is the frame's one real
-     *  tuning, the equivalent of the mean fold's. Default 128. */
+     *  Too short churns the collection on dense music; this is the frame's one real tuning, the equivalent
+     *  of the mean fold's. Default 128. */
     frameWindow?: number;
     /** CHROMATIC SHARP-LEAN: for a note whose pitch class is OUTSIDE the frame collection (a true
      *  chromatic), reward the SHARPER of its two single-accidental enharmonic spellings (F♯ over G♭,
-     *  E♯ over F, B over C♭) by this many points. The leading-tone / raised-degree asymmetry — a chromatic
-     *  is ~3.4× more often a raise than a lowering — so the ambiguous melodic/isolated chromatic (no
+     *  E♯ over F, B over C♭) by this many points. The leading-tone / raised-degree asymmetry (a chromatic is
+     *  far more often a raise than a lowering) means the ambiguous melodic/isolated chromatic (no
      *  co-sounding P5 for the vertical guard to break the F♯/G♭ tie) leans to the raise. A LoF-DIRECTION
      *  preference (higher LoF), NOT accidental economy: F♯/G♭ have equal accidental count and it still
      *  picks F♯. Gated to out-of-collection pcs, so a diatonic flat (D♭ in D♭ major) is never touched.
@@ -191,19 +193,19 @@ export interface EngineOptions {
     chromaticSharpLean?: number;
 }
 
-/** REAL-TIME tier (`new Speller()`): recency guard + spiral-CLAMP fold + diatonic-anchor leash. The fold
- *  centre averages only recently-sounded letters (foldSlotRecency), so a stale degree's spelling doesn't
- *  drag the side: Meredith clean wrong 922→909 (exact unchanged), lab exact +0.41. */
+/** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
+ *  centre averages only recently-sounded letters (foldSlotRecency), so a stale degree's spelling does not
+ *  drag the side. */
 export const RT_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 3,
     fold: 'clamp', foldCenter: 3, foldRadius: 7,
     sideWeight: 1, sideRadius: 6, anchorWindow: 32,
-    // The principled diatonic frame: the 7 slots are the coverage collection (recency-weighted raw pcs),
-    // placed on the spiral (continuity + range fold) and held by hysteresis, with keep-alive for chromatics.
-    // Replaces the mean drift-and-fold. verticalWeight breaks the F♯/G♭ side ties by chord consonance.
-    // chromaticSharpLean handles the melodic/isolated leading tones the vertical guard can't (no co-sounding
-    // P5): a chromatic leans to its raise. Meredith clean wrong 961→823, noisy 1017→817, fixtures ~neutral.
-    // NOT in LA: look-ahead already resolves these by direction, so the lean fights it (clean 547→578).
+    // The diatonic frame: the 7 slots are the coverage collection (recency-weighted raw pcs), placed on the
+    // spiral (continuity plus range fold) and held by hysteresis, with keep-alive for chromatics. Replaces
+    // the mean drift-and-fold. verticalWeight breaks the F♯/G♭ side ties by chord consonance;
+    // chromaticSharpLean handles the melodic/isolated leading tones the vertical guard cannot (no
+    // co-sounding P5), leaning a chromatic to its raise. Not used in look-ahead, which resolves these by
+    // direction, so the lean would fight it.
     frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1,
 };
 
@@ -213,12 +215,11 @@ export const LA_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
     // lookAheadWeight stays 2; the extra pull comes from leadingToneBoost, GATED to up-resolutions into a
-    // natural target (a genuine leading tone A♯→B), so it doesn't over-sharpen same-letter chromatic
-    // inflections (C→C♯, C♯→C). A blunt weight-3 bump could not make that distinction and regressed the
-    // golden chorales (+5 each); the gate keeps those clean. Net: Meredith clean 563→557, noisy 567→554, and
-    // it recovers true leading tones (Moonlight A♯). One residual: E♭→E, a lowered borrowed degree rising to
-    // the natural 3rd, is unseparable from a leading tone without harmonic context (bach_wtc1 +2). See
-    // handoffs/HANDOFF_leading_tone_vs_chromatic.md.
+    // natural target (a genuine leading tone A♯→B), so it does not over-sharpen same-letter chromatic
+    // inflections (C→C♯, C♯→C). A blunt weight bump cannot make that distinction and over-sharpens diatonic
+    // passing tones; the gate keeps those clean while still recovering true leading tones. One residual:
+    // E♭→E, a lowered borrowed degree rising to the natural 3rd, is inseparable from a leading tone without
+    // harmonic context.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
     frameMode: 'diatonic',
@@ -230,15 +231,15 @@ export const LA_PRESET: EngineOptions = {
 export const TP_PASS_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'economy', foldWindow: 24, foldMargin: 7, foldMaxChroma: 0, foldDebounce: 8,
-    // lookAheadWeight stays 2 here (NOT 3 like the real-time LA tier): a stronger per-pass look-ahead makes
-    // both passes commit a side harder, shrinking the forward/backward disagreement the reconciliation needs:
-    // measured net-worse (clean 278→300, noisy 384→394). Same reason the passes use the economy fold, not
-    // the clamp: the two-pass's own reconciliation is the better side fixer.
+    // lookAheadWeight stays 2 here (not stronger): a stronger per-pass look-ahead makes both passes commit a
+    // side harder, shrinking the forward/backward disagreement the reconciliation needs, which nets worse.
+    // Same reason the passes use the economy fold, not the clamp: the two-pass's own reconciliation is the
+    // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
-    // it is tuned to that fold — the diatonic frame breaks the reconciliation (exact 96.8->87.8). The
-    // streaming tiers (rt/la) use the diatonic frame; the offline tier keeps its own proven mechanism.
+    // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
+    // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
 };
 
 // ── Decision trace (introspection only) ────────────────────────────────────────
@@ -264,6 +265,31 @@ export interface Decision {
 
 // ── The engine ─────────────────────────────────────────────────────────────────
 
+/**
+ * TWO SIDE-SUBSTRATES COEXIST in this class, chosen by `frameMode`. The interval scoring, the six
+ * per-candidate deltas, and read-back are shared; only the way the SIDE (the enharmonic orientation) is
+ * held differs. Knowing which one is live explains why half the methods and options never run in a given
+ * tier.
+ *
+ *   'diatonic' (the streaming tiers, RT_PRESET and LA_PRESET). The 7 slots ARE a detected collection:
+ *   every onset recomputes the frame centre by coverage over recent RAW pitch classes
+ *   (computeFrameCentre), re-spells the slots from it, and holds it with hysteresis plus keep-alive for
+ *   chromatics. The comma (side) is the spiral folded INSIDE computeFrameCentre, at the writable band
+ *   [foldCenter ± foldRadius]. noteOn RETURNS at the diatonic commit, so maybeFold, repairCollision,
+ *   updateCollection and the leash anchor are never reached here.
+ *
+ *   'mean' (the offline per-pass tier, TP_PASS_PRESET / spellTwoPass). The 7 slots DRIFT: a commit
+ *   overwrites its letter's slot, and the side is corrected AFTER the fact by maybeFold (fold the frame
+ *   one comma back once its 7-slot MEAN line-of-fifths drifts past the deadzone, by range clamp or
+ *   accidental economy), with updateCollection and diatonicAnchor feeding the continuous leash.
+ *
+ * Both exist because the two tiers want different substrates. The two-pass forward/backward
+ * reconciliation is tuned to the drifting mean fold and needs the per-pass disagreement it produces; the
+ * stable diatonic frame commits a side too hard and breaks that reconciliation. The streaming tiers went
+ * the other way: the diatonic frame beats the mean across modulations. If the diatonic frame is ever made
+ * to reconcile in two pass, the whole 'mean' path (maybeFold, updateCollection, diatonicAnchor,
+ * repairCollision, spellNearest, and their options) can be deleted; see maybeFold's TODO.
+ */
 export class SpellingEngine {
     private readonly recencyGuard: number;
     private readonly guardWindow: number;
@@ -321,7 +347,7 @@ export class SpellingEngine {
     /** LEASH display: the diatonic COLLECTION's centre: the best-fit contiguous 7-fifth window over
      *  recent commits, moved only when a rival window strictly covers more (hysteresis). +2 = C major. */
     private collectionCentre = 2;
-    /** The line-of-fifths centre the clamp fold last tested (recency + repair applied) — a viz read-out. */
+    /** The line-of-fifths centre the clamp fold last tested (recency + repair applied), a viz read-out. */
     private foldCentre = 2;
     /** 'diatonic' frame: the current collection's segment CENTRE on the line of fifths (tonic + 2). */
     private frameCentre = 2;
@@ -432,7 +458,7 @@ export class SpellingEngine {
         const coSounding = this.verticalWeight > 0 ? [...this.active.values()] : [];
         const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(lofOf(p) - lofOf(q)) === 1));
         // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
-        // (higher-LoF) of its single-accidental spellings — the raised leading tone / raised degree.
+        // (higher-LoF) of its single-accidental spellings, the raised leading tone / raised degree.
         let leanTarget: number | null = null;
         if (this.chromaticSharpLean > 0) {
             const centre = this.frameMode === 'diatonic' ? this.frameCentre : this.collectionCentre;
@@ -519,12 +545,11 @@ export class SpellingEngine {
      * re-anchor the 7 slots one comma toward the cheaper side. Sounding notes keep their committed spelling.
      */
     private maybeFold(): void {
-        // TODO(side/flip): the fold centre is the INSTANTANEOUS 7-slot MEAN. This is a bench optimum but the
-        // wrong substrate for the FLIP on modulating pieces: the mean is yanked by every chromatic note and
-        // mis-fires at modulation SEAMS (op28/15 nudged: 13 -> 120 wrong). Restore an EVIDENCE-BASED frame —
-        // a detected key-signature / diatonic collection that holds until new evidence overturns it (lags a
-        // little, robust across modulation) — as the side substrate, replacing or gating this mean. See the
-        // `handoff-restore-evidence-frame` memory.
+        // TODO: the fold centre is the INSTANTANEOUS 7-slot MEAN, the wrong substrate for the flip on
+        // modulating pieces: the mean is yanked by every chromatic note and mis-fires at modulation seams.
+        // The intended replacement is an evidence-based frame (a detected key-signature or diatonic
+        // collection that holds until new evidence overturns it, laggier but robust across modulation) as
+        // the side substrate, replacing or gating this mean.
         // Centre entries [letter, lof] for the 7 slots.
         let entries = [...this.resolved.entries()].map(([L, pc]) => [L, lofOf(pc)] as [Letter, number]);
         // Drop STALE slots (letters not committed within N onsets): a degree the music has not used for a
@@ -544,20 +569,15 @@ export class SpellingEngine {
 
         let favoured = 0;
         if (this.fold === 'clamp') {
-            // Fold only when the frame drifts PAST an edge of the deadzone: far-sharp ⇒ flat, far-flat ⇒
+            // Fold only when the frame drifts PAST an edge of the deadzone: far-sharp to flat, far-flat to
             // sharp, never touching central keys.
             if (cFrame > this.foldCenter + this.foldRadius) favoured = -ENHARMONIC_COMMA;
             else if (cFrame < this.foldCenter - this.foldRadius) favoured = +ENHARMONIC_COMMA;
-            // TODO(fold): economy-gated clamp is a clean, landable win (Meredith neutral, lab +0.16pp/-31
-            // wrong, debussy 49.4->62.5 exact) but only VETOES over-folds; it can't fix UNDER-firing where
-            // the fold that should happen never triggers (op28/15 Dbm middle: centre stuck at Gb, never
-            // reaches the edge, so it stays flipped instead of folding to Chopin's C#m). Investigate landing
-            // this (needs bench:update — debussy is a gate fixture) AND a separate fix for under-fire:
-            // better deep-flat DETECTION (push the centre past the edge) or an economy TRIGGER that creates
-            // folds (careful — that reintroduces full-economy's aggregate cost). See fold-center memory.
-            // PROBE: ECONOMY GATE. The clamp says WHEN (far out); economy says WHETHER — only fold if the
-            // target side spells the recent raw pcs at least as cheaply (vetoes over-folding a moderate flat
-            // like Db major, confirms folding a deep flat like Db minor). Position triggers, economy confirms.
+            // Economy gate (foldEconomyGate, off by default): the clamp decides WHEN to fold (frame far out),
+            // this decides WHETHER, folding only if the target comma-side spells the recent raw pitch classes
+            // at least as cheaply. It vetoes over-folding a moderate flat while still confirming a deep one.
+            // It only VETOES, though; it cannot fix UNDER-firing, where a fold that should happen never
+            // triggers because the centre never reaches the edge.
             if (favoured !== 0 && this.foldEconomyGate) {
                 const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
                 if (heard.length) {
@@ -601,7 +621,7 @@ export class SpellingEngine {
     /**
      * The principled frame centre ('diatonic' mode): the diatonic COLLECTION as one contiguous 7-fifth
      * segment centred at the returned line-of-fifths position (tonic + 2). Chosen by COVERAGE over the
-     * recent RAW pitch classes — recency-weighted (half-life {@link frameHalfLife}), anti-poison (never the
+     * recent RAW pitch classes, recency-weighted (half-life {@link frameHalfLife}), anti-poison (never the
      * speller's own spellings), so it fixes the collection without lag or drift. The comma (SIDE) is the
      * spiral: among the equal-best-coverage commas, take the one nearest the held frame (continuity), with a
      * hard barrier past the writable band [foldCenter ± foldRadius] (the fold). Hysteresis holds the current
@@ -609,7 +629,7 @@ export class SpellingEngine {
      */
     private computeFrameCentre(): number {
         // Recency-weighted raw-pc histogram over the frame window: the current onset weighs 1, each older
-        // onset × decay^age (half-life {@link frameHalfLife}). Anti-poison — raw pcs, never our own spellings.
+        // onset × decay^age (half-life {@link frameHalfLife}). Anti-poison: raw pcs, never our own spellings.
         const decay = Math.pow(0.5, 1 / this.frameHalfLife);
         const counts = new Array(12).fill(0);
         let w = 1;

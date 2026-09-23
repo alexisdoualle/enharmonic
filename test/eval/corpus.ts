@@ -1,15 +1,14 @@
 /**
- * Second corpus: score THIS repo's shipped modes against the legacy lab's curated fixtures,
- * IN PLACE, without hoisting them into this repo.
+ * Second corpus: score THIS repo's shipped modes against an optional external curated corpus, IN
+ * PLACE, without hoisting the fixtures into this repo.
  *
- *   npm run lab-corpus                 # reads $ENHARMONIC_LAB/fixtures (else ../enharmonic-lab)
- *   ENHARMONIC_LAB=/path npm run lab-corpus
+ *   npm run corpus                     # reads $ENHARMONIC_LAB/fixtures (else ../enharmonic-lab)
+ *   ENHARMONIC_LAB=/path npm run corpus
  *
- * The lab (`enharmonic-lab`) is the legacy experimental repo, to be retired; its curated corpus
- * (~59 hand-audited fixtures, broader than the 6 shipped here) is a useful independent check while
- * it lasts. Its fixtures use the SAME format as this repo (events.json on/off + positional
- * expected.json), so we drive them with the real speller and the shared three-tier scorer: no copy,
- * no lab code. If the lab is gone, this simply reports the path is missing.
+ * The external corpus (a broader, hand-audited set of fixtures than the few shipped here) is a useful
+ * independent check when present. Its fixtures use the SAME format as this repo (events.json on/off +
+ * positional expected.json), so we drive them with the real speller and the shared three-tier scorer:
+ * nothing is copied in. If the path is absent, this simply reports it is missing.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +18,7 @@ import { scoreTiers } from './score.js';
 const LAB = process.env.ENHARMONIC_LAB || join(process.cwd(), '..', 'enharmonic-lab');
 const FIXTURES = join(LAB, 'fixtures');
 if (!existsSync(FIXTURES)) {
-    console.error(`✗ lab fixtures not found: ${FIXTURES}\n  Set $ENHARMONIC_LAB to the legacy repo, or place it at ../enharmonic-lab.`);
+    console.error(`✗ external fixtures not found: ${FIXTURES}\n  Set $ENHARMONIC_LAB to the corpus path, or place it at ../enharmonic-lab.`);
     process.exit(1);
 }
 

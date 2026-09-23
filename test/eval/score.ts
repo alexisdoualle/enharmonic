@@ -1,8 +1,7 @@
 /**
  * Three-tier, side-corrected scoring of predicted spellings against ground truth:
- * the COMMA-OFFSET COHERENCE metric. This is a faithful port of the lab's blessed
- * scorer (`enharmonic-lab/test/parity/sideclass.ts::tiersFromOffsets`), so this
- * repo grades spellings by exactly the same metric.
+ * the COMMA-OFFSET COHERENCE metric. It is the same metric the viz uses to grade
+ * spellings, shared here so every corpus is scored the same way.
  *
  * Every prediction spells the *same sounding pitch* as its expected counterpart, so a
  * mismatch is never a wrong note: only a wrong enharmonic *side*. Grade on the line of

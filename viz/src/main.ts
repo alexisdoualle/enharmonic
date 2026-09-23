@@ -529,7 +529,7 @@ function wire() {
     let resizeT = 0;
     window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = window.setTimeout(render, 120); });
     // Transport keys are GLOBAL: space plays/pauses and the arrows move the playhead no matter which
-    // control was last clicked — a focused button, checkbox or <select> must not swallow them (clicking
+    // control was last clicked: a focused button, checkbox or <select> must not swallow them (clicking
     // "look-ahead" then pressing space should play, not re-toggle the box). Only a genuine text field
     // (none in this app today) keeps a key as literal input.
     const isTextField = (el: HTMLElement | null): boolean => !!el && (el.isContentEditable

@@ -5,9 +5,9 @@
  * shipped real-time Speller: the three principles alone, without the settings that
  * correct the enharmonic side. `src/core.ts` is the source of truth; this file is a
  * derived copy, pinned to it by `test/examples/standalone.test.ts` (equal spellings
- * on every fixture). Kept for pedagogy. On its own, this model is sufficient to
- * achieve 99.44% coherent reading of spellings (with a cost of being on the wrong side
- * of the spiral of fifths, C# vs Db...).
+ * on every fixture). Kept for pedagogy. On its own, this model reads spellings coherently
+ * (intervals right, flicker-free), at the cost of sometimes landing on the wrong side of the
+ * spiral of fifths (C# vs Db).
  *
  * Three principles, and nothing else:
  *   1. The 7-LETTER LIMIT. A running "resolved scale" holds one spelling per letter
@@ -28,8 +28,7 @@
  * correction, an optional look-ahead, and more; spellTwoPass runs the same model
  * offline in two passes.
  *
- * Held-out corpus of ~196k notes (Meredith 8x25000, clean): 97.56% exact, 99.44%
- * coherent, 0.56% wrong. The principles all but solve coherence (intervals right and
+ * The principles all but solve coherence (intervals right and
  * flicker-free, well under 1% incoherent). The residual gap from coherent to exact is
  * the SIDE: with no key-signature prior and no range cap, the scale can drift onto the
  * other enharmonic side of a passage (a coherent flip, e.g. D♭ F A♭ for C♯ E♯ G♯:
