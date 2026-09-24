@@ -15,6 +15,7 @@ import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
+import { parseMusicXml } from './import/musicxml.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
@@ -139,6 +140,7 @@ async function listFixtures(): Promise<string[]> {
     return (await (await fetch('fixtures/manifest.json')).json()) as string[];
 }
 async function loadFixture(id: string): Promise<{ events: RawEvent[]; expected: Expected[] }> {
+    if (id === IMPORTED_ID && imported) return { events: imported.events, expected: imported.expected };
     const [events, expected] = await Promise.all([
         fetch(`fixtures/${id}/events.json`).then(r => r.json()),
         fetch(`fixtures/${id}/expected.json`).then(r => r.json()),
@@ -151,6 +153,16 @@ async function loadFixture(id: string): Promise<{ events: RawEvent[]; expected: 
 
 let rawEvents: RawEvent[] = [];
 let rawExpected: Expected[] = [];
+
+// An imported MusicXML score is a session-only fixture: it carries its own ground-truth spelling, so
+// it grades exactly like a committed fixture. It lives in memory under one reserved dropdown slot
+// (never fetched from disk, never written to the URL), replaced each time a new file is imported.
+const IMPORTED_ID = '__imported__';
+let imported: { events: RawEvent[]; expected: Expected[]; name: string } | null = null;
+/** Friendly name for the currently loaded fixture (the imported piece's name, else its corpus id). */
+function fixtureLabel(): string {
+    return state.fixtureId === IMPORTED_ID && imported ? `↥ ${imported.name}` : (state.fixtureId ?? '');
+}
 
 /** Look-ahead is an OPTION of the real-time speller (`Speller({ lookAhead })`), surfaced as a toolbar
  *  toggle rather than a separate dropdown mode. Internally that is the `la` replay mode. */
@@ -209,7 +221,7 @@ function renderStatus() {
     const pc = (x: number) => t.total ? (100 * x / t.total).toFixed(1) : '0.0';
     // "correct" = exact + flipped (right pitch-class / coherent side); exact & flipped break it down.
     const modeName = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
-    $('status').innerHTML = `${state.fixtureId} · ${modeName} · ${r.snapshots.length} onsets · `
+    $('status').innerHTML = `${fixtureLabel()} · ${modeName} · ${r.snapshots.length} onsets · `
         + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
         + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
         + `<span class="wrong">${pc(t.wrong)}% wrong (${t.wrong})</span>`
@@ -445,7 +457,9 @@ function copyContext(ev: KeyboardEvent) {
 function syncUrl() {
     if (!state.fixtureId) return;
     const u = new URL(location.href);
-    u.searchParams.set('fixture', state.fixtureId);
+    // An imported fixture is session-only (can't be reloaded from a URL), so keep it out of the link.
+    if (state.fixtureId === IMPORTED_ID) u.searchParams.delete('fixture');
+    else u.searchParams.set('fixture', state.fixtureId);
     u.searchParams.set('mode', state.mode);
     u.searchParams.set('step', String(state.step + 1));
     // spiral what-if params: omit when at the shipped default so a plain view keeps a clean URL
@@ -466,6 +480,30 @@ function syncUrl() {
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
+}
+
+/**
+ * Import a MusicXML file as a session-only fixture. The score's own notated spelling becomes the
+ * ground truth, so it grades like any committed fixture. Reuses one reserved dropdown slot; a second
+ * import replaces it. `.mxl` (zipped) is not read here.
+ */
+async function importMusicXmlFile(file: File) {
+    if (/\.mxl$/i.test(file.name)) { flash('compressed .mxl not supported — export uncompressed .musicxml'); return; }
+    let r: ReturnType<typeof parseMusicXml>;
+    try { r = parseMusicXml(await file.text(), file.name); }
+    catch (e) { flash(`import failed: ${(e as Error).message}`); return; }
+    // File names run long (paths, encoding junk); cap the label and keep the full name as a tooltip.
+    const short = r.name.length > 22 ? r.name.slice(0, 21).trimEnd() + '…' : r.name;
+    imported = { events: r.events, expected: r.expected, name: short };
+    const sel = $<HTMLSelectElement>('fixture');
+    let opt = sel.querySelector<HTMLOptionElement>(`option[value="${IMPORTED_ID}"]`);
+    if (!opt) { opt = document.createElement('option'); sel.appendChild(opt); opt.value = IMPORTED_ID; }
+    opt.textContent = `↥ ${short} (imported)`;
+    opt.title = r.name;
+    sel.value = IMPORTED_ID;
+    await pickFixture(IMPORTED_ID, 0);
+    const tail = r.warnings.length ? ` (${r.warnings.join('; ')})` : '';
+    flash(`imported ${r.name} · ${r.expected.length} notes${tail}`);
 }
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
@@ -492,6 +530,20 @@ function wire() {
     for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).addEventListener('click', () => setMobileTab(t));
     MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
+    // Import a MusicXML score (button opens the picker; drop works anywhere on the app).
+    $('import-btn').addEventListener('click', () => $('import-file').click());
+    $<HTMLInputElement>('import-file').addEventListener('change', e => {
+        const el = e.target as HTMLInputElement;
+        const f = el.files?.[0];
+        if (f) void importMusicXmlFile(f);
+        el.value = '';   // let the same file be re-imported
+    });
+    window.addEventListener('dragover', e => { e.preventDefault(); });
+    window.addEventListener('drop', e => {
+        e.preventDefault();
+        const f = e.dataTransfer?.files?.[0];
+        if (f) void importMusicXmlFile(f);
+    });
     $<HTMLSelectElement>('mode').addEventListener('change', e => { state.mode = (e.target as HTMLSelectElement).value as Mode; recompute(); syncUrl(); });
     // Dragging the scrub fires a stream of `input`s; restarting playback on each would machine-gun the
     // look-ahead scheduler, so playback pauses for the drag and picks up once at `change` (release).
