@@ -339,18 +339,30 @@ const rateToPos = (r: number) => Math.log(r) / Math.log(TEMPO_SPAN);
 // score's rhythm but never lets a huge rest stall the player. Rebuilt only when the replay changes.
 let timeline: number[] = [];
 let noteDurMs: number[] = [];
+// Exact unison duplicate per on-index: the same MIDI already struck at this same instant (an earlier
+// note shares its onset time and pitch). Orchestral/choral scores double a pitch across voices, so
+// without this the player stacks N identical oscillators at one `when` — louder, phasey, "played twice".
+// Octave doublings are a different pitch and are NOT flagged. Audio-only; the visuals show every note.
+let dupOnset: boolean[] = [];
 let timelineFor: Replay | null = null;
 function ensureTimeline(replay: Replay): number[] {
     if (timelineFor === replay) return timeline;
     const notes = replay.notes;
     timeline = new Array(notes.length);
     noteDurMs = new Array(notes.length);
+    dupOnset = new Array(notes.length);
     let acc = 0;
+    let curOnT = NaN;
+    const struck = new Set<number>();   // MIDIs already struck at the current onset (notes are onset-ordered)
     for (let i = 0; i < notes.length; i++) {
+        const n = notes[i]!;
+        if (n.onT !== curOnT) { curOnT = n.onT; struck.clear(); }
+        dupOnset[i] = struck.has(n.midi);
+        struck.add(n.midi);
         timeline[i] = acc;
-        noteDurMs[i] = Math.max(0, notes[i]!.offT - notes[i]!.onT);
+        noteDurMs[i] = Math.max(0, n.offT - n.onT);
         const next = notes[i + 1];
-        if (next) acc += Math.min(MAX_GAP_MS, Math.max(0, next.onT - notes[i]!.onT));
+        if (next) acc += Math.min(MAX_GAP_MS, Math.max(0, next.onT - n.onT));
     }
     timelineFor = replay;
     return timeline;
@@ -405,9 +417,11 @@ function frame() {
     if (soundOn) {
         const horizon = nowPlay + LOOKAHEAD_MS;
         while (audioIdx < notes.length && tl[audioIdx]! <= horizon) {
-            const when = t0Ctx + (tl[audioIdx]! - basePlay) / 1000 / tempoRate;
-            const dur = Math.min(MAX_NOTE_SEC, Math.max(MIN_NOTE_SEC, noteDurMs[audioIdx]! / tempoRate / 1000));
-            playMidi(notes[audioIdx]!.midi, dur, undefined, when);
+            if (!dupOnset[audioIdx]) {   // a unison duplicate is already sounding at this instant; play once
+                const when = t0Ctx + (tl[audioIdx]! - basePlay) / 1000 / tempoRate;
+                const dur = Math.min(MAX_NOTE_SEC, Math.max(MIN_NOTE_SEC, noteDurMs[audioIdx]! / tempoRate / 1000));
+                playMidi(notes[audioIdx]!.midi, dur, undefined, when);
+            }
             audioIdx++;
         }
     }
