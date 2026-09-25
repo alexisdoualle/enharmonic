@@ -123,6 +123,25 @@ paste to an agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
 </ul>`,
     },
     {
+        id: 'import', nav: 'Import a score', title: 'Import your own score',
+        body: `
+<p>The <b>&#8613; import</b> button, next to the fixture menu, loads a score of your own. You can also drop
+a file anywhere on the page. The format is <b>MusicXML</b>: <code>.musicxml</code> or <code>.xml</code>,
+and compressed <code>.mxl</code>. Every notation app exports it (MuseScore, Sibelius, Finale, Dorico).</p>
+
+<p>MusicXML keeps the composer's own spelling, so an imported score is graded exactly like the built-in
+fixtures: the speller sees only the pitches, and its output is scored against the notated letters, three
+tiers and all. A plain MIDI file has no spelling to grade against, which is why the import is MusicXML,
+not MIDI.</p>
+
+<p>An import lives in this browser session only. It is never uploaded and never added to the corpus, and
+it shows in the fixture menu as <b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
+
+<p><b>What this first version reads:</b> multiple parts, chords, ties, and voices. Grace notes are skipped
+and repeats are not expanded (the written order plays once), so the note count can differ from the printed
+score. A short message after import names anything that was skipped.</p>`,
+    },
+    {
         id: 'notation', nav: 'Staff & roll', title: 'The staff and the piano roll',
         body: `
 <p>Both views show the same committed spellings, one as notation and one over time.</p>
