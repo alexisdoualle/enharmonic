@@ -15,7 +15,7 @@ import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
-import { parseMusicXml } from './import/musicxml.js';
+import { parseMusicXml, readMxl } from './import/musicxml.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
@@ -488,10 +488,11 @@ function syncUrl() {
  * import replaces it. `.mxl` (zipped) is not read here.
  */
 async function importMusicXmlFile(file: File) {
-    if (/\.mxl$/i.test(file.name)) { flash('compressed .mxl not supported — export uncompressed .musicxml'); return; }
     let r: ReturnType<typeof parseMusicXml>;
-    try { r = parseMusicXml(await file.text(), file.name); }
-    catch (e) { flash(`import failed: ${(e as Error).message}`); return; }
+    try {
+        const xml = /\.mxl$/i.test(file.name) ? await readMxl(await file.arrayBuffer()) : await file.text();
+        r = parseMusicXml(xml, file.name);
+    } catch (e) { flash(`import failed: ${(e as Error).message}`); return; }
     // File names run long (paths, encoding junk); cap the label and keep the full name as a tooltip.
     const short = r.name.length > 22 ? r.name.slice(0, 21).trimEnd() + '…' : r.name;
     imported = { events: r.events, expected: r.expected, name: short };

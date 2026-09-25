@@ -9,7 +9,8 @@
  * chords (`<chord/>`), voice cursor moves (`<backup>`/`<forward>`), ties (continuations merged into
  * one held note), rests (advance the cursor). Grace notes are skipped (no duration). Repeats and
  * voltas are NOT expanded: the written order plays once. `<sound tempo>` sets playback speed, else
- * 120 BPM. Compressed `.mxl` (zip) is not handled here; export uncompressed `.musicxml`/`.xml`.
+ * 120 BPM. Compressed `.mxl` (a zip) is read by {@link readMxl}, which inflates the score with the
+ * browser's native `DecompressionStream` (still no dependency) and hands the XML to {@link parseMusicXml}.
  */
 
 import type { RawEvent, Expected } from '../replay.js';
@@ -170,7 +171,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     raw.sort((p, q) => p.t_ms - q.t_ms || rank(p) - rank(q) || (p.midi! - q.midi!));
     events.push(...raw);
 
-    const name = fileName.replace(/\.(musicxml|xml)$/i, '');
+    const name = fileName.replace(/\.(musicxml|xml|mxl)$/i, '');
     return { events, expected, name, warnings };
 }
 
@@ -178,4 +179,69 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
 function firstTempo(doc: Document): number | null {
     const t = doc.querySelector('sound[tempo]')?.getAttribute('tempo');
     return t ? Number(t) : null;
+}
+
+// ── .mxl (compressed MusicXML) ─────────────────────────────────────────────────
+
+const ZIP_EOCD = 0x06054b50;   // end of central directory
+const ZIP_CDIR = 0x02014b50;   // central directory file header
+
+interface ZipEntry { name: string; method: number; compSize: number; localOff: number; }
+
+/**
+ * Inflate the MusicXML text out of a compressed `.mxl` file (a ZIP archive). No dependency: the ZIP
+ * central directory is parsed by hand and the score member is inflated with the browser's
+ * `DecompressionStream`. The member is chosen from `META-INF/container.xml`'s rootfile when present,
+ * else the first non-`META-INF` `.musicxml`/`.xml`. Throws a clear message on anything unsupported.
+ */
+export async function readMxl(buf: ArrayBuffer): Promise<string> {
+    const bytes = new Uint8Array(buf);
+    const dv = new DataView(buf);
+    // Locate the end-of-central-directory record (scan back from the end, past any ZIP comment).
+    let eocd = -1;
+    for (let i = bytes.length - 22, min = Math.max(0, bytes.length - 22 - 0xffff); i >= min; i--) {
+        if (dv.getUint32(i, true) === ZIP_EOCD) { eocd = i; break; }
+    }
+    if (eocd < 0) throw new Error('not a valid .mxl (no ZIP end record)');
+    const count = dv.getUint16(eocd + 10, true);
+    let off = dv.getUint32(eocd + 16, true);
+
+    const entries: ZipEntry[] = [];
+    const dec = new TextDecoder();
+    for (let n = 0; n < count && off + 46 <= bytes.length; n++) {
+        if (dv.getUint32(off, true) !== ZIP_CDIR) break;
+        const method = dv.getUint16(off + 10, true);
+        const compSize = dv.getUint32(off + 20, true);
+        const nameLen = dv.getUint16(off + 28, true);
+        const extraLen = dv.getUint16(off + 30, true);
+        const commentLen = dv.getUint16(off + 32, true);
+        const localOff = dv.getUint32(off + 42, true);
+        const name = dec.decode(bytes.subarray(off + 46, off + 46 + nameLen));
+        entries.push({ name, method, compSize, localOff });
+        off += 46 + nameLen + extraLen + commentLen;
+    }
+    if (entries.length === 0) throw new Error('empty or unreadable .mxl archive');
+
+    const inflate = async (e: ZipEntry): Promise<string> => {
+        // The local header repeats the name/extra lengths; data begins right after them.
+        const dataStart = e.localOff + 30 + dv.getUint16(e.localOff + 26, true) + dv.getUint16(e.localOff + 28, true);
+        const comp = bytes.subarray(dataStart, dataStart + e.compSize);
+        if (e.method === 0) return dec.decode(comp);                                  // stored
+        if (e.method !== 8) throw new Error(`unsupported .mxl compression (method ${e.method})`);
+        if (typeof DecompressionStream === 'undefined') throw new Error('this browser cannot unzip .mxl; export uncompressed .musicxml');
+        const stream = new Blob([comp]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return dec.decode(await new Response(stream).arrayBuffer());
+    };
+
+    // Prefer the rootfile that META-INF/container.xml points at; else the first score member.
+    const container = entries.find(e => e.name === 'META-INF/container.xml');
+    if (container) {
+        const m = /full-path\s*=\s*"([^"]+)"/.exec(await inflate(container));
+        const target = m && entries.find(e => e.name === m[1]);
+        if (target) return inflate(target);
+    }
+    const score = entries.find(e => /\.(musicxml|xml)$/i.test(e.name) && !e.name.startsWith('META-INF/'))
+        ?? entries.find(e => /\.(musicxml|xml)$/i.test(e.name));
+    if (!score) throw new Error('no .musicxml found inside the .mxl');
+    return inflate(score);
 }
