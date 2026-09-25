@@ -75,18 +75,38 @@ its relative major, A minor to C=0). Experimental; omit it for the default keyle
 The shipped library is the speller above: the real-time `Speller`, its look-ahead setting, and the
 offline `spellTwoPass`.
 
-Held-out Meredith (216 movements, 195,972 notes), the standard pitch-spelling benchmark: exact
-composer-spelling match, level with the best deterministic and neural spellers
-(ps13, Temperley, Chew & Chen, PKSpell, scored on the same notes in `test/eval/meredith-baselines.json`):
+Held-out Meredith (216 movements, 195,972 notes), the standard pitch-spelling benchmark, level with the
+best deterministic and neural spellers (ps13, Temperley, Chew & Chen, PKSpell, scored on the same notes
+in `test/eval/meredith-baselines.json`). `exact` is a strict composer-spelling match; `coherent` also
+counts a contextually coherent enharmonic flip (the other, equally-correct side of the comma):
 
-| Mode | clean | noisy |
-|---|--:|--:|
-| Real-time | 99.52% | 99.44% |
-| + look-ahead | 99.70% | 99.70% |
-| + two-pass | 99.86% | 99.79% |
+| Mode | clean exact | clean coherent | noisy exact | noisy coherent |
+|---|--:|--:|--:|--:|
+| [Core](examples/core-speller.ts) (three principles) | 97.56% | 99.44% | 96.25% | 99.44% |
+| Real-time | 99.53% | 99.58% | 99.55% | 99.58% |
+| + look-ahead | 99.67% | 99.72% | 99.61% | 99.72% |
+| + two-pass | 99.86% | 99.86% | 99.79% | 99.80% |
 
-The remaining gap is mostly coherent enharmonic flips: the other, equally-correct side of the
-comma (D♭–F–A♭ for C♯–E♯–G♯), not incoherent errors.
+The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
+comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
+
+## The three principles
+
+The smallest form of the model is [`examples/core-speller.ts`](examples/core-speller.ts): the speller in
+~100 lines, zero imports, built from three principles and nothing else.
+
+1. **The seven-letter limit.** A running resolved scale holds one spelling per letter A–G. Spelling a
+   note is choosing which letter it claims.
+2. **Interval scoring.** Among a pitch's enharmonic candidates, pick the one that forms the most
+   consonant intervals with the rest of the scale. The scale drifts into key with no key detection.
+3. **The recency guard.** Dock a candidate whose letter was last committed at a different accidental a
+   few onsets ago, so a slot cannot flicker against its recent self.
+
+These alone all but solve *coherence* (intervals right, flicker-free): **99.44% coherent** on Meredith,
+**97.69%** on the harder, less-overfit curated corpus. The lower **exact** rate (**97.56%** on Meredith,
+**68.04%** on the curated corpus) is the gap the three principles leave open, and it is almost entirely
+the *side*, not incoherence: with no key prior a passage can settle on the other side of the spiral. The
+shipped `Speller` adds the side correction that closes it.
 
 ## Reproducing the Meredith benchmark
 

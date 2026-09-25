@@ -120,10 +120,16 @@
       <span class="glyph">D♭</span> major is the same pitches one turn around the spiral of fifths, a
       coherent transposition, not an error.</p>
 
-      <p>The speller settles both from three principles in one harmonic space, with
-      <strong>no key detection anywhere</strong>: a running seven-letter scale, an interval score that
-      rewards consonance, and a spiral that decides which side of the comma a passage sits on. The side it
-      lands on is a statistic of the notes it has already committed.</p>
+      <p>The speller works in one harmonic space, with <strong>no key detection anywhere</strong>. Three
+      principles handle coherence: a running seven-letter scale, an interval score that rewards consonance,
+      and a recency guard against flicker. A spiral of fifths then decides which side of the comma a passage
+      sits on. The side it lands on is a statistic of the notes it has already committed.</p>
+
+      <p>Those three principles are small enough to read in one file:
+      <a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">the Core
+      speller</a>, about 100 lines with zero imports. On its own it spells coherently but can land on the
+      wrong side of the comma, so its coherent rate stays high while its exact rate drops. The shipped modes
+      add the side correction that closes that gap.</p>
 
       <h2>One speller</h2>
       <p>One engine spells each note as it plays, from past context only. An optional
@@ -145,7 +151,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td>Real-time</td><td>99.52%</td><td class="grp">94.49%</td><td>98.06%</td></tr>
+          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (3 principles)</td><td>97.56%</td><td class="grp">68.04%</td><td>97.69%</td></tr>
+          <tr><td>Real-time</td><td>99.53%</td><td class="grp">91.43%</td><td>98.36%</td></tr>
           <tr><td>Two-pass</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
         </tbody>
       </table>
@@ -153,7 +160,7 @@
       composer-spelling match. On Meredith's held-out corpus (195,972 notes), the standard pitch-spelling
       benchmark, the library is level with the best deterministic and neural spellers. The 59-piece curated
       corpus is harder and less overfit: it stresses the side (comma) choice Meredith mostly avoids. There
-      the exact rate falls, but coherent stays near 99%. Coherent counts a whole-passage flip to the other
+      the exact rate falls (steeply for Core), but coherent stays high. Coherent counts a whole-passage flip to the other
       side of the spiral as correct, since it is the same music transposed, not a wrong note. Almost every
       miss is a flip, not an error.</p>
 

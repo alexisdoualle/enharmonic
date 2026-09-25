@@ -7,7 +7,11 @@
  * derived copy, pinned to it by `test/examples/standalone.test.ts` (equal spellings
  * on every fixture). Kept for pedagogy. On its own, this model reads spellings coherently
  * (intervals right, flicker-free), at the cost of sometimes landing on the wrong side of the
- * spiral of fifths (C# vs Db).
+ * spiral of fifths (C# vs Db). Note: coherent means an entire section is transposed to a comma: e.g.
+ * a passage the composer wrote in Db major is spelled in C# major instead. A lone note cannot be
+ * "flipped": if what was a Db major chord is spelled in C# major: C# F G#, "F" is considered "wrong", 
+ * because it disagrees with its neighbors, even if that note was in the original score. 
+ * It wasn't transposed correctly, it should be "E#".
  *
  * Three principles, and nothing else:
  *   1. The 7-LETTER LIMIT. A running "resolved scale" holds one spelling per letter
