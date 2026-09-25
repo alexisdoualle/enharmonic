@@ -178,7 +178,7 @@ let lastPressed: string | null = null;
  *  (e.g. G♭…G♯) sit in the tooltip; widening the range digs to deeper enharmonics, the centre biases
  *  sharp/flat. */
 function renderControls(opts: WheelOpts): HTMLElement {
-    const { range, center, even, streaming, control, onChange, repair, onRepair, meanFrame, onMeanFrame } = opts;
+    const { range, center, even, streaming, control, onChange, meanFrame, onMeanFrame } = opts;
     const editable = streaming || control;   // control mode also drives its window from these steppers
     const wrap = document.createElement('div');
     wrap.className = 'spiral-ctl' + (editable ? '' : ' disabled');
@@ -263,19 +263,10 @@ function renderControls(opts: WheelOpts): HTMLElement {
     reset.addEventListener('click', () => { lastPressed = null; onChange(SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT); });
     wrap.appendChild(reset);
 
-    // PROBE toggle: repair the fold-centre scale (snap chromatic outliers to the diatonic window) so the
-    // detected key reads the underlying collection. Streaming rungs only.
+    // The 'repair' PROBE toggle (snap the fold-centre scale to its best-fit diatonic window) is hidden
+    // from the panel: it is experimental and off by default. The `repair` state and the `?rp=1` URL lever
+    // still work, so it can be exercised without the button.
     if (!control) {
-        const rep = document.createElement('button');
-        rep.className = 'ctl-reset' + (repair ? ' on' : '');
-        rep.textContent = 'repair';
-        rep.disabled = !streaming;
-        rep.title = 'snap the fold-centre scale to its best-fit diatonic window (experimental)';
-        rep.dataset.k = 'repair';
-        rep.addEventListener('click', () => { lastPressed = 'repair'; onRepair(!repair); });
-        if (rep.dataset.k === lastPressed) focusLater.push(rep);
-        wrap.appendChild(rep);
-
         // A/B toggle: run the old 'mean' drift-and-fold side substrate instead of the shipped diatonic
         // frame. Streaming rungs only (the two-pass tier has its own mean fold already).
         const mf = document.createElement('button');
