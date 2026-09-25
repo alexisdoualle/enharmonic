@@ -7,8 +7,10 @@
  *
  * Scope (v1): score-partwise, one or many parts (merged on a shared clock), `<divisions>` changes,
  * chords (`<chord/>`), voice cursor moves (`<backup>`/`<forward>`), ties (continuations merged into
- * one held note), rests (advance the cursor). Grace notes are skipped (no duration). Repeats and
- * voltas are NOT expanded: the written order plays once. `<sound tempo>` sets playback speed, else
+ * one held note), rests (advance the cursor), and transposing instruments (`<transpose>`: written pitch
+ * is converted to sounding/concert pitch, MIDI and spelling together, so a clarinet or horn part reads
+ * in the same key as the rest). Grace notes are skipped (no duration). Repeats and voltas are NOT
+ * expanded: the written order plays once. `<sound tempo>` sets playback speed, else
  * 120 BPM. Compressed `.mxl` (a zip) is read by {@link readMxl}, which inflates the score with the
  * browser's native `DecompressionStream` (still no dependency) and hands the XML to {@link parseMusicXml}.
  */
@@ -29,6 +31,34 @@ export interface ImportResult {
 /** midi number of a notated pitch. */
 function midiOf(step: string, alter: number, octave: number): number {
     return 12 * (octave + 1) + STEP_SEMITONE[step]! + alter;
+}
+
+const LETTER_IDX: Record<string, number> = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+const LETTERS7 = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+
+/** A part's `<transpose>`: what to ADD to a written pitch to get the sounding (concert) pitch. */
+interface Transpose { diatonic: number; chromatic: number; octaveChange: number; }
+
+/** Concert = no pitch-class change: absent, or a whole number of octaves (piccolo, contrabass). */
+function isConcert(t: Transpose | null): boolean {
+    return t == null || ((t.chromatic + 12 * t.octaveChange) % 12 === 0);
+}
+
+/**
+ * Convert a WRITTEN pitch to its SOUNDING (concert) pitch through a part's `<transpose>` (clarinet in
+ * B♭, horn in F, …). MIDI and spelling are derived from the SAME interval, so they always name the same
+ * pitch: `midiOf(step, alter, octave) === midi`. That keeps the imported fixture self-consistent, so the
+ * viz scorer never sees a note whose committed spelling and expected spelling are different pitches.
+ */
+function toSounding(step: string, alter: number, octave: number, t: Transpose | null):
+    { step: string; alter: number; octave: number; midi: number } {
+    if (t == null) return { step, alter, octave, midi: midiOf(step, alter, octave) };
+    const midi = midiOf(step, alter, octave) + t.chromatic + 12 * t.octaveChange;
+    const rawIdx = LETTER_IDX[step]! + t.diatonic + 7 * t.octaveChange;   // letter shift (7 letters/octave)
+    const soundStep = LETTERS7[((rawIdx % 7) + 7) % 7]!;
+    const soundOctave = octave + Math.floor(rawIdx / 7);
+    const soundAlter = midi - (12 * (soundOctave + 1) + STEP_SEMITONE[soundStep]!);   // accidental to hit `midi`
+    return { step: soundStep, alter: soundAlter, octave: soundOctave, midi };
 }
 
 const text = (el: Element | null, sel: string): string | null => el?.querySelector(sel)?.textContent?.trim() ?? null;
@@ -71,7 +101,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     if (parts.length === 0) throw new Error('No <part> found.');
 
     const warnings: string[] = [];
-    let sawGrace = false, sawRepeat = false;
+    let sawGrace = false, sawRepeat = false, sawTranspose = false;
 
     const tempo = firstTempo(doc) ?? 120;
     const msPerQuarter = 60000 / tempo;
@@ -88,6 +118,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
         // Open tie continuations, keyed by pitch: a tie-stop extends the held note instead of re-attacking.
         const pendingTie = new Map<number, Attack>();
         let lastOnsetQ = 0;   // onset a following <chord/> note attaches to
+        let transpose: Transpose | null = null;   // this part's written->sounding transposition
 
         for (const measure of part.querySelectorAll(':scope > measure')) {
             measureNumber = Number(measure.getAttribute('number')) || measureNumber + 1;
@@ -99,7 +130,18 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                 if (tag === 'attributes') {
                     const d = num(el, 'divisions');
                     if (d && d > 0) divisions = d;
-                    if (respellScale == null) {
+                    const tr = el.querySelector('transpose');
+                    if (tr) {
+                        const chromatic = num(tr, 'chromatic') ?? 0;
+                        const octaveChange = num(tr, 'octave-change') ?? 0;
+                        // diatonic is usually given; if not, approximate it from the chromatic size.
+                        const diatonic = num(tr, 'diatonic') ?? Math.round(chromatic * 7 / 12);
+                        transpose = { chromatic, diatonic, octaveChange };
+                        if (!isConcert(transpose)) sawTranspose = true;
+                    }
+                    // Take the key signature from a CONCERT part only: a transposing part carries its
+                    // WRITTEN key, not the concert key the staff should show.
+                    if (respellScale == null && isConcert(transpose)) {
                         const f = num(el, 'key fifths');
                         if (f != null) respellScale = scaleFromFifths(f);
                     }
@@ -122,8 +164,9 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                         const step = text(pitch, 'step');
                         const octave = num(pitch, 'octave');
                         if (step && octave != null) {
-                            const alter = num(pitch, 'alter') ?? 0;
-                            const midi = midiOf(step, alter, octave);
+                            const writtenAlter = num(pitch, 'alter') ?? 0;
+                            const snd = toSounding(step, writtenAlter, octave, transpose);
+                            const midi = snd.midi;
                             const onMs = Math.round(onsetQ * msPerQuarter);
                             const offMs = Math.round((onsetQ + durQ) * msPerQuarter);
                             const tieStop = !!el.querySelector('tie[type="stop"], tied[type="stop"]');
@@ -134,7 +177,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                                 if (!tieStart) pendingTie.delete(midi);
                             } else {
                                 const a: Attack = {
-                                    onMs, offMs, midi, step, alter,
+                                    onMs, offMs, midi, step: snd.step, alter: snd.alter,
                                     measure: measureNumber, beat: onsetQ - measureStartQ + 1,
                                 };
                                 attacks.push(a);
@@ -151,6 +194,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     if (attacks.length === 0) throw new Error('No notes found.');
     if (sawGrace) warnings.push('grace notes were skipped');
     if (sawRepeat) warnings.push('repeats/voltas not expanded (written order plays once)');
+    if (sawTranspose) warnings.push('transposing instruments converted to concert pitch');
     if (parts.length > 1) warnings.push(`${parts.length} parts merged on a shared clock`);
 
     // ON-event order is (onset asc, midi asc): the bass commits first, and expected pairs 1:1 with it.

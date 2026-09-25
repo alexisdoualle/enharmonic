@@ -137,9 +137,10 @@ not MIDI.</p>
 <p>An import lives in this browser session only. It is never uploaded and never added to the corpus, and
 it shows in the fixture menu as <b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
 
-<p><b>What this first version reads:</b> multiple parts, chords, ties, and voices. Grace notes are skipped
-and repeats are not expanded (the written order plays once), so the note count can differ from the printed
-score. A short message after import names anything that was skipped.</p>`,
+<p><b>What this first version reads:</b> multiple parts, chords, ties, voices, and transposing instruments
+(a clarinet or horn part is converted to concert pitch so it lines up with the rest). Grace notes are
+skipped and repeats are not expanded (the written order plays once), so the note count can differ from the
+printed score. A short message after import names anything that was skipped or converted.</p>`,
     },
     {
         id: 'notation', nav: 'Staff & roll', title: 'The staff and the piano roll',
