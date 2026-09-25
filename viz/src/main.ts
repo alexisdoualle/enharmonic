@@ -11,7 +11,7 @@ import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
 import { renderStaff } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
-import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor } from './audio.js';
+import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor, setVolume as audioSetVolume } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
@@ -324,6 +324,7 @@ let tempoRate = 1;                 // playback speed multiplier (tempo slider); 
 // the VISUAL playhead only (never to when audio is scheduled), so raising it lets sight catch up to
 // late sound. Persisted per-browser.
 const LATENCY_KEY = 'viz.audioOffsetMs';
+const VOLUME_KEY = 'viz.volume';
 let audioOffsetMs = (() => { try { const v = Number(localStorage.getItem(LATENCY_KEY)); return Number.isFinite(v) ? v : 0; } catch { return 0; } })();
 const MAX_GAP_MS = 1800;           // cap a long held note / big rest so playback doesn't stall on silence
 const LOOKAHEAD_MS = 150;          // schedule audio this far ahead of the playhead (covers a dropped frame)
@@ -568,6 +569,16 @@ function wire() {
     $<HTMLInputElement>('sound').addEventListener('change', e => {
         soundOn = (e.target as HTMLInputElement).checked;
         if (soundOn) audioEnable(); else allNotesOff();
+    });
+    // Master output volume (0..100 -> 0..1), persisted per-browser.
+    const volEl = $<HTMLInputElement>('volume');
+    const savedVol = (() => { try { const v = localStorage.getItem(VOLUME_KEY); return v == null ? null : Number(v); } catch { return null; } })();
+    if (savedVol != null && Number.isFinite(savedVol)) volEl.value = String(savedVol);
+    const applyVolume = () => { const pct = Number(volEl.value); audioSetVolume(pct / 100); $('volume-val').textContent = `${pct}%`; };
+    applyVolume();
+    volEl.addEventListener('input', () => {
+        applyVolume();
+        try { localStorage.setItem(VOLUME_KEY, volEl.value); } catch { /* storage blocked */ }
     });
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('look-ahead').addEventListener('change', e => {

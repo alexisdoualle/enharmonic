@@ -12,14 +12,21 @@
  */
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
 const voices = new Set<{ oscs: OscillatorNode[]; gain: GainNode }>();
+
+/** Set the master output volume (0..1). Works before or after the AudioContext exists. */
+export function setVolume(v: number): void {
+    masterVolume = Math.max(0, Math.min(1, v));
+    if (master) master.gain.value = masterVolume;
+}
 
 function ensure(): AudioContext {
     if (!ctx) {
         ctx = new AudioContext();
         master = ctx.createGain();
-        master.gain.value = 0.9;
+        master.gain.value = masterVolume;
         // Soft-knee bus compressor: tames dense tuttis and stops peaks clipping into buzz, so sparse
         // solo lines and 20-voice chords both sit at a comfortable level without per-note gain fiddling.
         const comp = ctx.createDynamicsCompressor();
