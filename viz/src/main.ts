@@ -489,26 +489,38 @@ function syncUrl() {
  * import replaces it. `.mxl` (zipped) is not read here.
  */
 async function importMusicXmlFile(file: File) {
-    let r: ReturnType<typeof parseMusicXml>;
+    const btn = $<HTMLButtonElement>('import-btn');
+    const overlay = $('import-overlay');
+    btn.disabled = true;
+    overlay.hidden = false;
+    // Let the loading wheel paint before the (possibly heavy, synchronous) parse blocks the main thread.
+    // setTimeout, not requestAnimationFrame: rAF can stall in a backgrounded tab and hang the import.
+    await new Promise<void>(res => setTimeout(res, 0));
     try {
         const xml = /\.mxl$/i.test(file.name) ? await readMxl(await file.arrayBuffer()) : await file.text();
-        r = parseMusicXml(xml, file.name);
-    } catch (e) { flash(`import failed: ${(e as Error).message}`); return; }
-    // File names run long (paths, encoding junk); cap the label and keep the full name as a tooltip.
-    const short = r.name.length > 22 ? r.name.slice(0, 21).trimEnd() + '…' : r.name;
-    imported = { events: r.events, expected: r.expected, name: short };
-    const sel = $<HTMLSelectElement>('fixture');
-    let opt = sel.querySelector<HTMLOptionElement>(`option[value="${IMPORTED_ID}"]`);
-    if (!opt) { opt = document.createElement('option'); sel.appendChild(opt); opt.value = IMPORTED_ID; }
-    opt.textContent = `↥ ${short} (imported)`;
-    opt.title = r.name;
-    sel.value = IMPORTED_ID;
-    await pickFixture(IMPORTED_ID, 0);
-    const tail = r.warnings.length ? ` (${r.warnings.join('; ')})` : '';
-    flash(`imported ${r.name} · ${r.expected.length} notes${tail}`);
+        const r = parseMusicXml(xml, file.name);
+        // File names run long (paths, encoding junk); cap the label and keep the full name as a tooltip.
+        const short = r.name.length > 22 ? r.name.slice(0, 21).trimEnd() + '…' : r.name;
+        imported = { events: r.events, expected: r.expected, name: short };
+        const sel = $<HTMLSelectElement>('fixture');
+        let opt = sel.querySelector<HTMLOptionElement>(`option[value="${IMPORTED_ID}"]`);
+        if (!opt) { opt = document.createElement('option'); sel.appendChild(opt); opt.value = IMPORTED_ID; }
+        opt.textContent = `↥ ${short} (imported)`;
+        opt.title = r.name;
+        sel.value = IMPORTED_ID;
+        await pickFixture(IMPORTED_ID, 0);
+        const tail = r.warnings.length ? ` (${r.warnings.join('; ')})` : '';
+        flash(`imported ${r.name} · ${r.expected.length} notes${tail}`);
+    } catch (e) {
+        flash(`import failed: ${(e as Error).message}`);
+    } finally {
+        overlay.hidden = true;
+        btn.disabled = false;
+    }
 }
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
+    stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
     if (state.fixtureId !== id && !preserveMarkers) state.sideOverrides = [];
     state.fixtureId = id;
     const f = await loadFixture(id);
