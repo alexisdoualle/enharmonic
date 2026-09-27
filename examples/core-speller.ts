@@ -47,61 +47,49 @@ type Accidental = -2 | -1 | 0 | 1 | 2;
 interface PitchClass { readonly step: Letter; readonly alter: Accidental; }
 interface Pitch { readonly step: Letter; readonly alter: Accidental; readonly octave: number; }
 
-// ── Constant tables ──────────────────────────────────────────────────────────
+// ── The line of fifths ───────────────────────────────────────────────────────
 
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
-/** Natural pitch class of each letter (C = 0). */
-const LETTER_BASE: Record<Letter, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-/** Line-of-fifths position of each natural (F=-1 to B=+5); the fifth-distance axis principle 2 scores on. */
-const LETTER_CHROMA: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
+/*
+ * Inside the speller, every spelling is one integer n: its position on the line of fifths (C=0).
+ *
+ *   ... A♭  E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯  D♯ ...
+ *   ... -4  -3  -2  -1  0   1   2   3   4   5   6   7   8   9  ...
+ *
+ * +1 is a fifth (C, G, D). +7 is the same letter one accidental sharper (E♭ -3, E 4, E♯ 11).
+ * Letter, accidental and pitch class are all read off n. {step, alter} only appears at the
+ * public API.
+ */
 
-// ── Enharmonic candidates ────────────────────────────────────────────────────
-
-/** The seven letters in fifths order; F is at line-of-fifths position -1, B at +5. */
+/** The seven letters in fifths order, indexed by letter slot. */
 const FIFTHS = ['F', 'C', 'G', 'D', 'A', 'E', 'B'] as const;
 
-/**
- * Spelling at line-of-fifths position `n` (C=0). +1 is a fifth (C, G, D), +7 is one
- * accidental (E♭, E, E♯), so the letter cycles every 7 steps: F♭♭(-15) to B♯♯(+19).
- */
-function spellingAt(n: number): PitchClass {
-    return { step: FIFTHS[((n + 1) % 7 + 7) % 7]!, alter: Math.floor((n + 1) / 7) as Accidental };
+/** Letter slot of n, 0..6 in fifths order (F C G D A E B). The letter repeats every 7 steps. */
+function letter(n: number): number {
+    return ((n + 1) % 7 + 7) % 7;
 }
 
-/**
- * The 35 spellings bucketed by pitch class. Cut the line of fifths (F♭♭ at -15 to
- * B♯♯ at +19) into rows of 12 and stack: a fifth adds 7 to the pitch class (mod 12),
- * so spellings 12 fifths apart share a class and align in a column.
- *
- *   F♭♭ C♭♭ G♭♭ D♭♭ A♭♭ E♭♭ B♭♭ F♭  C♭  G♭  D♭  A♭    more flat
- *   E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯    naturals in the middle
- *   D♯  A♯  E♯  B♯  F♯♯ C♯♯ G♯♯ D♯♯ A♯♯ E♯♯ B♯♯       more sharp
- *   3   10  5   0   7   2   9   4   11  6   1   8    pitch class (ordered by fifths)
- *
- * Each column is one class holding two or three spellings (pc 8 has only A♭, G♯).
- * Reading by letter, each accidental step moves the class by one (E♭ 3, E 4, E♯ 5).
- * buildCandidates fills the columns, then sorts each plainest first (smallest
- * accidental, sharp before flat on a tie) so noteOn's argmax reaches the natural or
- * nearest accidental first.
- */
-function buildCandidates(): PitchClass[][] {
-    const byPc: PitchClass[][] = Array.from({ length: 12 }, () => []);
-    for (let n = -15; n <= 19; n++) {
-        byPc[((7 * n) % 12 + 12) % 12]!.push(spellingAt(n)); // wrap position n onto its pitch class
-    }
-    for (const pile of byPc) pile.sort((a, b) => Math.abs(a.alter) - Math.abs(b.alter) || b.alter - a.alter);
-    return byPc;
+/** Accidental of n: -1 flat, 0 natural, +1 sharp. Naturals are F (-1) to B (5). */
+function acc(n: number): number {
+    return Math.floor((n + 1) / 7);
 }
-/** Pitch class (0-11) to its spellings, plainest first; noteOn picks from this. */
-const CANDIDATES: readonly (readonly PitchClass[])[] = buildCandidates();
+
+/** Pitch class of n (0-11). A fifth is 7 semitones, so n sounds 7n mod 12. */
+function pitchClass(n: number): number {
+    return ((7 * n) % 12 + 12) % 12;
+}
+
+/** Readable name of n (-3 -> "E♭"), for debugging. */
+function name(n: number): string {
+    const a = acc(n);
+    return FIFTHS[letter(n)] + (a > 0 ? '♯'.repeat(a) : '♭'.repeat(-a));
+}
+
+/** Tie-break: true if `a` is plainer than `b` (fewer accidentals, then sharp over flat). */
+function plainer(a: number, b: number): boolean {
+    return Math.abs(acc(a)) < Math.abs(acc(b)) || (Math.abs(acc(a)) === Math.abs(acc(b)) && acc(a) > acc(b));
+}
 
 // ── Interval scoring (principle 2) ─────────────────────────────────────────────
-
-/** Line-of-fifths position of a spelling (C=0): the natural's fifth-position + 7*accidental.
- *  One accidental = 7 steps (E♭, E, E♯); one fifth = 1 step (C, G, D). */
-function lofOf(p: PitchClass): number {
-    return LETTER_CHROMA[p.step] + 7 * p.alter;
-}
 
 /**
  * Consonance of the interval between two spellings, the whole of principle 2 as one number.
@@ -113,20 +101,20 @@ function lofOf(p: PitchClass): number {
  *   d = 6..12  augmented / dim.     dissonant  -1
  *   d >= 13    doubly aug / dim.    worse      -2
  */
-function consonance(a: PitchClass, b: PitchClass): number {
-    const d = Math.abs(lofOf(a) - lofOf(b));
+function consonance(a: number, b: number): number {
+    const d = Math.abs(a - b);
     if (d === 1 || d === 3 || d === 4) return 1;
     if (d === 0 || d === 2 || d === 5) return 0;
     if (d <= 12) return -1;
     return -2;
 }
 
-/** Sum of a candidate's consonance against the rest of the resolved scale. Higher = better fit. */
-function intervalScore(candidate: PitchClass, resolved: ReadonlyMap<Letter, PitchClass>): number {
+/** Sum of a candidate's consonance against the rest of the scale. Higher = better fit. */
+function intervalScore(n: number, scale: readonly number[]): number {
     let total = 0;
-    for (const [letter, pc] of resolved) {
-        if (letter === candidate.step) continue; // candidate replaces this slot
-        total += consonance(candidate, pc);
+    for (let slot = 0; slot < 7; slot++) {
+        if (slot === letter(n)) continue; // candidate replaces this slot
+        total += consonance(n, scale[slot]!);
     }
     return total;
 }
@@ -140,20 +128,24 @@ const GUARD_WINDOW = 3;
 // ── The speller ──────────────────────────────────────────────────────────────
 
 export class CoreSpeller {
-    /** Principle 1, the 7-letter limit: one spelling per letter A-G, the drifting scale. Starts at C major. */
-    private resolved = new Map<Letter, PitchClass>();
+    /** Principle 1, the 7-letter limit: one spelling per letter, the drifting scale. Starts at C major. */
+    //                          F   C  G  D  A  E  B
+    private scale: number[] = [-1, 0, 1, 2, 3, 4, 5];
     /** Spelling committed for each sounding note, so note-off reads back that note's own
      *  spelling even if a later same-letter note has overwritten the slot. */
-    private active = new Map<number, PitchClass>();
-    /** Recency guard memory: letter -> the onset + accidental last committed there. */
-    private lastByLetter = new Map<Letter, { onset: number; alter: Accidental }>();
+    private active = new Map<number, number>();
+    /** Principle 3, the recency guard's memory: letter slot -> the onset and spelling last committed there. */
+    private lastByLetter: ({ onset: number; n: number } | undefined)[] = [];
     /** Onset counter (co-struck notes sharing a `t` are one onset); -1 before the first note. */
     private onset = -1;
     /** `t` of the current onset, so co-struck notes don't each bump `onset`. */
     private lastT = NaN;
 
-    constructor() {
-        for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
+    /** Principle 3: GUARD_PENALTY if n's letter was committed at a different accidental
+     *  within the last GUARD_WINDOW onsets, else 0. */
+    private guardPenalty(n: number): number {
+        const last = this.lastByLetter[letter(n)];
+        return last && last.n !== n && this.onset - last.onset <= GUARD_WINDOW ? GUARD_PENALTY : 0;
     }
 
     /** Commit a spelling for `midi`: the candidate whose intervals best fit the current scale, less
@@ -165,19 +157,33 @@ export class CoreSpeller {
             if (t !== undefined) this.lastT = t;
             this.onset++;
         }
-        let best: PitchClass | null = null;
+        // The candidates are every spelling of this pitch class. Cut the line of fifths
+        // (F♭♭ at -15 to B♯♯ at +19) into rows of 12 and stack them:
+        //
+        //   F♭♭ C♭♭ G♭♭ D♭♭ A♭♭ E♭♭ B♭♭ F♭  C♭  G♭  D♭  A♭    n = -15..-4
+        //   E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯    n =  -3..8
+        //   D♯  A♯  E♯  B♯  F♯♯ C♯♯ G♯♯ D♯♯ A♯♯ E♯♯ B♯♯       n =   9..19
+        //   3   10  5   0   7   2   9   4   11  6   1   8    pitch class
+        //
+        // Each column is one pitch class: spellings of the same pitch sit 12 fifths apart.
+        // A fifth is 7 semitones, so position n has pitch class 7n mod 12. Since 7 × 7 = 49
+        // = 1 (mod 12), the inverse is the same map: n0 = 7·pc mod 12 is the spelling of pc
+        // in 0..11 (C to E♯). The others are n0 - 24, n0 - 12 and n0 + 12, kept within
+        // -15..19. A column holds two or three spellings (pc 8 has only A♭ and G♯).
+        const n0 = (7 * (midi % 12)) % 12;
+        let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        for (const c of CANDIDATES[midi % 12]!) {
-            let s = intervalScore(c, this.resolved);
-            // Principle 3: dock a candidate whose letter was just committed at a different accidental.
-            const last = this.lastByLetter.get(c.step);
-            if (last && last.alter !== c.alter && this.onset - last.onset <= GUARD_WINDOW) s -= GUARD_PENALTY;
-            if (s > bestScore) { bestScore = s; best = c; }
+        for (let n = n0 - 24; n <= n0 + 12; n += 12) {
+            if (n < -15 || n > 19) continue; // beyond double flat or double sharp
+            const s = intervalScore(n, this.scale) - this.guardPenalty(n);
+            if (s > bestScore || (s === bestScore && plainer(n, best!))) { bestScore = s; best = n; }
         }
         if (best === null) return;
-        this.resolved.set(best.step, best);
+        // Principle 1: the winner overwrites its letter's slot.
+        this.scale[letter(best)] = best;
         this.active.set(midi, best);
-        this.lastByLetter.set(best.step, { onset: this.onset, alter: best.alter });
+        // Principle 3: remember when this letter was set.
+        this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
     }
 
     noteOff(midi: number): void {
@@ -187,20 +193,22 @@ export class CoreSpeller {
     /** The spelling of a sounding note (its committed one), else the scale's current spelling of it. */
     getSpelling(midi: number): Pitch | null {
         const octave = Math.floor(midi / 12) - 1;
-        const sounding = this.active.get(midi);
-        if (sounding) return { step: sounding.step, alter: sounding.alter, octave };
-        const target = ((midi % 12) + 12) % 12;
-        for (const L of LETTERS) {
-            const pc = this.resolved.get(L)!;
-            if (((LETTER_BASE[pc.step] + pc.alter) % 12 + 12) % 12 === target) {
-                return { step: pc.step, alter: pc.alter, octave };
-            }
-        }
-        return null;
+        const n = this.active.get(midi) ?? this.scale.find(m => pitchClass(m) === midi % 12);
+        return n === undefined ? null : { ...spellingOf(n), octave };
     }
 
-    /** Read-only snapshot of the current 7-letter scale (introspection). */
+    /** Read-only snapshot of the current 7-letter scale, in fifths order (introspection). */
     getResolvedScale(): PitchClass[] {
-        return LETTERS.map(L => ({ ...this.resolved.get(L)! }));
+        return this.scale.map(spellingOf);
     }
+
+    /** The scale by name, in fifths order, e.g. "F C G D A E B" or "F♯ C♯ G♯ D♯ A♯ E♯ B". */
+    toString(): string {
+        return this.scale.map(name).join(' ');
+    }
+}
+
+/** {step, alter} of n, for the public API. */
+function spellingOf(n: number): PitchClass {
+    return { step: FIFTHS[letter(n)]!, alter: acc(n) as Accidental };
 }
