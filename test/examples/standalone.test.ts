@@ -5,13 +5,14 @@
  * file (zero imports, ~100 effective lines). It is a DERIVED copy: `src/core.ts` is the
  * source of truth (the bench drives it as Core and shares its primitives with the rest of the speller). This test
  * pins the copy to the original: for every curated fixture the standalone must produce byte-identical
- * spellings to `CoreSpeller`, so "the complete speller in ~100 lines" stays a true claim as the code
+ * spellings, scale and read-back to `CoreSpeller`, so "the complete speller in ~100 lines" stays a true claim as the code
  * evolves. Edit `src/core.ts` and this drift will fail here until the standalone is re-synced.
  */
 import { assertEq, suite, test } from '../framework.js';
 import { CoreSpeller as Standalone } from '../../examples/core-speller.js';
 import { FIXTURES, loadEvents, predict, type BatchEv } from '../eval/fixtures.js';
 import type { Pitch } from '../../src/pitch.js';
+import { CoreSpeller } from '../../src/core.js';
 
 /** Drive the standalone through the same note-off read-back path the bench's `drive()` uses. */
 function driveStandalone(events: BatchEv[]): (Pitch | null)[] {
@@ -39,6 +40,18 @@ suite('examples/core-speller ↔ src/core parity', () => {
         test(`${id}: standalone spellings == shipped CoreSpeller`, () => {
             const events = loadEvents(id);
             assertEq(driveStandalone(events).map(spell), predict('core', events).map(spell));
+        });
+        test(`${id}: standalone scale and read-back == shipped CoreSpeller`, () => {
+            // The scale after each note, and the read-back of every pitch class (not only sounding notes).
+            const a = new Standalone(), b = new CoreSpeller();
+            const state = (s: Standalone | CoreSpeller) =>
+                JSON.stringify([s.getResolvedScale(), Array.from({ length: 12 }, (_, pc) => s.getSpelling(60 + pc))]);
+            const sa: string[] = [], sb: string[] = [];
+            for (const e of loadEvents(id)) {
+                if (e.type === 'on') { a.noteOn(e.midi, e.t); b.noteOn(e.midi, { t: e.t }); sa.push(state(a)); sb.push(state(b)); }
+                else { a.noteOff(e.midi); b.noteOff(e.midi); }
+            }
+            assertEq(sa, sb);
         });
     }
 });

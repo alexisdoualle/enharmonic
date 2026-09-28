@@ -62,6 +62,8 @@ interface Pitch { readonly step: Letter; readonly alter: Accidental; readonly oc
 
 /** The seven letters in fifths order, indexed by letter slot. */
 const FIFTHS = ['F', 'C', 'G', 'D', 'A', 'E', 'B'] as const;
+/** Letter slots in note-name order C D E F G A B, for output and read-back. */
+const LETTER_ORDER = [1, 3, 5, 0, 2, 4, 6] as const;
 
 /** Letter slot of n, 0..6 in fifths order (F C G D A E B). The letter repeats every 7 steps. */
 function letter(n: number): number {
@@ -87,6 +89,32 @@ function name(n: number): string {
 /** Tie-break: true if `a` is plainer than `b` (fewer accidentals, then sharp over flat). */
 function plainer(a: number, b: number): boolean {
     return Math.abs(acc(a)) < Math.abs(acc(b)) || (Math.abs(acc(a)) === Math.abs(acc(b)) && acc(a) > acc(b));
+}
+
+// ── Enharmonic candidates ────────────────────────────────────────────────────
+
+/**
+ * Every spelling of `midi`'s pitch class. Cut the line of fifths (F♭♭ at -15 to B♯♯ at +19)
+ * into rows of 12 and stack them:
+ *
+ *   F♭♭ C♭♭ G♭♭ D♭♭ A♭♭ E♭♭ B♭♭ F♭  C♭  G♭  D♭  A♭    n = -15..-4
+ *   E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯    n =  -3..8
+ *   D♯  A♯  E♯  B♯  F♯♯ C♯♯ G♯♯ D♯♯ A♯♯ E♯♯ B♯♯       n =   9..19
+ *   3   10  5   0   7   2   9   4   11  6   1   8    pitch class
+ *
+ * Each column is one pitch class: spellings of the same pitch sit 12 fifths apart.
+ * A fifth is 7 semitones, so position n has pitch class 7n mod 12. Since 7 × 7 = 49
+ * = 1 (mod 12), the inverse is the same map: n0 = 7·pc mod 12 is the spelling of pc
+ * in 0..11 (C to E♯). The others are n0 - 24, n0 - 12 and n0 + 12, kept within
+ * -15..19. A column holds two or three spellings (pc 8 has only A♭ and G♯).
+ */
+function candidates(midi: number): number[] {
+    const n0 = (7 * (midi % 12)) % 12;
+    const out: number[] = [];
+    for (let n = n0 - 24; n <= n0 + 12; n += 12) {
+        if (n >= -15 && n <= 19) out.push(n); // within a double flat or double sharp
+    }
+    return out;
 }
 
 // ── Interval scoring (principle 2) ─────────────────────────────────────────────
@@ -157,24 +185,9 @@ export class CoreSpeller {
             if (t !== undefined) this.lastT = t;
             this.onset++;
         }
-        // The candidates are every spelling of this pitch class. Cut the line of fifths
-        // (F♭♭ at -15 to B♯♯ at +19) into rows of 12 and stack them:
-        //
-        //   F♭♭ C♭♭ G♭♭ D♭♭ A♭♭ E♭♭ B♭♭ F♭  C♭  G♭  D♭  A♭    n = -15..-4
-        //   E♭  B♭  F   C   G   D   A   E   B   F♯  C♯  G♯    n =  -3..8
-        //   D♯  A♯  E♯  B♯  F♯♯ C♯♯ G♯♯ D♯♯ A♯♯ E♯♯ B♯♯       n =   9..19
-        //   3   10  5   0   7   2   9   4   11  6   1   8    pitch class
-        //
-        // Each column is one pitch class: spellings of the same pitch sit 12 fifths apart.
-        // A fifth is 7 semitones, so position n has pitch class 7n mod 12. Since 7 × 7 = 49
-        // = 1 (mod 12), the inverse is the same map: n0 = 7·pc mod 12 is the spelling of pc
-        // in 0..11 (C to E♯). The others are n0 - 24, n0 - 12 and n0 + 12, kept within
-        // -15..19. A column holds two or three spellings (pc 8 has only A♭ and G♯).
-        const n0 = (7 * (midi % 12)) % 12;
         let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        for (let n = n0 - 24; n <= n0 + 12; n += 12) {
-            if (n < -15 || n > 19) continue; // beyond double flat or double sharp
+        for (const n of candidates(midi)) {
             const s = intervalScore(n, this.scale) - this.guardPenalty(n);
             if (s > bestScore || (s === bestScore && plainer(n, best!))) { bestScore = s; best = n; }
         }
@@ -190,16 +203,18 @@ export class CoreSpeller {
         this.active.delete(midi);
     }
 
-    /** The spelling of a sounding note (its committed one), else the scale's current spelling of it. */
+    /** The spelling of a sounding note (its committed one), else the scale's spelling of its pitch class,
+     *  searching the letters C to B. */
     getSpelling(midi: number): Pitch | null {
         const octave = Math.floor(midi / 12) - 1;
-        const n = this.active.get(midi) ?? this.scale.find(m => pitchClass(m) === midi % 12);
+        const n = this.active.get(midi)
+            ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === midi % 12);
         return n === undefined ? null : { ...spellingOf(n), octave };
     }
 
-    /** Read-only snapshot of the current 7-letter scale, in fifths order (introspection). */
+    /** Read-only snapshot of the current 7-letter scale, C to B (introspection). */
     getResolvedScale(): PitchClass[] {
-        return this.scale.map(spellingOf);
+        return LETTER_ORDER.map(s => spellingOf(this.scale[s]!));
     }
 
     /** The scale by name, in fifths order, e.g. "F C G D A E B" or "F♯ C♯ G♯ D♯ A♯ E♯ B". */
