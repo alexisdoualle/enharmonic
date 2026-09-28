@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "enharmonic: real-time enharmonic pitch spelling for MIDI input"
+abstract: >-
+  Spells MIDI pitches as note names (C sharp vs D flat) from musical context,
+  with no key signature. Four rungs: Core, real-time, look-ahead and an offline
+  two-pass speller. Zero runtime dependencies.
+authors:
+  - family-names: Doualle
+    given-names: Alexis
+    affiliation: Independent Researcher
+version: 0.1.2
+date-released: 2026-09-28
+license: Apache-2.0
+repository-code: "https://github.com/alexisdoualle/enharmonic"
+url: "https://enharmonic.tonalmap.org"
+keywords:
+  - pitch spelling
+  - enharmonic spelling
+  - music information retrieval
+  - MIDI
+  - line of fifths
