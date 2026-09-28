@@ -12,28 +12,24 @@
  * what locks the scale into key with no explicit key detection.
  */
 
-import { lineOfFifths } from './interval.js';
-import type { Letter, PitchClass } from './pitch.js';
+import { letter } from './lof.js';
 
-/** Consonance of the interval between two spellings, read off their line-of-fifths distance `d`. */
-export function consonance(a: PitchClass, b: PitchClass): number {
-    const d = Math.abs(lineOfFifths(a) - lineOfFifths(b));
+/** Consonance of the interval between two spellings (line-of-fifths positions), read off their distance `d`. */
+export function consonance(a: number, b: number): number {
+    const d = Math.abs(a - b);
     if (d === 1 || d === 3 || d === 4) return 1;
     if (d === 0 || d === 2 || d === 5) return 0;
     if (d <= 12) return -1;
     return -2;
 }
 
-/** Total interval score of a candidate against the other scale letters (its own slot excluded, since the
- *  candidate replaces it). Higher = better fit. */
-export function intervalScore(
-    candidate: PitchClass,
-    resolved: ReadonlyMap<Letter, PitchClass>,
-): number {
+/** Total interval score of candidate `n` against the other letters of `scale` (indexed by letter slot; the
+ *  candidate's own slot is skipped, since the candidate replaces it). Higher = better fit. */
+export function intervalScore(n: number, scale: readonly number[]): number {
     let total = 0;
-    for (const [letter, pc] of resolved) {
-        if (letter === candidate.step) continue;
-        total += consonance(candidate, pc);
+    for (let s = 0; s < 7; s++) {
+        if (s === letter(n)) continue;
+        total += consonance(n, scale[s]!);
     }
     return total;
 }

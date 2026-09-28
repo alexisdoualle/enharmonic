@@ -22,21 +22,20 @@
  * test/examples/standalone.test.ts.
  */
 
-import { enharmonicCandidatesFor } from './candidates.js';
-import { pitchClassValue, type Letter, type Pitch, type PitchClass } from './pitch.js';
+import type { Pitch, PitchClass } from './pitch.js';
+import { acc, C_MAJOR, candidates, letter, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
 import type { NoteContext } from './kernel.js';
 
-const ALL_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
-
 export class CoreSpeller {
-    private resolved = new Map<Letter, PitchClass>();
+    /** One spelling (line-of-fifths position) per letter slot: the drifting scale. */
+    private scale: number[] = [...C_MAJOR];
     /** midi → the spelling COMMITTED for that note while it's sounding. Stored per-note (not just
      *  the letter) so read-back returns the note's own spelling, even if a later same-letter note
      *  with a different pitch class overwrites the shared slot. */
-    private active = new Map<number, PitchClass>();
-    /** Recency guard (principle 3) memory: letter → the onset + accidental last committed there. */
-    private lastByLetter = new Map<Letter, { onset: number; alter: number }>();
+    private active = new Map<number, number>();
+    /** Recency guard (principle 3) memory: letter slot → the onset and spelling last committed there. */
+    private lastByLetter: ({ onset: number; n: number } | undefined)[] = [];
     /** Onset counter (co-struck notes sharing a `t` are one onset); −1 before the first note. */
     private onset = -1;
     /** `t` of the current onset, so co-struck notes don't each bump `onset`. */
@@ -54,20 +53,11 @@ export class CoreSpeller {
         private readonly recencyGuard = 2,
         private readonly guardWindow = 3,
         private readonly doubleAccidentalPenalty = 0,
-    ) {
-        this.snapToCMajor();
-    }
-
-    private snapToCMajor(): void {
-        this.resolved.clear();
-        for (const L of ALL_LETTERS) {
-            this.resolved.set(L, { step: L, alter: 0 });
-        }
-    }
+    ) {}
 
     reset(scale: readonly PitchClass[]): void {
-        this.resolved.clear();
-        this.lastByLetter.clear();   // a new frame forgets the recency guard's memory
+        this.scale = [...C_MAJOR];
+        this.lastByLetter = [];   // a new frame forgets the recency guard's memory
         // NOTE: `active` (currently-sounding notes) is deliberately NOT cleared. A note that has
         // already committed and is still sounding keeps its own spelling until its own note-off: a
         // key-signature change (respell/reset) under a held note does not respell it. Clearing it here
@@ -75,12 +65,8 @@ export class CoreSpeller {
         // across the seam into the C♯-major WTC prelude read back as B♯). See getSpelling()'s
         // sounding-branch, which returns each note's own committed spelling.
         for (const pc of scale) {
-            this.resolved.set(pc.step, { step: pc.step, alter: pc.alter });
-        }
-        for (const L of ALL_LETTERS) {
-            if (!this.resolved.has(L)) {
-                this.resolved.set(L, { step: L, alter: 0 });
-            }
+            const n = lofOf(pc);
+            this.scale[letter(n)] = n;
         }
     }
 
@@ -91,51 +77,42 @@ export class CoreSpeller {
             if (t !== undefined) this.lastT = t;
             this.onset++;
         }
-        const candidates = enharmonicCandidatesFor(midi);
-        let best: PitchClass | null = null;
+        let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        for (const c of candidates) {
-            let s = intervalScore(c, this.resolved);
-            if (this.doubleAccidentalPenalty && Math.abs(c.alter) >= 2) s -= this.doubleAccidentalPenalty;
+        for (const n of candidates(midi)) {
+            let s = intervalScore(n, this.scale);
+            if (this.doubleAccidentalPenalty && Math.abs(acc(n)) >= 2) s -= this.doubleAccidentalPenalty;
             // Principle 3: dock a candidate whose letter was just committed at a different accidental.
-            const last = this.lastByLetter.get(c.step);
-            if (this.recencyGuard && last && last.alter !== c.alter && this.onset - last.onset <= this.guardWindow) {
+            const last = this.lastByLetter[letter(n)];
+            if (this.recencyGuard && last && last.n !== n && this.onset - last.onset <= this.guardWindow) {
                 s -= this.recencyGuard;
             }
             if (s > bestScore) {
                 bestScore = s;
-                best = c;
+                best = n;
             }
         }
         if (best === null) return;
-        this.resolved.set(best.step, best);
+        this.scale[letter(best)] = best;
         this.active.set(midi, best);
-        this.lastByLetter.set(best.step, { onset: this.onset, alter: best.alter });
+        this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
     }
 
     noteOff(midi: number): void {
         this.active.delete(midi);
     }
 
-    /** Read-only snapshot of the current 7-letter frame (introspection; e.g. the viz). */
+    /** Read-only snapshot of the current 7-letter frame, C to B (introspection; e.g. the viz). */
     getResolvedScale(): PitchClass[] {
-        return ALL_LETTERS.map(L => ({ ...this.resolved.get(L)! }));
+        return LETTER_ORDER.map(s => spellingOf(this.scale[s]!));
     }
 
+    /** The spelling of a sounding note (its committed one), else the scale's spelling of its pitch class,
+     *  searching the letters C to B. */
     getSpelling(midi: number): Pitch | null {
-        const sounding = this.active.get(midi);
-        const targetPc = ((midi % 12) + 12) % 12;
-        if (sounding !== undefined) {
-            const octave = Math.floor(midi / 12) - 1;
-            return { step: sounding.step, alter: sounding.alter, octave };
-        }
-        for (const L of ALL_LETTERS) {
-            const pc = this.resolved.get(L)!;
-            if (pitchClassValue(pc) === targetPc) {
-                const octave = Math.floor(midi / 12) - 1;
-                return { step: pc.step, alter: pc.alter, octave };
-            }
-        }
-        return null;
+        const octave = Math.floor(midi / 12) - 1;
+        const n = this.active.get(midi)
+            ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
+        return n === undefined ? null : { ...spellingOf(n), octave };
     }
 }

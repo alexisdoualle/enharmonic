@@ -33,6 +33,7 @@ const STABLE_HALF_LIFE_MS = 12000, STABLE_HYSTERESIS = 4.0;
 export interface CollectionRead { relMajorPc: number; name: string; margin: number; }
 import { enharmonicCandidatesFor } from '../../src/candidates.js';
 import { intervalScore } from '../../src/scoring.js';
+import { letter, lofOf } from '../../src/lof.js';
 
 export type Mode = 'core' | 'rt' | 'la' | 'tp' | 'control';
 
@@ -48,8 +49,9 @@ interface CoreLike {
 /** Build a viz decision trace for a Core note: re-score the candidates against the pre-commit
  *  scale. Frame = the 7-letter scale the candidates were scored against. */
 function coreDecision(before: PitchClass[], midi: number, committed: Pitch | null): DecisionTrace | null {
-    const frameMap = new Map(before.map(p => [p.step, p] as const));
-    const candidates = enharmonicCandidatesFor(midi).map(c => ({ c, base: intervalScore(c, frameMap), laDelta: 0, nsDelta: 0 }));
+    const scale: number[] = [];
+    for (const p of before) { const n = lofOf(p); scale[letter(n)] = n; }
+    const candidates = enharmonicCandidatesFor(midi).map(c => ({ c, base: intervalScore(lofOf(c), scale), laDelta: 0, nsDelta: 0 }));
     const chosen = committed ? { step: committed.step, alter: committed.alter } : candidates[0]!.c;
     return { frame: before, candidates, chosen, override: 'none' };
 }

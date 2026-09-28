@@ -8,7 +8,8 @@
  * half-step) vector representation meantonal uses and we don't otherwise need.
  */
 
-import type { Letter, PitchClass } from './pitch.js';
+import type { PitchClass } from './pitch.js';
+import { lofOf } from './lof.js';
 
 export type IntervalQuality =
     | 'P'   // perfect
@@ -23,26 +24,6 @@ export interface Interval {
     readonly quality: IntervalQuality;
     /** 1 (unison) through 8 (octave). Always reduced. */
     readonly number: number;
-}
-
-/** Diatonic position of each letter (C=0, D=1, …, B=6). */
-const LETTER_IDX = {
-    C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6,
-} as const satisfies Record<Letter, number>;
-
-/** Line-of-fifths position of each natural letter (F=-1, C=0, G=+1, …, B=+5). */
-const LETTER_CHROMA = {
-    F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5,
-} as const satisfies Record<Letter, number>;
-
-/**
- * Line-of-fifths position of a pitch-class spelling. Naturals run F=-1…B=+5;
- * each accidental shifts by ±7 (so F♯=+6, B♭=-2, E♯=+11, B𝄫=-9). The integer
- * distance between two positions is the count of fifths separating them: a
- * spelling's "remoteness" from a tonal center.
- */
-export function lineOfFifths(pc: PitchClass): number {
-    return LETTER_CHROMA[pc.step] + 7 * pc.alter;
 }
 
 /** Signed quality → label. 0=P, ±1=M/m, ±2=A/d, ±3=AA/dd. */
@@ -77,13 +58,11 @@ export function rawIntervalBetween(
     from: PitchClass,
     to: PitchClass,
 ): { quality: number; number: number } {
-    // Ascending letter distance, 0=unison … 6=seventh.
-    const letterDist = (LETTER_IDX[to.step] - LETTER_IDX[from.step] + 7) % 7;
+    // Line-of-fifths distance (chroma); it fixes the interval completely.
+    const intervalChroma = lofOf(to) - lofOf(from);
 
-    // Line-of-fifths chroma of each PC; each accidental shifts chroma by ±7.
-    const chromaFrom = LETTER_CHROMA[from.step] + 7 * from.alter;
-    const chromaTo = LETTER_CHROMA[to.step] + 7 * to.alter;
-    const intervalChroma = chromaTo - chromaFrom;
+    // Ascending letter distance, 0=unison … 6=seventh. Each fifth is 4 letters up (mod 7).
+    const letterDist = ((4 * intervalChroma) % 7 + 7) % 7;
 
     // Same letter but `to` is flatter than `from` (e.g. C → C♭): treat as
     // the ascending diminished octave d8.

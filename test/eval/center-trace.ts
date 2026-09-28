@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import { resolveStep } from '../../src/kernel.js';
-import { lineOfFifths } from '../../src/interval.js';
+import { lofOf } from '../../src/lof.js';
 import type { Pitch, PitchClass } from '../../src/pitch.js';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -60,7 +60,7 @@ for (const e of evs) {
     if (e.on) {
         engine.noteOn(m, e.t, dirs[e.i]!);
         const scale = engine.getResolvedScale();
-        centre[e.i] = scale.reduce((s, p) => s + lineOfFifths(p), 0) / scale.length;
+        centre[e.i] = scale.reduce((s, p) => s + lofOf(p), 0) / scale.length;
         (pend.get(m) ?? pend.set(m, []).get(m)!).push(e.i);
     } else { const q = pend.get(m); if (q?.length) { out[q.shift()!] = engine.getSpelling(m); if (q.length === 0) engine.noteOff(m); } }
 }
