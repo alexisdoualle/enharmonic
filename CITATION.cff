@@ -11,6 +11,7 @@ authors:
     given-names: Alexis
     affiliation: Independent Researcher
 version: 0.1.2
+doi: 10.5281/zenodo.23023002
 date-released: 2026-09-28
 license: Apache-2.0
 repository-code: "https://github.com/alexisdoualle/enharmonic"

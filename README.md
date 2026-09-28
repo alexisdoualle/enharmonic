@@ -1,5 +1,7 @@
 # enharmonic
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23023002.svg)](https://doi.org/10.5281/zenodo.23023002)
+
 **Real-time enharmonic pitch-spelling for MIDI input.**
 
 Given a stream of MIDI note numbers, decides whether `61` should be spelled `C♯` or `D♭`
@@ -118,6 +120,12 @@ npm run meredith -- --check      # assert exact% >= published thresholds
 ```
 
 `exact` = strict composer-spelling match (ps13's metric); `coherent` = exact + contextually coherent enharmonic flip.
+
+## Citing
+
+Cite the archived release on Zenodo: [10.5281/zenodo.23023002](https://doi.org/10.5281/zenodo.23023002)
+(all versions). Each release also has its own DOI on the Zenodo record. GitHub's "Cite this repository"
+button gives the full reference from [CITATION.cff](CITATION.cff).
 
 ## License
 
