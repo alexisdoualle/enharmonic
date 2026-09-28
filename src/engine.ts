@@ -3,10 +3,10 @@
  * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). No key detection anywhere.
  *
  * Two principles do the base work:
- *   1. 7-LETTER LIMIT. A resolved scale holds one spelling per letter A–G. A note is spelled by
- *      choosing which letter to claim; that overwrites the letter's slot.
- *   2. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the rest of the
+ *   1. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the resolved
  *      scale. This alone drifts the scale into key.
+ *   2. 7-LETTER LIMIT. The resolved scale holds one spelling per letter A–G. A note is spelled by
+ *      choosing which letter to claim; that overwrites the letter's slot.
  *
  * Named-option mechanisms sit on top; each is documented on its {@link EngineOptions} field:
  *   RECENCY GUARD: penalise a same-letter clash within K onsets (coherence, the `wrong` tier).
@@ -22,68 +22,45 @@
  * scale's current spelling of its pitch class.
  */
 
-import { LETTER_BASE, type Accidental, type Letter, type Pitch, type PitchClass } from './pitch.js';
-import { enharmonicCandidatesFor } from './candidates.js';
-import { lineOfFifths, rawIntervalBetween } from './interval.js';
+import type { Pitch, PitchClass } from './pitch.js';
+import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
 
-// ── Constant tables ──────────────────────────────────────────────────────────
+// Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
+// by letter slot. {step, alter} appears only at the public API and in the decision trace.
 
-const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const satisfies readonly Letter[];
-/** Line-of-fifths position of each natural, F=−1 … B=+5. */
-const LETTER_CHROMA: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
-
-/** Line-of-fifths position of a spelling (C=0). One accidental = 7 steps, one fifth = 1 step. */
-const lofOf = lineOfFifths;
-
-/** The enharmonic comma on the line of fifths: shifting a spelling by ±12 renotates the SAME sounding
- *  note one turn around the spiral (C↔B♯, D♭↔C♯, …). Folding a comma is the fold's one and only move. */
-const ENHARMONIC_COMMA = 12;
-
-// ── Interval scoring (principle 2) ────────────────────────────────────────────────
 // consonance + intervalScore live in src/scoring.ts (one source, shared with CoreSpeller).
 
 /**
  * Is the pair {a, b} a MISSPELLED THIRD: a diminished fourth (should be a major third, C–F♭ ⇒ C–E) or
- * an augmented second (should be a minor third, C–D♯ ⇒ C–E♭), in either direction? This is the exact
- * vertical tell: a note off the sheet where an in-sheet third neighbour was available. It deliberately
- * does NOT flag an augmented sixth or a diminished seventh, legitimate chromatic sonorities the
- * resolution decides, not the vertical.
+ * an augmented second (should be a minor third, C–D♯ ⇒ C–E♭), in either direction? On the line of
+ * fifths a d4 is 8 apart and an A2 is 9. This is the exact vertical tell: a note off the sheet where an
+ * in-sheet third neighbour was available. It does not flag an augmented sixth (10 apart). A diminished
+ * seventh is the A2 inverted, so it is flagged; the guard only runs inside a perfect triad, which a
+ * diminished-seventh chord is not.
  */
-function isMisspelledThird(a: PitchClass, b: PitchClass): boolean {
-    for (const [f, t] of [[a, b], [b, a]] as const) {
-        const { quality, number } = rawIntervalBetween(f, t);
-        if (number === 4 && quality === -2) return true;   // diminished fourth  (a misspelled major third)
-        if (number === 2 && quality === 2) return true;    // augmented second   (a misspelled minor third)
-    }
-    return false;
+function isMisspelledThird(a: number, b: number): boolean {
+    const d = Math.abs(a - b);
+    return d === 8 || d === 9;
 }
 
-// ── Line-of-fifths helpers for the fold ────────────────────────────────────────
-
-/** The [−2, +2] spelling of pitch class `pcv` whose LoF sits nearest centre `c` (letter free). */
-function spellNearest(pcv: number, c: number): PitchClass {
-    let best: PitchClass | null = null, bestD = Infinity;
-    for (const step of LETTERS) {
-        const raw = ((pcv - LETTER_BASE[step]) % 12 + 12) % 12;
+/** The [−2, +2] spelling of pitch class `pc` nearest centre `c` (letter free). Equal distances go to
+ *  the first letter from C to B. */
+function spellNearest(pc: number, c: number): number {
+    let best = 0, bestD = Infinity;
+    for (const s of LETTER_ORDER) {
+        const raw = ((pc - pitchClass(s - 1)) % 12 + 12) % 12;
         const alter = raw > 6 ? raw - 12 : raw;
         if (Math.abs(alter) > 2) continue;
-        const d = Math.abs((LETTER_CHROMA[step] + 7 * alter) - c);
-        if (d < bestD) { bestD = d; best = { step, alter: alter as Accidental }; }
+        const n = s - 1 + 7 * alter;
+        if (Math.abs(n - c) < bestD) { bestD = Math.abs(n - c); best = n; }
     }
-    return best!;
-}
-
-/** Spell a FIXED letter `L` with the accidental that lands it nearest LoF centre `c` (clamped to
- *  [−2, +2]): the letter-locked twin of {@link spellNearest}, used to re-anchor the 7 slots after a fold. */
-function spellLetterAt(L: Letter, c: number): PitchClass {
-    const alter = Math.max(-2, Math.min(2, Math.round((c - LETTER_CHROMA[L]) / 7)));
-    return { step: L, alter: alter as Accidental };
+    return best;
 }
 
 /** The 7-letter diatonic collection whose line-of-fifths centre is `c`, e.g. `collectionAt(2)` is C
  *  major (a major key's centre = tonic + 2), `collectionAt(−3)` is D♭ major. A supplied-key seed. */
-export function collectionAt(c: number): PitchClass[] { return LETTERS.map(L => spellLetterAt(L, c)); }
+export function collectionAt(c: number): PitchClass[] { return LETTER_ORDER.map(s => spellingOf(letterAt(s, c))); }
 
 // ── Options + presets ──────────────────────────────────────────────────────────
 
@@ -319,16 +296,16 @@ export class SpellingEngine {
     private readonly frameSide: 'continuity' | 'drift';
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
-    /** 'diatonic' keep-alive: letters currently holding a committed chromatic alteration over the collection. */
-    private kept = new Map<Letter, PitchClass>();
+    /** 'diatonic' keep-alive: letter slot → the committed chromatic alteration it holds over the collection. */
+    private kept = new Map<number, number>();
 
-    /** One spelling per letter A–G: the drifting scale. Starts at C major. */
-    private resolved = new Map<Letter, PitchClass>();
+    /** One spelling per letter slot: the drifting scale. Starts at C major. */
+    private scale: number[] = [...C_MAJOR];
     /** midi → the spelling committed while that note is sounding, so read-back at note-off returns the
      *  note's OWN spelling even if a later same-letter note has since overwritten the slot. */
-    private active = new Map<number, PitchClass>();
-    /** letter → the onset and accidental last committed to that letter, the recency guard's memory. */
-    private lastByLetter = new Map<Letter, { onset: number; alter: Accidental }>();
+    private active = new Map<number, number>();
+    /** letter slot → the onset and spelling last committed there, the recency guard's memory. */
+    private lastByLetter: ({ onset: number; n: number } | undefined)[] = [];
     /** Running onset counter (co-struck notes share one onset); −1 before the first note. */
     private onset = -1;
     /** The `t` of the current onset, so co-struck notes (same `t`) don't each bump `onset`. */
@@ -383,7 +360,6 @@ export class SpellingEngine {
         this.frameSide = opts.frameSide ?? 'continuity';
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
-        for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
     }
 
     /**
@@ -419,12 +395,12 @@ export class SpellingEngine {
             this.anchor = this.frameCentre;
             // The collection moving PULLS BACK the held alterations (they belonged to the old collection).
             if (this.frameKeepAlive && this.frameCentre !== prevCentre) this.kept.clear();
-            for (const L of LETTERS) this.resolved.set(L, spellLetterAt(L, this.frameCentre));
+            for (let s = 0; s < 7; s++) this.scale[s] = letterAt(s, this.frameCentre);
             // KEEP-ALIVE overlay: a committed chromatic rides its slot until the collection pulls it back.
             if (this.frameKeepAlive) {
-                for (const [L, sp] of this.kept) {
-                    if (this.resolved.get(L)!.alter !== sp.alter) this.resolved.set(L, sp);
-                    else this.kept.delete(L);   // the collection now spells this letter the same way; drop it
+                for (const [s, n] of this.kept) {
+                    if (this.scale[s] !== n) this.scale[s] = n;
+                    else this.kept.delete(s);   // the collection now spells this letter the same way; drop it
                 }
             }
         }
@@ -437,82 +413,80 @@ export class SpellingEngine {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
         const laOn = this.lookAheadOn && resolveDir !== 0;
-        let laStep: Letter | null = null, laTarget: Letter | null = null, laWeight = this.lookAheadWeight;
+        let laStep: number | null = null, laTarget: number | null = null, laWeight = this.lookAheadWeight;
         if (laOn) {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;
-            for (const L of LETTERS) {
-                const p = this.resolved.get(L)!;
-                if (((LETTER_BASE[p.step] + p.alter) % 12 + 12) % 12 === targetPc) { laTarget = L; break; }
-            }
-            if (laTarget) laStep = LETTERS[(LETTERS.indexOf(laTarget) - resolveDir + 7) % 7]!;
+            laTarget = LETTER_ORDER.find(s => pitchClass(this.scale[s]!) === targetPc) ?? null;
+            // The step letter: one letter below the target for an up-resolution, above for down. A letter
+            // step is 2 slots on the line of fifths (C=1, D=3).
+            if (laTarget !== null) laStep = ((laTarget - 2 * resolveDir) % 7 + 7) % 7;
             // LEADING-TONE BOOST: only for an UP-resolution into a NATURAL (unaltered) target: a genuine
             // leading tone (A♯→B). Up-into-chromatic (C→C♯) and down-resolutions keep the base weight, so
             // the boost never over-sharpens a same-letter chromatic inflection of a degree.
-            if (laTarget && resolveDir === 1 && this.resolved.get(laTarget)!.alter === 0) laWeight += this.leadingToneBoost;
+            if (laTarget !== null && resolveDir === 1 && acc(this.scale[laTarget]!) === 0) laWeight += this.leadingToneBoost;
         }
 
-        const scale = LETTERS.map(L => ({ ...this.resolved.get(L)! }));   // the surface scored against
+        const scale = LETTER_ORDER.map(s => spellingOf(this.scale[s]!));   // the surface scored against
         // VERTICAL GUARD context: the notes still ringing. The guard only fires inside a PERFECT triad:
         // a dim4/aug2 is a valid interval elsewhere. The triad's tell is a P5 (LoF distance 1); a dim7 /
         // aug6 has no P5, so they don't qualify.
         const coSounding = this.verticalWeight > 0 ? [...this.active.values()] : [];
-        const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(lofOf(p) - lofOf(q)) === 1));
+        const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(p - q) === 1));
         // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
         // (higher-LoF) of its single-accidental spellings, the raised leading tone / raised degree.
         let leanTarget: number | null = null;
         if (this.chromaticSharpLean > 0) {
             const centre = this.frameMode === 'diatonic' ? this.frameCentre : this.collectionCentre;
-            const collectionPcs = new Set(LETTERS.map(L => { const s = spellLetterAt(L, centre); return ((LETTER_BASE[s.step] + s.alter) % 12 + 12) % 12; }));
-            const pc = ((midi % 12) + 12) % 12;
-            if (!collectionPcs.has(pc)) {
+            const collectionPcs = new Set(LETTER_ORDER.map(s => pitchClass(letterAt(s, centre))));
+            if (!collectionPcs.has(((midi % 12) + 12) % 12)) {
                 let m = -Infinity;
-                for (const c of enharmonicCandidatesFor(midi)) if (Math.abs(c.alter) <= 1) m = Math.max(m, lofOf(c));
+                for (const n of candidates(midi)) if (Math.abs(acc(n)) <= 1) m = Math.max(m, n);
                 if (m !== -Infinity) leanTarget = m;
             }
         }
         const cands: DecisionCandidate[] = [];
-        let best: PitchClass | null = null;
+        let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
-        for (const c of enharmonicCandidatesFor(midi)) {
-            const base = intervalScore(c, this.resolved);
-            const last = this.lastByLetter.get(c.step);
-            const guarded = this.recencyGuard && last && last.alter !== c.alter && this.onset - last.onset <= this.guardWindow;
+        for (const n of candidates(midi)) {
+            const base = intervalScore(n, this.scale);
+            const last = this.lastByLetter[letter(n)];
+            const guarded = this.recencyGuard && last && last.n !== n && this.onset - last.onset <= this.guardWindow;
             const guardDelta = guarded ? -this.recencyGuard : 0;
-            const laDelta = laOn ? (c.step === laStep ? laWeight : c.step === laTarget ? -laWeight : 0) : 0;
-            const daDelta = Math.abs(c.alter) >= 2 ? -this.doubleAccPenalty : 0;
+            const laDelta = laOn ? (letter(n) === laStep ? laWeight : letter(n) === laTarget ? -laWeight : 0) : 0;
+            const daDelta = Math.abs(acc(n)) >= 2 ? -this.doubleAccPenalty : 0;
             let misThirds = 0;
-            if (this.verticalWeight > 0 && inPerfectTriad) for (const x of coSounding) if (isMisspelledThird(c, x)) misThirds++;
+            if (this.verticalWeight > 0 && inPerfectTriad) for (const x of coSounding) if (isMisspelledThird(n, x)) misThirds++;
             const vertDelta = -this.verticalWeight * misThirds;
             // LEASH: one point per fifth the candidate sits BEYOND the anchor's deadzone. Zero inside, so
             // ordinary chromatic colour is free; it only bites a spelling that would strand the note far
             // from where the last bar of music has sat.
             const sideDelta = this.sideWeight > 0
-                ? -this.sideWeight * Math.max(0, Math.abs(lofOf(c) - this.anchor) - this.sideRadius)
+                ? -this.sideWeight * Math.max(0, Math.abs(n - this.anchor) - this.sideRadius)
                 : 0;
-            const leanDelta = (leanTarget !== null && Math.abs(c.alter) <= 1 && lofOf(c) === leanTarget) ? this.chromaticSharpLean : 0;
+            const leanDelta = (leanTarget !== null && Math.abs(acc(n)) <= 1 && n === leanTarget) ? this.chromaticSharpLean : 0;
             const s = base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta;
-            cands.push({ c, base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
-            if (s > bestScore) { bestScore = s; best = c; }
+            cands.push({ c: spellingOf(n), base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
+            if (s > bestScore) { bestScore = s; best = n; }
         }
         if (best === null) return;
-        this.lastDecision = { scale, candidates: cands, chosen: best };
+        this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
         this.active.set(midi, best);
-        this.lastByLetter.set(best.step, { onset: this.onset, alter: best.alter });
+        this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
         if (this.frameMode === 'diatonic') {
             // The frame is the collection; a commit never drifts the SLOTS. But it does record the committed
             // line-of-fifths (the 'drift' side anchor reads its recent median) and keeps a chromatic alive.
-            this.committedLof.push(lofOf(best));
+            this.committedLof.push(best);
             if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
             if (this.frameKeepAlive) {
-                if (best.alter !== spellLetterAt(best.step, this.frameCentre).alter) this.kept.set(best.step, best);
-                else this.kept.delete(best.step);
+                if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
+                else this.kept.delete(letter(best));
             }
             return;
         }
 
-        this.resolved.set(best.step, best);
+        this.scale[letter(best)] = best;
         if (this.sideWeight > 0) {
-            this.committedLof.push(lofOf(best));
+            this.committedLof.push(best);
             if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
             this.updateCollection();
         }
@@ -526,15 +500,15 @@ export class SpellingEngine {
      * pitch class, move it to its nearest sensible spelling so the scale keeps 7 distinct pitch classes.
      * A letter whose note is currently sounding is left alone: a genuine enharmonic doubling, not drift.
      */
-    private repairCollision(just: PitchClass): void {
-        const pc = ((LETTER_BASE[just.step] + just.alter) % 12 + 12) % 12;
-        const sounding = new Set<Letter>(); for (const p of this.active.values()) sounding.add(p.step);
-        for (const L of LETTERS) {
-            if (L === just.step || sounding.has(L)) continue;
-            const slot = this.resolved.get(L)!;
-            if (((LETTER_BASE[L] + slot.alter) % 12 + 12) % 12 !== pc) continue;   // no collision on this letter
-            for (const alt of [0, -1, 1, -2, 2] as Accidental[]) {                 // nearest natural first
-                if (((LETTER_BASE[L] + alt) % 12 + 12) % 12 !== pc) { this.resolved.set(L, { step: L, alter: alt }); break; }
+    private repairCollision(just: number): void {
+        const pc = pitchClass(just);
+        const sounding = new Set<number>(); for (const n of this.active.values()) sounding.add(letter(n));
+        for (let s = 0; s < 7; s++) {
+            if (s === letter(just) || sounding.has(s)) continue;
+            if (pitchClass(this.scale[s]!) !== pc) continue;   // no collision on this letter
+            for (const alt of [0, -1, 1, -2, 2]) {               // nearest natural first
+                const n = s - 1 + 7 * alt;
+                if (pitchClass(n) !== pc) { this.scale[s] = n; break; }
             }
         }
     }
@@ -550,19 +524,19 @@ export class SpellingEngine {
         // The intended replacement is an evidence-based frame (a detected key-signature or diatonic
         // collection that holds until new evidence overturns it, laggier but robust across modulation) as
         // the side substrate, replacing or gating this mean.
-        // Centre entries [letter, lof] for the 7 slots.
-        let entries = [...this.resolved.entries()].map(([L, pc]) => [L, lofOf(pc)] as [Letter, number]);
+        // Centre entries [slot, n] for the 7 slots, C to B.
+        let entries = LETTER_ORDER.map(s => [s, this.scale[s]!] as [number, number]);
         // Drop STALE slots (letters not committed within N onsets): a degree the music has not used for a
         // while holds an outdated spelling that should not anchor the fold centre. Fall back to all 7.
         if (this.foldSlotRecency > 0) {
-            const fresh = entries.filter(([L]) => { const last = this.lastByLetter.get(L); return last != null && this.onset - last.onset <= this.foldSlotRecency; });
+            const fresh = entries.filter(([s]) => { const last = this.lastByLetter[s]; return last != null && this.onset - last.onset <= this.foldSlotRecency; });
             if (fresh.length) entries = fresh;
         }
         if (this.foldRepairScale) {
             const vals = entries.map(([, v]) => v); const med = this.median(vals);
             let bestK = med, bestCov = -1;
             for (let k = med - 6; k <= med + 6; k++) { const cov = vals.reduce((n, v) => n + (Math.abs(v - k) <= 3 ? 1 : 0), 0); if (cov > bestCov || (cov === bestCov && Math.abs(k - med) < Math.abs(bestK - med))) { bestCov = cov; bestK = k; } }
-            entries = entries.map(([L, v]) => [L, Math.abs(v - bestK) <= 3 ? v : lofOf(spellLetterAt(L, bestK))] as [Letter, number]);
+            entries = entries.map(([s, v]) => [s, Math.abs(v - bestK) <= 3 ? v : letterAt(s, bestK)] as [number, number]);
         }
         const cFrame = entries.reduce((s, [, v]) => s + v, 0) / entries.length;
         this.foldCentre = cFrame;   // the actual quantity the clamp tests (recency + repair applied), for the viz
@@ -571,8 +545,8 @@ export class SpellingEngine {
         if (this.fold === 'clamp') {
             // Fold only when the frame drifts PAST an edge of the deadzone: far-sharp to flat, far-flat to
             // sharp, never touching central keys.
-            if (cFrame > this.foldCenter + this.foldRadius) favoured = -ENHARMONIC_COMMA;
-            else if (cFrame < this.foldCenter - this.foldRadius) favoured = +ENHARMONIC_COMMA;
+            if (cFrame > this.foldCenter + this.foldRadius) favoured = -COMMA;
+            else if (cFrame < this.foldCenter - this.foldRadius) favoured = +COMMA;
             // Economy gate (foldEconomyGate, off by default): the clamp decides WHEN to fold (frame far out),
             // this decides WHETHER, folding only if the target comma-side spells the recent raw pitch classes
             // at least as cheaply. It vetoes over-folding a moderate flat while still confirming a deep one.
@@ -581,7 +555,7 @@ export class SpellingEngine {
             if (favoured !== 0 && this.foldEconomyGate) {
                 const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
                 if (heard.length) {
-                    const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(spellNearest(pc, c).alter), 0);
+                    const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
                     if (costAt(cFrame + favoured) > costAt(cFrame)) favoured = 0;   // target dearer ⇒ veto
                 }
             }
@@ -592,11 +566,11 @@ export class SpellingEngine {
             const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
             if (heard.length === 0) return;
             const vetoed = this.foldMaxChroma > 0 && new Set(heard).size > this.foldMaxChroma;
-            const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(spellNearest(pc, c).alter), 0);
+            const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
             const here = costAt(cFrame);
-            const up = costAt(cFrame + ENHARMONIC_COMMA), dn = costAt(cFrame - ENHARMONIC_COMMA);
-            if (up < here - this.foldMargin && up <= dn) favoured = +ENHARMONIC_COMMA;
-            else if (dn < here - this.foldMargin) favoured = -ENHARMONIC_COMMA;
+            const up = costAt(cFrame + COMMA), dn = costAt(cFrame - COMMA);
+            if (up < here - this.foldMargin && up <= dn) favoured = +COMMA;
+            else if (dn < here - this.foldMargin) favoured = -COMMA;
             if (vetoed) favoured = 0;
         }
 
@@ -608,7 +582,7 @@ export class SpellingEngine {
         this.pendingDir = 0; this.pendingCount = 0;
 
         const newCentre = cFrame + favoured;
-        for (const L of LETTERS) this.resolved.set(L, spellLetterAt(L, newCentre));
+        for (let s = 0; s < 7; s++) this.scale[s] = letterAt(s, newCentre);
     }
 
     /**
@@ -687,16 +661,9 @@ export class SpellingEngine {
     /** The spelling of a sounding note (its committed one), else the scale's current spelling of it. */
     getSpelling(midi: number): Pitch | null {
         const octave = Math.floor(midi / 12) - 1;
-        const sounding = this.active.get(midi);
-        if (sounding) return { step: sounding.step, alter: sounding.alter, octave };
-        const target = ((midi % 12) + 12) % 12;
-        for (const L of LETTERS) {
-            const pc = this.resolved.get(L)!;
-            if (((LETTER_BASE[pc.step] + pc.alter) % 12 + 12) % 12 === target) {
-                return { step: pc.step, alter: pc.alter, octave };
-            }
-        }
-        return null;
+        const n = this.active.get(midi)
+            ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
+        return n === undefined ? null : { ...spellingOf(n), octave };
     }
 
     noteOff(midi: number): void {
@@ -710,11 +677,10 @@ export class SpellingEngine {
      * accepted for API compatibility but treated the same as a soft seed.
      */
     reset(scale: readonly PitchClass[] = [], _hard = false): void {
-        this.resolved = new Map<Letter, PitchClass>();
-        for (const L of LETTERS) this.resolved.set(L, { step: L, alter: 0 });
-        for (const pc of scale) this.resolved.set(pc.step, { step: pc.step, alter: pc.alter });
+        this.scale = [...C_MAJOR];
+        for (const pc of scale) { const n = lofOf(pc); this.scale[letter(n)] = n; }
         this.active.clear();
-        this.lastByLetter.clear();
+        this.lastByLetter = [];
         this.onset = -1;
         this.lastT = NaN;
         this.pcWindow = [];
@@ -743,7 +709,7 @@ export class SpellingEngine {
 
     /** Read-only snapshot of the current 7-letter scale (introspection). */
     getResolvedScale(): PitchClass[] {
-        return LETTERS.map(L => ({ ...this.resolved.get(L)! }));
+        return LETTER_ORDER.map(s => spellingOf(this.scale[s]!));
     }
 
     /** The diatonic collection's line-of-fifths centre (leash display; a major collection is centred at
@@ -756,7 +722,7 @@ export class SpellingEngine {
 
     /** The 7-letter diatonic COLLECTION: the un-altered substrate, each letter spelled within the current
      *  collection window. The stable "frame" against the altered surface (leash display). */
-    getCollection(): PitchClass[] { return LETTERS.map(L => spellLetterAt(L, this.collectionCentre)); }
+    getCollection(): PitchClass[] { return collectionAt(this.collectionCentre); }
 
     /** The most recent note's scoring trace (introspection / visualiser), or null before the first note.
      *  Read-only; recording it never changes a spelling. */

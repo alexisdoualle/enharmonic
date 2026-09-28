@@ -31,7 +31,7 @@ if (!baselines) { console.error(`no baseline snapshot for variant '${variant}'`)
 
 // Column order, grouped by LATENCY (causal → bounded → offline → control): the original design.
 const COLUMNS = [
-    { src: ['ours', 'core'], latency: 'causal', ours: true, label: ['CoreSpeller', '(~100 lines)'] },
+    { src: ['ours', 'core'], latency: 'causal', ours: true, label: ['CoreSpeller', '(~90 lines)'] },
     { src: ['ours', 'rt'], latency: 'causal', ours: true, label: ['real-time', '(guard + fold + leash)'] },
     { src: ['base', 'chew_chen'], latency: 'causal', label: ['Chew & Chen', '(spiral array)'] },
     { src: ['ours', 'la'], latency: 'bounded', ours: true, label: ['real-time +LA', '(letter look-ahead)'] },

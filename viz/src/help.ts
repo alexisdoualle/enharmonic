@@ -68,11 +68,11 @@ composer wrote is flipped, not wrong.</blockquote>`,
 (<code>src/core.ts</code>); every other mode builds on it.</p>
 
 <ol>
-<li><b>The 7-letter limit.</b> A running scale holds one spelling per letter A to G. Every note
-overwrites its letter's slot. Spelling a note means choosing which letter to claim.</li>
 <li><b>Interval scoring.</b> Among a pitch's enharmonic candidates, pick the one that forms the most
-consonant intervals with the rest of the scale. Fifths and thirds reward, augmented and diminished
+consonant intervals with the running scale. Fifths and thirds reward, augmented and diminished
 intervals punish. The scale drifts into key on its own, with no key ever named.</li>
+<li><b>The 7-letter limit.</b> The running scale holds one spelling per letter A to G. Every note
+overwrites its letter's slot. Spelling a note means choosing which letter to claim.</li>
 <li><b>The recency guard.</b> Interval scoring only compares a candidate against the <i>other</i>
 letters, so it misses a same-letter clash (A&flat; right after A&natural;). The guard penalises a letter
 respelled at a different accidental within a few onsets. It blocks flicker, not real modulation.</li>
@@ -169,7 +169,7 @@ against.</li>
 </ul>
 <p><b>Candidate table.</b> Every enharmonic spelling of the struck pitch, with its score.</p>
 <ul>
-<li><code>base</code> is the interval consonance against the surface (principle 2).</li>
+<li><code>base</code> is the interval consonance against the surface (principle 1).</li>
 <li>the remaining columns are the mechanism deltas: the recency guard, look-ahead, the side leash, the
 vertical guard, and so on, depending on the mode.</li>
 <li>the winner (<b>&#9654;</b>) is the one that maximises <code>base</code> plus the deltas. That is the
@@ -238,7 +238,7 @@ heard as one alteration (0,0,1), an augmented unison. B to F is six fifths down 
 lowered by an alteration (1,0,-1), a diminished fifth. The quality reads straight off the move: a
 neighbour in the fifths-and-thirds plane (a fifth or a third) is consonant, a farther step (a second or a
 seventh) is neutral, and a move onto the alteration axis is dissonant. That is interval scoring
-(principle 2), summed against every letter of the current frame.</blockquote>
+(principle 1), summed against every letter of the current frame.</blockquote>
 
 <p>Because <code>n = x + 4y + 7z</code> has many integer solutions, the same note appears at many cells.
 An in-scale note lights up in several places at once. That is inherent to the lattice, not a bug.</p>

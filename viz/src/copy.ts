@@ -46,7 +46,7 @@ function header(s: AppState): string[] {
     const r = s.replay;
     const out = [
         `fixture: ${s.fixtureId}`,
-        `speller: ${MODE_LONG[s.mode]} [${s.mode}]`,
+        `speller: ${s.mode === 'rt' && s.lookAhead ? `${MODE_LONG.la} [la]` : `${MODE_LONG[s.mode]} [${s.mode}]`}`,
         `spiral:  range ±${s.spiralRange}, centre ${sgn(s.spiralCenter)}${s.repair ? ', repair ON' : ''}`
         + (s.spiralRange === SPIRAL_RANGE_DEFAULT && s.spiralCenter === SPIRAL_CENTER_DEFAULT && !s.repair
             ? '  (shipped default)'

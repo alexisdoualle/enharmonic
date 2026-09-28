@@ -130,13 +130,13 @@
       coherent transposition, not an error.</p>
 
       <p>The speller works in one harmonic space, with <strong>no key detection anywhere</strong>. Three
-      principles handle coherence: a running seven-letter scale, an interval score that rewards consonance,
+      principles handle coherence: an interval score that rewards consonance, a running seven-letter scale,
       and a recency guard against flicker. A spiral of fifths then decides which side of the comma a passage
       sits on. The side it lands on is a statistic of the notes it has already committed.</p>
 
       <p>Those three principles are small enough to read in one file:
       <a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">the Core
-      speller</a>, about 100 lines with zero imports. On its own it spells coherently but can land on the
+      speller</a>, about 90 lines with zero imports. On its own it spells coherently but can land on the
       wrong side of the comma, so its coherent rate stays high while its exact rate drops. The shipped modes
       add the side correction that closes that gap.</p>
 
@@ -150,19 +150,20 @@
         <thead>
           <tr>
             <th rowspan="2">Mode</th>
-            <th>Meredith</th>
+            <th colspan="2">Meredith</th>
             <th class="grp" colspan="2">Curated corpus, harder</th>
           </tr>
           <tr>
             <th>exact</th>
+            <th>coherent</th>
             <th class="grp">exact</th>
             <th>coherent</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (3 principles)</td><td>97.56%</td><td class="grp">68.04%</td><td>97.69%</td></tr>
-          <tr><td>Real-time</td><td>99.53%</td><td class="grp">91.43%</td><td>98.36%</td></tr>
-          <tr><td>Two-pass</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
+          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (3 principles)</td><td>97.56%</td><td>99.44%</td><td class="grp">68.04%</td><td>97.69%</td></tr>
+          <tr><td>Real-time</td><td>99.53%</td><td>99.58%</td><td class="grp">91.43%</td><td>98.36%</td></tr>
+          <tr><td>Two-pass</td><td>99.86%</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
         </tbody>
       </table>
       <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact is a

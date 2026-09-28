@@ -19,8 +19,8 @@ export interface PitchClass {
     readonly alter: Accidental;
 }
 
-/** Natural pitch class of each letter (C = 0). The single source of truth; imported by
- *  candidates.ts and engine.ts rather than re-declared. */
+/** Natural pitch class of each letter (C = 0), for the {step, alter} API. Inside the speller a spelling
+ *  is a line-of-fifths position and its pitch class is read off that (lof.ts). */
 export const LETTER_BASE = {
     C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
 } as const satisfies Record<Letter, number>;

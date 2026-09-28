@@ -39,7 +39,7 @@ if (!done.length) { console.error('\n✗ no corpora fetched; nothing to score.')
 
 // --- write results/RESULTS.md --------------------------------------------------------------
 const baseSnap = JSON.parse(readFileSync(join(REPO, 'test', 'eval', 'meredith-baselines.json'), 'utf8'));
-const MODES = [['core', 'Core (~100 lines)', 'real-time'], ['rt', 'real-time speller', 'real-time'], ['la', 'real-time + look-ahead', 'near-real-time'], ['tp', 'two-pass speller', 'offline']];
+const MODES = [['core', 'Core (~90 lines)', 'real-time'], ['rt', 'real-time speller', 'real-time'], ['la', 'real-time + look-ahead', 'near-real-time'], ['tp', 'two-pass speller', 'offline']];
 const BASE = [['chew_chen', 'Chew & Chen (spiral array)', 'causal'], ['pkspell', 'PKSpell (ISMIR’21 neural)', 'offline'], ['ps13', 'ps13 (Meredith)', 'offline'], ['temperley', 'Temperley (Melisma 2003)', 'offline'], ['fixed_lof', 'fixed LoF window (= music21 default)', 'control']];
 const pct = (num, den) => (100 * num / den).toFixed(2);
 const ex = t => pct(t.correct, t.committed), co = t => pct(t.correct + t.flipped, t.committed), wr = t => pct(t.wrong, t.committed);

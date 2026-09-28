@@ -19,9 +19,10 @@
  * see the README for benchmark figures.
  */
 
-import type { Letter, Pitch, PitchClass } from './pitch.js';
+import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
 import { SpellingEngine, TP_PASS_PRESET } from './engine.js';
+import { lofOf, spellingOf } from './lof.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -72,10 +73,8 @@ export interface TwoPassTrace {
     readonly lastStable: number | null;
 }
 
-// ── Line-of-fifths + direction helpers ─────────────────────────────────────────
-
-const LETTER_CHROMA: Record<Letter, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
-const lof = (s: { step: Letter; alter: number }) => LETTER_CHROMA[s.step] + 7 * s.alter;
+// ── Direction helpers ─────────────────────────────────────────────────────────
+// Spellings below are line-of-fifths positions (see lof.ts); {step, alter} only at the output.
 
 /** Nearest-semitone-resolution direction for each note, scanning up to `horizon` following onsets. */
 function resolveDirs(notes: readonly TwoPassNote[], horizon = 16): number[] {
@@ -106,22 +105,22 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
     return d;
 }
 
-/** Drive one engine pass over notes in the given order; return one spelling per note (same order).
- *  Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied. */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null): Pitch[] {
+/** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
+ *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied. */
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null): number[] {
     const s = new SpellingEngine(TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
     notes.forEach((n, i) => { evs.push({ t: n.tOn, on: true, i }); evs.push({ t: n.tOff, on: false, i }); });
     evs.sort((a, b) => a.t - b.t || Number(a.on) - Number(b.on) || notes[a.i]!.midi - notes[b.i]!.midi);
-    const out: Pitch[] = new Array(notes.length);
+    const out: number[] = new Array(notes.length);
     const pend = new Map<number, number[]>();   // midi → FIFO of note indices awaiting read-back at note-off
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
         if (e.on) { s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
         // Read the note's committed spelling (before release); release the midi only once its LAST overlapping
         // voice ends, so read-back never falls through and the vertical guard's ringing set stays correct.
-        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = s.getSpelling(midi) as Pitch; if (q.length === 0) s.noteOff(midi); } }
+        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); if (q.length === 0) s.noteOff(midi); } }
     }
     return out;
 }
@@ -141,9 +140,9 @@ function order(notes: readonly TwoPassNote[]) {
 }
 
 interface CoreResult {
-    spellings: Pitch[];               // in the SORTED (bass-first) order
-    forward: Pitch[];
-    backward: Pitch[];
+    spellings: number[];              // in the SORTED (bass-first) order
+    forward: number[];
+    backward: number[];
     agrees: boolean[];
     firstStable: number;
     lastStable: number;
@@ -172,11 +171,11 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     // is already committed. bNotes[k] = original n-1-k.
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
     const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null);
-    const bwd: Pitch[] = new Array(n);
+    const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
 
-    const out: Pitch[] = new Array(n);
-    const agree = (i: number) => lof(fwd[i]!) === lof(bwd[i]!);
+    const out: number[] = new Array(n);
+    const agree = (i: number) => fwd[i] === bwd[i];
     // Cold-end handling: before the first agreement trust the backward (warm) pass; after the last, forward.
     let firstAgree = 0; while (firstAgree < n && !agree(firstAgree)) firstAgree++;
     let lastAgree = n - 1; while (lastAgree >= 0 && !agree(lastAgree)) lastAgree--;
@@ -187,7 +186,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     // reliable majority), an emergent statistic, not a detected key. Whole-piece median (deliberately not
     // windowed: a local centre is dragged by nearby agreed-but-wrong runs).
     const agreedLofs: number[] = [];
-    for (let t = 0; t < n; t++) if (agree(t)) agreedLofs.push(lof(fwd[t]!));
+    for (let t = 0; t < n; t++) if (agree(t)) agreedLofs.push(fwd[t]!);
     agreedLofs.sort((a, b) => a - b);
     const centre = agreedLofs.length ? agreedLofs[agreedLofs.length >> 1]! : 0;
 
@@ -199,12 +198,12 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
         // bracketed window [i-1, j]. Wolf-cost LOCATES an incoherent lag boundary; a COHERENT flip makes no
         // wolves so every k ties, broken by the SIDE-CENTRE, then by WARMTH (forward late, backward early).
         const late = (i + j) / 2 >= n / 2;
-        const pickFor = (k: number) => (t: number): Pitch => t < i ? out[t]! : t >= j ? fwd[t]! : (t < k ? fwd[t]! : bwd[t]!);
+        const pickFor = (k: number) => (t: number): number | undefined => t < i ? out[t] : t >= j ? fwd[t] : (t < k ? fwd[t] : bwd[t]);
         const costOf = (k: number): number => {
             const pick = pickFor(k); let cost = 0;
             for (let t = Math.max(1, i); t <= Math.min(n - 1, j); t++) {
                 const a = pick(t - 1), b = pick(t);
-                if (a && b && Math.abs(lof(a) - lof(b)) >= 6) cost++;
+                if (a !== undefined && b !== undefined && Math.abs(a - b) >= 6) cost++;
             }
             return cost;
         };
@@ -214,7 +213,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
         for (let k = i; k <= j; k++) {
             if (cost[k - i]! > minCost + centreMargin) continue;
             const pick = pickFor(k);
-            let dist = 0; for (let t = i; t < j; t++) dist += Math.abs(lof(pick(t)) - centre);
+            let dist = 0; for (let t = i; t < j; t++) dist += Math.abs(pick(t)! - centre);
             const pref = centreTiebreak ? -(dist + cost[k - i]!) : -cost[k - i]!;
             const warm = late ? k : -k;
             if (pref > bestPref || (pref === bestPref && warm > bestWarm)) { bestK = k; bestPref = pref; bestWarm = warm; }
@@ -239,18 +238,18 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
             const pcs = onsetPcs.get(N[k]!.tOn)!, L = pc(k);
             return pcs.has(L) && pcs.has((L + 3) % 12) && pcs.has((L + 6) % 12) && pcs.has((L + 9) % 12);
         };
-        const vWolf = (cand: Pitch, k: number): number => {
+        const vWolf = (cand: number, k: number): number => {
             let w = 0;
             for (const jj of sameOnset.get(N[k]!.tOn)!) {
-                const p = out[jj]; if (jj === k || !p) continue;
+                const p = out[jj]; if (jj === k || p === undefined) continue;
                 if (pc(jj) === pc(k)) continue;               // octave doubling: one sounding pc, not a clash
-                if (Math.abs(lof(cand) - lof(p)) >= 7) w++;
+                if (Math.abs(cand - p) >= 7) w++;
             }
             return w;
         };
         for (let idx = 0; idx < n; idx++) {
             const cur = out[idx], f = fwd[idx]!;
-            if (dirsX[idx] === 1 && cur && lof(f) > lof(cur) && (vWolf(f, idx) <= vWolf(cur, idx) || inFullDim7(idx)))
+            if (dirsX[idx] === 1 && cur !== undefined && f > cur && (vWolf(f, idx) <= vWolf(cur, idx) || inFullDim7(idx)))
                 out[idx] = f;
         }
     }
@@ -264,8 +263,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     };
 }
 
-/** Reduce a Pitch to a PitchClass (the historic two-pass output shape). */
-const toPc = (p: Pitch | undefined): PitchClass | null => p ? { step: p.step, alter: p.alter } : null;
+/** A line-of-fifths position as a PitchClass (the two-pass output shape). */
+const toPc = (n: number | undefined): PitchClass | null => n === undefined ? null : spellingOf(n);
 
 /** Production entry point: returns only final spellings, one per input note (caller's order). */
 export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): (PitchClass | null)[] {
