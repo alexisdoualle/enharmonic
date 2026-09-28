@@ -1,5 +1,5 @@
 /**
- * Principle 2: interval scoring, the single source shared by CoreSpeller (src/core.ts) and the shipped
+ * Principle 1: interval scoring, the single source shared by CoreSpeller (src/core.ts) and the shipped
  * SpellingEngine (src/engine.ts). A candidate is scored against the OTHER letters of the resolved scale
  * by summing per-interval consonance, read straight off the line-of-fifths distance between the two
  * spellings, so the interval never has to be named:

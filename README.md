@@ -93,12 +93,12 @@ comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an
 ## The three principles
 
 The smallest form of the model is [`examples/core-speller.ts`](examples/core-speller.ts): the speller in
-~100 lines, zero imports, built from three principles and nothing else.
+~90 lines, zero imports, built from three principles and nothing else.
 
-1. **The seven-letter limit.** A running resolved scale holds one spelling per letter A–G. Spelling a
-   note is choosing which letter it claims.
-2. **Interval scoring.** Among a pitch's enharmonic candidates, pick the one that forms the most
-   consonant intervals with the rest of the scale. The scale drifts into key with no key detection.
+1. **Interval scoring.** Among a pitch's enharmonic candidates, pick the one that forms the most
+   consonant intervals with the running scale. The scale drifts into key with no key detection.
+2. **The seven-letter limit.** The running scale holds one spelling per letter A–G. Spelling a note is
+   choosing which letter it claims.
 3. **The recency guard.** Dock a candidate whose letter was last committed at a different accidental a
    few onsets ago, so a slot cannot flicker against its recent self.
 

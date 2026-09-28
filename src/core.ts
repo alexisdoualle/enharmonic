@@ -1,7 +1,7 @@
 /**
  * CoreSpeller: the three-principle foundation.
  *
- * The 7-letter limit, interval (aug/dim) scoring, and a recency guard, nothing else:
+ * Interval (aug/dim) scoring, the 7-letter limit, and a recency guard, nothing else:
  * the minimal causal baseline the real-time Speller (look-ahead is an option) and the
  * two-pass function `spellTwoPass` build on. Frameless and persistent: one drifting scale whose slots are
  * overwritten, never reverted.
@@ -17,7 +17,7 @@
  * package exports keep it off the npm surface. It lives in src/ (not an example) so
  * the bench can score it as Core; reach it only by an in-repo path import.
  *
- * The self-contained ~100-line version is examples/core-speller.ts (zero imports),
+ * The self-contained ~90-line version is examples/core-speller.ts (zero imports),
  * kept in lockstep with this class (identical spellings on every fixture) by
  * test/examples/standalone.test.ts.
  */
@@ -28,7 +28,8 @@ import { intervalScore } from './scoring.js';
 import type { NoteContext } from './kernel.js';
 
 export class CoreSpeller {
-    /** One spelling (line-of-fifths position) per letter slot: the drifting scale. */
+    /** Principle 2, the 7-letter limit: one spelling (line-of-fifths position) per letter slot, the
+     *  drifting scale. */
     private scale: number[] = [...C_MAJOR];
     /** midi → the spelling COMMITTED for that note while it's sounding. Stored per-note (not just
      *  the letter) so read-back returns the note's own spelling, even if a later same-letter note
@@ -80,6 +81,7 @@ export class CoreSpeller {
         let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
         for (const n of candidates(midi)) {
+            // Principle 1: score the candidate's intervals against the scale.
             let s = intervalScore(n, this.scale);
             if (this.doubleAccidentalPenalty && Math.abs(acc(n)) >= 2) s -= this.doubleAccidentalPenalty;
             // Principle 3: dock a candidate whose letter was just committed at a different accidental.
@@ -93,8 +95,10 @@ export class CoreSpeller {
             }
         }
         if (best === null) return;
+        // Principle 2: the winner overwrites its letter's slot.
         this.scale[letter(best)] = best;
         this.active.set(midi, best);
+        // Principle 3: remember when this letter was set.
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
     }
 

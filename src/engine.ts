@@ -3,10 +3,10 @@
  * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). No key detection anywhere.
  *
  * Two principles do the base work:
- *   1. 7-LETTER LIMIT. A resolved scale holds one spelling per letter A–G. A note is spelled by
- *      choosing which letter to claim; that overwrites the letter's slot.
- *   2. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the rest of the
+ *   1. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the resolved
  *      scale. This alone drifts the scale into key.
+ *   2. 7-LETTER LIMIT. The resolved scale holds one spelling per letter A–G. A note is spelled by
+ *      choosing which letter to claim; that overwrites the letter's slot.
  *
  * Named-option mechanisms sit on top; each is documented on its {@link EngineOptions} field:
  *   RECENCY GUARD: penalise a same-letter clash within K onsets (coherence, the `wrong` tier).

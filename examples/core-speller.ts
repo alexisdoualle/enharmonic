@@ -14,13 +14,13 @@
  * It wasn't transposed correctly, it should be "E#".
  *
  * Three principles, and nothing else:
- *   1. The 7-LETTER LIMIT. A running "resolved scale" holds one spelling per letter
- *      A-G. Every note overwrites its letter's slot; spelling a note means choosing
- *      which letter to claim.
- *   2. INTERVAL SCORING. Among a pitch's enharmonic candidates, pick the one that
- *      forms the most consonant intervals with the rest of the resolved scale
+ *   1. INTERVAL SCORING. Among a pitch's enharmonic candidates, pick the one that
+ *      forms the most consonant intervals with the running "resolved scale"
  *      (consonances reward, augmented/diminished punish). The scale drifts into key
  *      with no explicit key detection.
+ *   2. The 7-LETTER LIMIT. The resolved scale holds one spelling per letter A-G.
+ *      Every note overwrites its letter's slot; spelling a note means choosing which
+ *      letter to claim.
  *   3. THE RECENCY GUARD. Interval scoring reads a candidate against the OTHER letters
  *      only, so it misses a same-letter clash (A♭ right after A♮). The guard docks a
  *      candidate whose letter was last committed at a different accidental within K
@@ -117,10 +117,10 @@ function candidates(midi: number): number[] {
     return out;
 }
 
-// ── Interval scoring (principle 2) ─────────────────────────────────────────────
+// ── Interval scoring (principle 1) ─────────────────────────────────────────────
 
 /**
- * Consonance of the interval between two spellings, the whole of principle 2 as one number.
+ * Consonance of the interval between two spellings, the whole of principle 1 as one number.
  * It depends only on their distance `d` on the line of fifths, so the interval never has
  * to be named: read the score straight off `d`.
  *   d = 1      P5 / P4              consonant  +1
@@ -156,7 +156,7 @@ const GUARD_WINDOW = 3;
 // ── The speller ──────────────────────────────────────────────────────────────
 
 export class CoreSpeller {
-    /** Principle 1, the 7-letter limit: one spelling per letter, the drifting scale. Starts at C major. */
+    /** Principle 2, the 7-letter limit: one spelling per letter, the drifting scale. Starts at C major. */
     //                          F   C  G  D  A  E  B
     private scale: number[] = [-1, 0, 1, 2, 3, 4, 5];
     /** Spelling committed for each sounding note, so note-off reads back that note's own
@@ -188,11 +188,12 @@ export class CoreSpeller {
         let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
         for (const n of candidates(midi)) {
+            // Principle 1 scores the candidate; principle 3 docks it.
             const s = intervalScore(n, this.scale) - this.guardPenalty(n);
             if (s > bestScore || (s === bestScore && plainer(n, best!))) { bestScore = s; best = n; }
         }
         if (best === null) return;
-        // Principle 1: the winner overwrites its letter's slot.
+        // Principle 2: the winner overwrites its letter's slot.
         this.scale[letter(best)] = best;
         this.active.set(midi, best);
         // Principle 3: remember when this letter was set.

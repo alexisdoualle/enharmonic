@@ -130,13 +130,13 @@
       coherent transposition, not an error.</p>
 
       <p>The speller works in one harmonic space, with <strong>no key detection anywhere</strong>. Three
-      principles handle coherence: a running seven-letter scale, an interval score that rewards consonance,
+      principles handle coherence: an interval score that rewards consonance, a running seven-letter scale,
       and a recency guard against flicker. A spiral of fifths then decides which side of the comma a passage
       sits on. The side it lands on is a statistic of the notes it has already committed.</p>
 
       <p>Those three principles are small enough to read in one file:
       <a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">the Core
-      speller</a>, about 100 lines with zero imports. On its own it spells coherently but can land on the
+      speller</a>, about 90 lines with zero imports. On its own it spells coherently but can land on the
       wrong side of the comma, so its coherent rate stays high while its exact rate drops. The shipped modes
       add the side correction that closes that gap.</p>
 

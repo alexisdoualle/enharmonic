@@ -1,9 +1,9 @@
 /**
- * RealtimeSpeller: the demo real-time speller, in one file, ~210 loc.
+ * RealtimeSpeller: the demo real-time speller, in one file, ~175 loc.
  *
  * CoreSpeller (core-speller.ts) plus three mechanisms; same style, zero imports.
  *
- * Core's three principles (7-letter limit + interval scoring + recency guard) solve
+ * Core's three principles (interval scoring + 7-letter limit + recency guard) solve
  * COHERENCE but drift on the SIDE. The three additions fix both:
  *
  *   1. DIATONIC FRAME (side). The 7 slots ARE a diatonic collection, not the drifting
@@ -113,7 +113,7 @@ function candidates(midi: number): number[] {
     return out.sort((a, b) => (plainer(a, b) ? -1 : plainer(b, a) ? 1 : 0));
 }
 
-// ── Interval scoring (principle 2) ────────────────────────────────────────────────
+// ── Interval scoring (principle 1) ────────────────────────────────────────────────
 
 /** Consonance read straight off the fifth-distance d: fifth/third (d 1,3,4) +1; unison/2nd/7th (d 0,2,5)
  *  0; aug/dim (d 6..12) −1; doubly aug/dim (d ≥ 13) −2. No interval-naming needed. */
