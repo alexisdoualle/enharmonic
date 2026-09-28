@@ -18,7 +18,7 @@ export interface AppState {
     sideOverrides: SideOverride[]; // editorial comma orientation markers for two-pass replay
 }
 
-export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, meanFrame: false, lookAhead: false, showKeyLanes: false, sideOverrides: [] };
+export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, meanFrame: false, lookAhead: true, showKeyLanes: false, sideOverrides: [] };
 
 /** Shipped-preset defaults: the spiral controls reset to these, and the URL omits them when unchanged.
  *  `range` is the clamp radius directly, so the default is 7 (= RT_PRESET foldRadius); min 6 = a tighter fold. */

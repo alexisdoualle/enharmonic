@@ -324,9 +324,9 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             resolvedScale = engine!.getResolvedScale();
             // Read the frame side off the resolved scale's MEAN, the quantity the spiral fold actually
             // clamps (a major scale's mean line-of-fifths sits at tonic + 2). Both rt and la use the mean
-            // so the lit key on the wheel matches what range/offset control; the stable collection (leash)
-            // is still shown as the `frame` band.
-            frame = mode === 'rt' ? engine!.getCollection() : resolvedScale.map(p => ({ ...p }));
+            // so the lit key on the wheel matches what range/offset control; the stable collection is
+            // still shown as the `frame` band (both run the diatonic frame, so both have one).
+            frame = engine!.getCollection();
             // The lit key = the centre the clamp fold actually tests (slot mean after recency + repair), so
             // it reflects the repair toggle; falls back to the raw surface mean if the fold never ran.
             frameLofTonic = Math.round(engine!.getFoldCentre()) - 2;

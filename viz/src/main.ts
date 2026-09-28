@@ -488,8 +488,10 @@ function syncUrl() {
     else u.searchParams.delete('rp');
     if (state.meanFrame) u.searchParams.set('fm', '1');
     else u.searchParams.delete('fm');
+    // look-ahead is on by default; only record when turned off
+    if (state.lookAhead) u.searchParams.delete('la');
+    else u.searchParams.set('la', '0');
     // experimental key lanes are off by default; only record when enabled
-    if (state.lookAhead) u.searchParams.set('la', '1');
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
     else u.searchParams.delete('keys');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
@@ -665,7 +667,7 @@ async function boot() {
     if (urlMode === 'core' || urlMode === 'rt' || urlMode === 'tp' || urlMode === 'control') state.mode = urlMode;
     // Look-ahead is now the toolbar toggle on the real-time speller; migrate an old `?mode=la` link.
     if (urlMode === 'la') { state.mode = 'rt'; state.lookAhead = true; }
-    if (p.get('la') === '1') state.lookAhead = true;
+    if (p.get('la')) state.lookAhead = p.get('la') !== '0';
     if (p.get('sr')) state.spiralRange = clampRange(Number(p.get('sr')));
     if (p.get('sc')) state.spiralCenter = clampCenter(Number(p.get('sc')));
     if (p.get('sk')) state.spiralEven = p.get('sk') === '1';
