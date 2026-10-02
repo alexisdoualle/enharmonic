@@ -430,12 +430,24 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
     midiRequested = true;
     model.setMidiStatus('requesting MIDI access…');
     return navigator.requestMIDIAccess({ sysex: false }).then(access => {
+        // SUSTAIN PEDAL (CC64): while it is down a released key keeps sounding, so its note-off waits for the
+        // pedal to lift. A sustained key struck again is released first, then re-struck, as on a piano.
+        let pedal = false;
+        const sustained = new Set<number>();
         const attach = (input: WebMidi.MIDIInput) => {
             input.addEventListener('midimessage', event => {
-                const [status, midi, velocity] = event.data;
-                const command = status! & 0xf0;
-                if (command === 0x90 && velocity! > 0) model.noteOn(midi!, false, event.timeStamp);
-                else if (command === 0x80 || (command === 0x90 && velocity === 0)) model.noteOff(midi!, event.timeStamp);
+                const [status, data1, data2] = event.data;
+                const command = status! & 0xf0, t = event.timeStamp;
+                if (command === 0x90 && data2! > 0) {
+                    if (sustained.delete(data1!)) model.noteOff(data1!, t);
+                    model.noteOn(data1!, false, t);
+                } else if (command === 0x80 || (command === 0x90 && data2 === 0)) {
+                    if (pedal) sustained.add(data1!);
+                    else model.noteOff(data1!, t);
+                } else if (command === 0xb0 && data1 === 64) {
+                    pedal = data2! >= 64;
+                    if (!pedal) { for (const m of sustained) model.noteOff(m, t); sustained.clear(); }
+                }
             });
         };
         access.inputs.forEach(attach);

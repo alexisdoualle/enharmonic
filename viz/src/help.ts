@@ -160,7 +160,7 @@ paste to an agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
         id: 'live', nav: 'Play live', title: 'Play notes yourself',
         body: `
 <p>The computer keyboard is a small piano. Press a key to play a note into the real-time speller
-(<code>new Speller()</code>). Try it here: the keys below light up.</p>
+(<code>new Speller()</code>). Try it here: the keys below light up and sound, without recording.</p>
 ${keyboardMap()}
 <ul>
 <li><b>Upper piano</b>: the <b>Q</b> row is the white keys from C4 to G5, the number row above it the black keys.</li>
@@ -174,8 +174,8 @@ shortcuts keep working. Space, the arrows, Home and End stay transport keys.</li
 <p><b>A MIDI keyboard.</b> The <b>&#127929; MIDI</b> button in the transport bar connects every MIDI input.
 The browser asks for permission on that click, never on page load. Once connected the button reads
 <b>&#127929; MIDI &check;</b>, and a device plugged in later is picked up on its own. Notes from a MIDI
-keyboard are not played through the synth: your instrument makes the sound. The button is hidden when the
-browser has no Web MIDI.</p>
+keyboard are not played through the synth: your instrument makes the sound. The sustain pedal holds
+notes as on a piano. The button is hidden when the browser has no Web MIDI.</p>
 
 <p><b>Free play.</b> The first note switches to a <b>&#127929; live take</b>, and every panel follows it:
 staff, roll, spiral, scoring and Tonnetz, on the same engine the pieces run on. Nothing is graded (there is
@@ -183,7 +183,8 @@ no composer spelling to compare to), so notes take their letter's colour. Keys p
 as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is spelled
 in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
 play the take back like a piece. <b>&#10226; new take</b> starts an empty one; picking a piece leaves the
-take in the menu.</p>`,
+take in the menu, and it survives a reload in this browser. <b>&#10515; export</b> downloads it as a
+fixture <code>events.json</code> (no spellings: those come from a person, never from the speller).</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

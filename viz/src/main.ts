@@ -201,28 +201,30 @@ function liveMode(): Mode {
 function enterLive(fresh: boolean) {
     stopPlay();
     if (fresh) { take = []; takeHeld.clear(); takeT = 0; }
-    const sel = $<HTMLSelectElement>('fixture');
-    let opt = sel.querySelector<HTMLOptionElement>(`option[value="${LIVE_ID}"]`);
-    if (!opt) { opt = document.createElement('option'); opt.value = LIVE_ID; opt.textContent = '🎹 live take'; sel.prepend(opt); }
-    sel.value = LIVE_ID;
+    addTakeOption();
+    $<HTMLSelectElement>('fixture').value = LIVE_ID;
     state.fixtureId = LIVE_ID;
     state.sideOverrides = [];
     rawEvents = take; rawExpected = [];
     $('take-clear').hidden = false;
+    $('take-export').hidden = false;
 }
 
 /** One keyboard or MIDI event into the take. */
 function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number) {
-    if (type === 'on') {
-        if (takeHeld.has(midi)) return;
-        if (!isLive()) enterLive(true);
-        else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
-        if (sound && soundOn) { audioEnable(); liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22)); }
-    } else {
-        if (!takeHeld.has(midi)) return;
+    // Sound first: a key sounds while held, whether or not it is recorded.
+    if (type === 'on' && !liveVoices.has(midi) && !takeHeld.has(midi) && sound && soundOn) {
+        audioEnable();
+        liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22));
+    } else if (type === 'off') {
         const v = liveVoices.get(midi);
         if (v) { releaseVoice(v); liveVoices.delete(midi); }
     }
+    if (type === 'on') {
+        if (takeHeld.has(midi) || isHelpOpen()) return;   // the help page's keyboard map only lights and sounds
+        if (!isLive()) enterLive(true);
+        else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
+    } else if (!takeHeld.has(midi)) return;
     // Only a silence (nothing held) is capped; time under a held key is sounding.
     const gap = now - takeWall;
     takeT = take.length ? takeT + (takeHeld.size ? gap : Math.min(gap, LIVE_GAP_CAP)) : 0;
@@ -231,7 +233,10 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     if (type === 'on') takeHeld.add(midi); else takeHeld.delete(midi);
     takeSettled = false;
     clearTimeout(settleTimer);
-    if (takeHeld.size === 0) settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
+    if (takeHeld.size === 0) {
+        saveTake();
+        settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
+    }
     clearInterval(holdTimer);
     if (takeHeld.size) holdTimer = window.setInterval(() => { if (isLive() && !liveFrame) recompute(); }, 100);
     if (!isLive() || liveFrame) return;
@@ -243,12 +248,47 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     });
 }
 
+// The take survives a reload in this browser (a convenience; it is never uploaded).
+const TAKE_KEY = 'viz.liveTake';
+function saveTake() {
+    try { take.length ? localStorage.setItem(TAKE_KEY, JSON.stringify(take)) : localStorage.removeItem(TAKE_KEY); } catch { /* storage blocked */ }
+}
+/** Restore a saved take into the menu without switching to it. */
+function restoreTake() {
+    let saved: RawEvent[] = [];
+    try { saved = JSON.parse(localStorage.getItem(TAKE_KEY) ?? '[]'); } catch { return; }
+    if (!Array.isArray(saved) || !saved.length) return;
+    take = saved.filter(e => (e.type === 'on' || e.type === 'off') && typeof e.midi === 'number' && typeof e.t_ms === 'number');
+    takeT = take.at(-1)?.t_ms ?? 0;
+    addTakeOption();
+}
+function addTakeOption() {
+    const sel = $<HTMLSelectElement>('fixture');
+    if (sel.querySelector(`option[value="${LIVE_ID}"]`)) return;
+    const opt = document.createElement('option');
+    opt.value = LIVE_ID; opt.textContent = '🎹 live take';
+    sel.prepend(opt);
+}
+
+/** Download the take as a fixture `events.json` (on/off events, ms). */
+function exportTake() {
+    if (!take.length) { flash('nothing to export: play something first'); return; }
+    const body = '[\n' + take.map(e => `  ${JSON.stringify({ t_ms: e.t_ms, type: e.type, midi: e.midi })}`).join(',\n') + '\n]\n';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
+    const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
+    a.download = `live-take-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.events.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /** Throw the take away and start an empty one. */
 function clearTake() {
     clearTimeout(settleTimer);
     clearInterval(holdTimer);
     for (const v of liveVoices.values()) releaseVoice(v);
     liveVoices.clear();
+    try { localStorage.removeItem(TAKE_KEY); } catch { /* storage blocked */ }
     takeSettled = true;
     enterLive(true);
     state.step = 0;
@@ -639,7 +679,7 @@ async function importMusicXmlFile(file: File) {
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
-    $('take-clear').hidden = id !== LIVE_ID;
+    $('take-clear').hidden = $('take-export').hidden = id !== LIVE_ID;
     if (id === LIVE_ID) {   // back to the take: land on its latest note
         enterLive(false); recompute();
         state.step = (state.replay?.snapshots.length ?? 1) - 1;
@@ -659,6 +699,9 @@ function wire() {
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
     $('take-clear').addEventListener('click', clearTake);
+    $('take-export').addEventListener('click', exportTake);
+    // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
+    $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and
     // playback identically; it only paints while it is the visible view and its scene has been built.
     liveTonnetz.model.subscribe(s => { if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetzLive(s); });
@@ -766,6 +809,7 @@ async function boot() {
     updatePlayBtn();
     const ids = await listFixtures();
     $<HTMLSelectElement>('fixture').innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join('');
+    restoreTake();
     const p = new URLSearchParams(location.search);
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');
