@@ -352,3 +352,4 @@ footer code, footer b { color: var(--ink); }
 /* Clear the live take: a muted red, brighter on hover. */
 #transport button#take-clear { color: #d98a8f; border-color: #6e3a3f; background: color-mix(in srgb, #e06c75 10%, var(--panel)); }
 #transport button#take-clear:hover { color: #f0a0a5; border-color: #b0545b; }
+#transport button#take-clear.armed { color: #fff; border-color: #c25a62; background: #8f3b42; }

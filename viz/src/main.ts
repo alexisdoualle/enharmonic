@@ -841,7 +841,15 @@ function wire() {
     initPianoRoll(seek);
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
-    $('take-clear').addEventListener('click', clearTake);
+    // Clear asks twice: the first click arms it for 3 s, the second clears.
+    let clearArmed = 0;
+    const disarmClear = () => { clearTimeout(clearArmed); clearArmed = 0; $('take-clear').textContent = 'clear'; $('take-clear').classList.remove('armed'); };
+    $('take-clear').addEventListener('click', () => {
+        if (clearArmed) { disarmClear(); clearTake(); return; }
+        $('take-clear').textContent = 'click again to clear';
+        $('take-clear').classList.add('armed');
+        clearArmed = window.setTimeout(disarmClear, 3000);
+    });
     $('take-export').addEventListener('click', exportTake);
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
