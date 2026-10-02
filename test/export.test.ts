@@ -82,4 +82,16 @@ suite('MusicXML export', () => {
         assert(xml.includes('<alter>-1</alter>'), 'alter');
         assert(xml.includes('<tie type="start"/>'), 'tie');
     });
+
+    test('a chord released unevenly stays one chord in one voice', () => {
+        // C major, then F major: the C chord's fingers lift 480, 620 and 700 ms after it (ends at 4, 5 and
+        // 6 sixteenths), the last one an 8th into the F chord.
+        const uneven = [n(60, 'C', 0, 0, 480), n(64, 'E', 0, 0, 620), n(67, 'G', 0, 0, 700),
+            n(65, 'F', 0, 500, 1990), n(69, 'A', 0, 500, 1990), n(72, 'C', 0, 500, 1990)];
+        const U = layoutTake({ ...input, notes: uneven, grid: { ...input.grid, t1: t0 + 2000 } });
+        assertEq(U.staves[0]!.length, 1, 'one treble voice');
+        const evs = U.staves[0]![0]![0]!.filter(e => e.pitches.length);
+        // The F chord, beat 2 to the bar's end, is a quarter tied over the half bar to a half.
+        assertEq(evs.map(e => `${e.start}:${e.dur}:${e.pitches.length}`).join(' '), '0:4:3 4:4:3 8:8:3');
+    });
 });

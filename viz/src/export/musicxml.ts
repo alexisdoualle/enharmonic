@@ -7,8 +7,9 @@
  *  2. SNAP with a metric bias, in 16ths: within 0.6 of a 16th of a beat it is the beat, within 0.45 of an
  *     8th it is the 8th, otherwise the nearest 16th. A slightly early downbeat lands on the beat, a real
  *     16th stays a 16th, and 32nds never appear.
- *  3. CLEAN LENGTHS: a legato overlap of less than an 8th is trimmed to the next onset; a gap of less
- *     than a 16th is closed; every note lasts at least a 16th.
+ *  3. CLEAN LENGTHS: notes struck together and released within an 8th of each other end together; a
+ *     legato overlap of up to an 8th is trimmed to the next onset; a gap of less than a 16th is closed;
+ *     every note lasts at least a 16th.
  *  4. VOICES: a grand staff split at middle C; per staff, notes that start and end together are one
  *     chord, and a note still held when the next one starts goes to another voice.
  *  5. BARS: notes split with ties at bar lines (and at the half bar in 4/4).
@@ -106,16 +107,20 @@ export function layoutTake(input: ExportInput): Layout {
         const placed: N[] = [];
         sg.forEach((g, gi) => {
             const next = sg[gi + 1];
-            for (const n of g.notes) {
-                let e = Math.max(g.at + 1, Math.round(toU(n.offT)));
+            // Notes struck together and released within an 8th of each other end together (fingers lift
+            // a little apart); a note held clearly longer keeps its own end and gets its own voice.
+            const ends = g.notes.map(n => Math.max(g.at + 1, Math.round(toU(n.offT))));
+            const latest = Math.max(...ends);
+            g.notes.forEach((n, ni) => {
+                let e = latest - ends[ni]! <= 2 ? latest : ends[ni]!;
                 if (next) {
                     const over = e - next.at;
-                    if (over > 0 && over < 2) e = next.at;                       // legato overlap < an 8th
+                    if (over > 0 && over <= 2) e = next.at;                      // legato overlap up to an 8th
                     const gapMs = next.raw * sixteenthMs - (n.offT - grid.t0);
                     if (e < next.at && gapMs < sixteenthMs) e = next.at;          // a gap < a 16th
                 }
                 placed.push({ midi: n.midi, step: n.step, alter: n.alter, start: g.at, end: Math.min(e, end) });
-            }
+            });
         });
         // Voices: same start and end = one chord; a voice is free once its last chord has ended.
         const chords = new Map<string, N[]>();
