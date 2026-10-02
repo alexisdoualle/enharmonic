@@ -16,7 +16,7 @@ import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
 import { parseMusicXml, readMxl } from './import/musicxml.js';
-import { Metronome, clicksPerBar, barMs, type Grid } from './metronome.js';
+import { Metronome, clicksPerBar, clickMs, barMs, COUNT_IN, type Grid } from './metronome.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
@@ -180,6 +180,9 @@ let takeWall = 0;                  // the input timeStamp (performance clock) ma
 let takeAnchored = false;          // takeWall is valid (false for an empty or just-restored take)
 let takeGrid: Grid | null = null;  // the metronome grid, once a metronome has run in this take
 const metro = new Metronome();
+/** Recording against the metronome: off, counting down, recording, or finishing the current bar. */
+let rec: 'off' | 'countdown' | 'recording' | 'stopping' = 'off';
+let recEndTimer = 0;
 let takeSettled = true;            // false while playing: look-ahead and two-pass wait for the pause
 let settleTimer = 0;
 let liveFrame = 0;                 // one rebuild per animation frame, however many notes arrived
@@ -237,7 +240,8 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
         if (v) { releaseVoice(v); liveVoices.delete(midi); }
     }
     if (type === 'on') {
-        if (takeHeld.has(midi) || isHelpOpen()) return;   // the help page's keyboard map only lights and sounds
+        // The help page's keyboard map only lights and sounds; so does the countdown before bar 1.
+        if (takeHeld.has(midi) || isHelpOpen() || inCountdown(now)) return;
         if (!isLive()) enterLive(false);   // back to the take, adding to it (only ⟲ new take starts over)
         else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
     } else if (!takeHeld.has(midi)) return;
@@ -302,48 +306,90 @@ function exportTake() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-// METRONOME: starting it stamps a grid on the current take (nothing is discarded). Bar 1 begins after a
-// one-bar count-in; while it runs the take's clock is real time, so a pause stays a pause.
-function startMetronome() {
+// RECORDING with the metronome: a 4-click countdown, then bar 1. It stamps a grid on the current take
+// (nothing is discarded). While it runs the take's clock is real time, so a pause stays a pause. Stop
+// finishes the bar being played and ends the recording on its bar line (the grid's `t1`).
+function startRecording() {
     audioEnable();
     if (!isLive()) enterLive(false);
     const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
     const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
     const now = performance.now();
     advanceClock(now);
-    const lead = 120;   // ms before the first count-in click, so it is never scheduled late
-    takeGrid = { bpm, num, den, t0: 0 };
-    takeGrid.t0 = Math.round(takeT + lead + barMs(takeGrid));
-    const perBar = clicksPerBar(takeGrid);
+    const lead = 120;   // ms before the first countdown click, so it is never scheduled late
+    const grid: Grid = { bpm, num, den, t0: 0 };
+    grid.t0 = Math.round(takeT + lead + COUNT_IN * clickMs(grid));
+    takeGrid = grid;
+    const perBar = clicksPerBar(grid);
+    rec = 'countdown';
     metro.start(bpm, perBar, now + lead, k => {
         const el = $('metro-beat');
-        el.textContent = k < perBar ? `count-in ${k + 1}` : `${Math.floor(k / perBar)}.${(k % perBar) + 1}`;
-        el.classList.toggle('downbeat', k % perBar === 0);
+        if (k < COUNT_IN) el.textContent = String(COUNT_IN - k);
+        else {
+            if (rec === 'countdown') rec = 'recording';
+            const b = k - COUNT_IN;
+            el.textContent = `${rec === 'stopping' ? '■' : '●'} ${Math.floor(b / perBar) + 1}.${(b % perBar) + 1}`;
+        }
+        el.classList.toggle('downbeat', k < COUNT_IN ? k === 0 : (k - COUNT_IN) % perBar === 0);
         el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+        syncRecUi();
     });
-    syncMetroUi();
+    syncRecUi();
     saveTake();
     recompute();
 }
 
-function stopMetronome() {
-    if (!metro.running) return;
-    advanceClock(performance.now());   // the time up to now was real
-    metro.stop();
-    $('metro-beat').textContent = '';
-    syncMetroUi();
+/** Is `now` still in the countdown? Decided by time, not by the click display: a downbeat played a little
+ *  early (up to a 16th) belongs to bar 1. */
+function inCountdown(now: number): boolean {
+    return rec !== 'off' && !!takeGrid && takeClock(now) < takeGrid.t0 - clickMs(takeGrid) / 4;
 }
 
-function syncMetroUi() {
-    const on = metro.running;
-    $('metro-toggle').textContent = on ? '■ metronome' : '♩ metronome';
-    $<HTMLInputElement>('metro-bpm').disabled = on;
-    $<HTMLSelectElement>('metro-meter').disabled = on;
+/** Stop: during the countdown, cancel; while recording, finish the current bar; when already finishing,
+ *  end now. */
+function stopRecording() {
+    if (rec === 'off') return;
+    if (inCountdown(performance.now())) { takeGrid = null; endRecording(performance.now()); flash('recording cancelled'); return; }
+    if (rec === 'stopping') { endRecording(performance.now()); return; }
+    const perBar = clicksPerBar(takeGrid!);
+    const k = metro.clickAt(performance.now());
+    const bars = Math.max(1, Math.ceil((k - COUNT_IN + 1e-6) / perBar));   // bars begun so far
+    const endK = COUNT_IN + bars * perBar;
+    rec = 'stopping';
+    metro.stopAt(endK);
+    recEndTimer = window.setTimeout(() => endRecording(metro.perfOf(endK)), Math.max(0, metro.perfOf(endK) - performance.now()));
+    syncRecUi();
+}
+
+/** End the recording at performance time `at`, closing the grid on the last whole bar. */
+function endRecording(at: number) {
+    clearTimeout(recEndTimer);
+    advanceClock(Math.min(at, performance.now()));   // the time up to now was real
+    metro.stop();
+    if (takeGrid) {
+        const bars = Math.max(0, Math.round((takeT - takeGrid.t0) / barMs(takeGrid)));
+        takeGrid.t1 = takeGrid.t0 + bars * barMs(takeGrid);
+        flash(bars ? `recorded ${bars} bar${bars === 1 ? '' : 's'}` : 'recording cancelled');
+        if (!bars) takeGrid = null;
+    }
+    rec = 'off';
+    $('metro-beat').textContent = '';
+    syncRecUi();
+    saveTake();
+    if (isLive()) recompute();
+}
+
+function syncRecUi() {
+    const btn = $('metro-toggle');
+    btn.textContent = rec === 'off' ? '● record' : rec === 'stopping' ? '■ stop now' : '■ stop';
+    btn.classList.toggle('recording', rec !== 'off');
+    $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off';
+    $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off';
 }
 
 /** Throw the take away and start an empty one. */
 function clearTake() {
-    stopMetronome();
+    if (rec !== 'off') endRecording(performance.now());
     clearTimeout(settleTimer);
     clearInterval(holdTimer);
     for (const v of liveVoices.values()) releaseVoice(v);
@@ -740,7 +786,7 @@ async function importMusicXmlFile(file: File) {
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
     $('take-clear').hidden = $('take-export').hidden = id !== LIVE_ID;
-    if (id !== LIVE_ID) stopMetronome();
+    if (id !== LIVE_ID && rec !== 'off') endRecording(performance.now());
     if (id === LIVE_ID) {   // back to the take: land on its latest note
         enterLive(false); recompute();
         state.step = (state.replay?.snapshots.length ?? 1) - 1;
@@ -761,7 +807,7 @@ function wire() {
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
     $('take-clear').addEventListener('click', clearTake);
     $('take-export').addEventListener('click', exportTake);
-    $('metro-toggle').addEventListener('click', () => metro.running ? stopMetronome() : startMetronome());
+    $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and

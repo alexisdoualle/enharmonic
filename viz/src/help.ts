@@ -186,9 +186,11 @@ play the take back like a piece. Only <b>&#10226; new take</b> starts an empty o
 leaves the take in the menu, and it survives a reload in this browser. <b>&#10515; export</b> downloads it as a
 fixture <code>events.json</code> (no spellings: those come from a person, never from the speller).</p>
 
-<p><b>Metronome.</b> <b>&#9833; metronome</b> in the transport bar clicks at the tempo and time signature
-next to it, after one bar of count-in, and stamps that grid on the take (the piano roll draws it). While it
-runs a pause stays a pause, so the take keeps its real rhythm. Stopping it keeps the take.</p>`,
+<p><b>Recording with a metronome.</b> <b>&#9679; record</b> in the transport bar counts down four
+clicks at the tempo and time signature next to it, then records from bar 1 against that grid (the piano roll
+draws it). Notes during the countdown sound but are not recorded. While recording a pause stays a pause, so
+the take keeps its real rhythm. <b>&#9632; stop</b> finishes the bar you are in and ends the recording on its
+bar line; pressing again ends it at once. The take is kept, and free play still adds to it afterwards.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

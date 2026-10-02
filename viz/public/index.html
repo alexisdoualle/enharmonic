@@ -53,8 +53,8 @@
       <span id="volume-val" class="pos">90%</span></label>
     <label class="ctl" title="show / hide the sheet-music staff"><input type="checkbox" id="show-staff" checked /> ♫ staff</label>
     <button class="ctl midi-btn" id="midi-enable" title="connect a MIDI keyboard (asks for permission on click)">🎹 MIDI</button>
-    <span class="ctl metro" title="metronome for a live take: one bar of count-in, then the take is recorded against this grid">
-      <button class="ctl midi-btn" id="metro-toggle" type="button">♩ metronome</button>
+    <span class="ctl metro" title="record against a metronome: a 4-click countdown, then bar 1; stop finishes the current bar">
+      <button class="ctl midi-btn" id="metro-toggle" type="button">● record</button>
       <input type="number" id="metro-bpm" min="30" max="260" step="1" value="90" aria-label="tempo in beats per minute" /> bpm
       <select id="metro-meter" aria-label="time signature"><option>2/4</option><option>3/4</option><option selected>4/4</option><option>6/8</option></select>
       <span id="metro-beat" class="metro-beat"></span></span>

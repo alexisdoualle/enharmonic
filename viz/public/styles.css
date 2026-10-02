@@ -344,4 +344,5 @@ footer code, footer b { color: var(--ink); }
 .metro-beat { min-width: 64px; font-variant-numeric: tabular-nums; color: var(--ink); }
 .metro-beat.pulse { animation: metro-pulse .18s ease-out; }
 .metro-beat.downbeat { color: var(--accent); }
+#transport button#metro-toggle.recording { border-color: #e06c75; color: #e06c75; }
 @keyframes metro-pulse { from { opacity: .35; } to { opacity: 1; } }
