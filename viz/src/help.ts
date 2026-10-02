@@ -200,10 +200,10 @@ recording a pause stays a pause, so the take keeps its real rhythm. <b>&#9632; s
 the recording at once; the last bar is filled with a rest. Notes played outside the recording are washed out:
 export leaves them out.</p>
 
-<p><b>Re-recording.</b> On a take that has a recording, move the playhead and press <b>&#9679; record</b>:
-after the countdown it records over the playhead note's bar and replaces everything from there to the end
-(on the last note, it carries on after the recording). Stopping during the countdown leaves the take as it
-was. <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.</p>`,
+<p><b>Recording over a take.</b> Move the playhead and press <b>&#9679; record</b>: after the countdown it
+records from the playhead note's bar, and the new notes are added to what is already there (on the last
+note, it carries on after the end). On a take played without the metronome, bar 1 is the playhead note.
+<b>Backspace</b> or <b>Delete</b> removes the note under the playhead.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
