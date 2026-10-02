@@ -3,11 +3,8 @@ import type { Snapshot } from '../replay.js';
 import { selectSevenNodeLoF } from '../tonnetzLine.js';
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { classifyTriad } from '../tonnetz3d/LatticeGeometry.js';
+import { LETTER_COLOR } from '../format.js';
 
-const LETTER_COLOR: Record<string, string> = {
-    C: '#cb6a62', G: '#e0975a', D: '#cdb45c', A: '#6fb389',
-    E: '#5aa79b', B: '#6f95c4', F: '#9c78bd',
-};
 const LOF: Record<string, number> = { F: -1, C: 0, G: 1, D: 2, A: 3, E: 4, B: 5 };
 const LOF_LETTERS = ['C', 'G', 'D', 'A', 'E', 'B', 'F'];
 const SCALE_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];

@@ -8,10 +8,10 @@ import {
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll } from './music/pianoroll.js';
-import { renderStaff } from './music/staff.js';
+import { renderStaff, renderLiveStaff } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
-import { enable as audioEnable, whenPlaying as audioReady, playMidi, allNotesOff, audioNow, scheduleAnchor, setVolume as audioSetVolume } from './audio.js';
+import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, setVolume as audioSetVolume, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
@@ -161,7 +161,98 @@ const IMPORTED_ID = '__imported__';
 let imported: { events: RawEvent[]; expected: Expected[]; name: string } | null = null;
 /** Friendly name for the currently loaded fixture (the imported piece's name, else its corpus id). */
 function fixtureLabel(): string {
+    if (state.fixtureId === LIVE_ID) return '🎹 live take';
     return state.fixtureId === IMPORTED_ID && imported ? `↥ ${imported.name}` : (state.fixtureId ?? '');
+}
+
+// A LIVE TAKE is a session-only fixture recorded from the computer keyboard or MIDI. It has no ground
+// truth, so nothing is graded. Each note appends to the take and rebuilds the replay, so every panel
+// follows the same engine the fixtures run on.
+const LIVE_ID = '__live__';
+const LIVE_ONSET_TOLERANCE = 50;   // ms: keys pressed together for a chord arrive this spread out
+const LIVE_GAP_CAP = 2000;         // ms: a longer silence is shortened to this in the take's timeline
+const LIVE_SETTLE = 1000;          // ms after the last release before look-ahead / two-pass re-spell the take
+let take: RawEvent[] = [];
+const takeHeld = new Set<number>();
+let takeT = 0;                     // the take's clock at its last event
+let takeWall = 0;                  // the input timeStamp of its last event
+let takeSettled = true;            // false while playing: look-ahead and two-pass wait for the pause
+let settleTimer = 0;
+let liveFrame = 0;                 // one rebuild per animation frame, however many notes arrived
+let holdTimer = 0;                 // while keys are held, the take refreshes so held notes grow
+const liveVoices = new Map<number, Voice>();   // held computer-keyboard notes, released on key up
+const LIVE_HOLD_SEC = 30;          // a held synth note sustains up to this long
+
+/** The take's clock now: a held note is sounding, so its time is not a silence and is never capped. */
+function takeClock(): number {
+    return takeHeld.size ? takeT + (performance.now() - takeWall) : takeT;
+}
+
+const isLive = () => state.fixtureId === LIVE_ID;
+
+/** The speller that spells the take right now: while playing, look-ahead and two-pass need a future
+ *  that does not exist yet, so the real-time speller stands in until the pause. */
+function liveMode(): Mode {
+    const m = effMode();
+    return !takeSettled && (m === 'la' || m === 'tp') ? 'rt' : m;
+}
+
+/** Switch to the live take (creating its menu entry), starting it empty when coming from a fixture. */
+function enterLive(fresh: boolean) {
+    stopPlay();
+    if (fresh) { take = []; takeHeld.clear(); takeT = 0; }
+    const sel = $<HTMLSelectElement>('fixture');
+    let opt = sel.querySelector<HTMLOptionElement>(`option[value="${LIVE_ID}"]`);
+    if (!opt) { opt = document.createElement('option'); opt.value = LIVE_ID; opt.textContent = '🎹 live take'; sel.prepend(opt); }
+    sel.value = LIVE_ID;
+    state.fixtureId = LIVE_ID;
+    state.sideOverrides = [];
+    rawEvents = take; rawExpected = [];
+    $('take-clear').hidden = false;
+}
+
+/** One keyboard or MIDI event into the take. */
+function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number) {
+    if (type === 'on') {
+        if (takeHeld.has(midi)) return;
+        if (!isLive()) enterLive(true);
+        else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
+        if (sound && soundOn) { audioEnable(); liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22)); }
+    } else {
+        if (!takeHeld.has(midi)) return;
+        const v = liveVoices.get(midi);
+        if (v) { releaseVoice(v); liveVoices.delete(midi); }
+    }
+    // Only a silence (nothing held) is capped; time under a held key is sounding.
+    const gap = now - takeWall;
+    takeT = take.length ? takeT + (takeHeld.size ? gap : Math.min(gap, LIVE_GAP_CAP)) : 0;
+    takeWall = now;
+    take.push({ t_ms: Math.round(takeT), type, midi });
+    if (type === 'on') takeHeld.add(midi); else takeHeld.delete(midi);
+    takeSettled = false;
+    clearTimeout(settleTimer);
+    if (takeHeld.size === 0) settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
+    clearInterval(holdTimer);
+    if (takeHeld.size) holdTimer = window.setInterval(() => { if (isLive() && !liveFrame) recompute(); }, 100);
+    if (!isLive() || liveFrame) return;
+    liveFrame = requestAnimationFrame(() => {
+        liveFrame = 0;
+        recompute();
+        state.step = (state.replay?.snapshots.length ?? 1) - 1;   // follow the newest note
+        render();
+    });
+}
+
+/** Throw the take away and start an empty one. */
+function clearTake() {
+    clearTimeout(settleTimer);
+    clearInterval(holdTimer);
+    for (const v of liveVoices.values()) releaseVoice(v);
+    liveVoices.clear();
+    takeSettled = true;
+    enterLive(true);
+    state.step = 0;
+    recompute();
 }
 
 /** Look-ahead is an OPTION of the real-time speller (`Speller({ lookAhead })`), surfaced as a toolbar
@@ -172,8 +263,12 @@ function effMode(): Mode {
 
 function recompute() {
     if (!state.fixtureId) return;
-    state.replay = buildReplay(effMode(), rawEvents, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame },
+    const live = isLive();
+    // Keys still held get a provisional release at the take's clock, so they read back like a released note.
+    const events = live ? [...take, ...[...takeHeld].map(midi => ({ t_ms: Math.round(takeClock()), type: 'off' as const, midi }))] : rawEvents;
+    state.replay = buildReplay(live ? liveMode() : effMode(), events, rawExpected,
+        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame,
+          ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
@@ -221,6 +316,12 @@ function renderStatus() {
     const pc = (x: number) => t.total ? (100 * x / t.total).toFixed(1) : '0.0';
     // "correct" = exact + flipped (right pitch-class / coherent side); exact & flipped break it down.
     const modeName = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
+    if (isLive()) {
+        const waiting = liveMode() !== effMode();
+        $('status').innerHTML = `${fixtureLabel()} · ${modeName} · ${r.snapshots.length} onsets · <span class="dim">not graded`
+            + (waiting ? ' · spelled real-time while you play, re-spelled when you pause' : '') + '</span>';
+        return;
+    }
     $('status').innerHTML = `${fixtureLabel()} · ${modeName} · ${r.snapshots.length} onsets · `
         + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
         + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
@@ -244,7 +345,8 @@ function render() {
     // subscription in the boot block), so whichever view is on tracks both playback and live input.
     liveTonnetz?.renderPlaybackSnapshot(snap);
     if (state.replay) {
-        renderStaff(state.replay, state.step);
+        if (isLive()) renderLiveStaff(state.replay, state.step);
+        else renderStaff(state.replay, state.step);
         renderPianoRoll(state.replay, state.step, state.showKeyLanes);
     }
     renderStrip();
@@ -473,7 +575,7 @@ function syncUrl() {
     if (!state.fixtureId) return;
     const u = new URL(location.href);
     // An imported fixture is session-only (can't be reloaded from a URL), so keep it out of the link.
-    if (state.fixtureId === IMPORTED_ID) u.searchParams.delete('fixture');
+    if (state.fixtureId === IMPORTED_ID || state.fixtureId === LIVE_ID) u.searchParams.delete('fixture');
     else u.searchParams.set('fixture', state.fixtureId);
     u.searchParams.set('mode', state.mode);
     u.searchParams.set('step', String(state.step + 1));
@@ -537,6 +639,12 @@ async function importMusicXmlFile(file: File) {
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
+    $('take-clear').hidden = id !== LIVE_ID;
+    if (id === LIVE_ID) {   // back to the take: land on its latest note
+        enterLive(false); recompute();
+        state.step = (state.replay?.snapshots.length ?? 1) - 1;
+        render(); syncUrl(); return;
+    }
     if (state.fixtureId !== id && !preserveMarkers) state.sideOverrides = [];
     state.fixtureId = id;
     const f = await loadFixture(id);
@@ -549,6 +657,8 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
 function wire() {
     initPianoRoll(seek);
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
+    liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
+    $('take-clear').addEventListener('click', clearTake);
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and
     // playback identically; it only paints while it is the visible view and its scene has been built.
     liveTonnetz.model.subscribe(s => { if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetzLive(s); });

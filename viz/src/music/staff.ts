@@ -10,7 +10,7 @@
  * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
  */
-import { Renderer, Stave, StaveNote, Accidental, Dot, Formatter, Voice } from 'vexflow';
+import { Renderer, Stave, StaveNote, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
@@ -91,6 +91,70 @@ export function renderStaff(replay: Replay, step: number): void {
 
     try { build(host, start, sounding, pcNotes, avail, replay.respells); }
     catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
+}
+
+const LIVE_ONSETS = 16;   // chords shown on the live staff
+const LIVE_GROUP_MS = 50; // notes this close to a chord's first note stack with it (the take's onset tolerance)
+
+/** A live take has no meter and no composer spelling: engrave the speller's own spellings in onset order,
+ *  chords stacked, as plain quarter notes on one stave with no barlines. Accidentals carry across the
+ *  whole stave, as they would within one long bar. */
+export function renderLiveStaff(replay: Replay, step: number): void {
+    const host = document.getElementById('staff')!;
+    builtForReplay = null;   // a fixture shown next rebuilds from scratch
+    if (!replay.notes.length) { host.innerHTML = emptyMsg('play a note'); return; }
+    const s = Math.max(0, Math.min(replay.notes.length - 1, step));
+    const sounding = soundingSet(replay, s);
+
+    // Chord groups up to the current note, the same grouping the engine used.
+    const groups: ReplayNote[][] = [];
+    for (const n of replay.notes.slice(0, s + 1)) {
+        const g = groups[groups.length - 1];
+        if (g && n.onT - g[0]!.onT <= LIVE_GROUP_MS && !g.some(m => m.midi === n.midi)) g.push(n);
+        else groups.push([n]);
+    }
+    const shown = groups.slice(-LIVE_ONSETS);
+    const all = shown.flat();
+    const clef = all.reduce((a, n) => a + n.midi, 0) / all.length >= 60 ? 'treble' : 'bass';
+    const curGroup = shown[shown.length - 1]!;
+
+    host.innerHTML = '';
+    try {
+        const notes = shown.map(g => {
+            const sorted = g.slice().sort((a, b) => a.midi - b.midi);
+            const keys = sorted.map(n => {
+                const sp = spellOf(n);
+                return `${sp.step.toLowerCase()}${ACC[sp.alter] ?? ''}/${sp.octave}`;
+            });
+            const sn = new StaveNote({ clef, keys, duration: 'q' });
+            sorted.forEach((n, i) => {
+                const color = g === curGroup || sounding.has(n.onIndex) ? '#1f6feb' : '#222';
+                sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });
+            });
+            return sn;
+        });
+        const voice = new Voice({ num_beats: notes.length, beat_value: 4 }).setMode(Voice.Mode.SOFT);
+        voice.addTickables(notes);
+        Accidental.applyAccidentals([voice], 'C');
+        const fmt = new Formatter().joinVoices([voice]);
+        const lead = 46, rightPad = 18;
+        const noteArea = Math.max(MEASURE_W, Math.ceil(fmt.preCalculateMinTotalWidth([voice])) + 12 * notes.length);
+        const totalW = lead + noteArea + rightPad + 20;
+        const avail = host.clientWidth || 0;
+        const narrow = avail > 0 && avail < 640;
+        const zoom = Math.max(narrow ? 0.1 : ZOOM_MIN, Math.min(1, avail > 0 ? (avail - 2) / totalW : 1)) * (narrow ? 0.85 : 1);
+        const renderer = new Renderer(host as HTMLDivElement, Renderer.Backends.SVG);
+        const ctx = renderer.getContext();
+        renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
+        if (zoom !== 1) ctx.scale(zoom, zoom);
+        const stave = new Stave(10, STAVE_Y, lead + noteArea + rightPad);
+        stave.addClef(clef);
+        stave.setEndBarType(BarlineType.NONE);
+        stave.setContext(ctx).draw();
+        fmt.format([voice], noteArea);
+        voice.draw(ctx, stave);
+        fitToBand(host, stave, clef, zoom, totalW, narrow);
+    } catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
 }
 
 function emptyMsg(text: string): string {
@@ -220,9 +284,13 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
         x += b.staveW;
     }
 
-    // Size the SVG to the engraved content, but keep at least half a band of room on each side of the
-    // middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
-    // band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top.
+    fitToBand(host, firstStave, clef, zoom, totalW, narrow);
+}
+
+/** Size the SVG to the engraved content, but keep at least half a band of room on each side of the
+ *  middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
+ *  band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top. */
+function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zoom: number, totalW: number, narrow: boolean): void {
     const svg = host.querySelector('svg');
     if (svg instanceof SVGSVGElement && firstStave) {
         try {

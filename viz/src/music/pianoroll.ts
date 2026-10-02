@@ -15,7 +15,7 @@
  */
 import type { Replay, ReplayNote, Tier } from '../replay.js';
 import type { Letter, Accidental } from '../../../src/index.js';
-import { label } from '../format.js';
+import { label, LETTER_COLOR } from '../format.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -47,7 +47,7 @@ const TIER_COLOR: Record<Tier, string> = { correct: '#57caa0', flipped: '#d8b35a
 interface Layout {
     x: number; w: number; y: number;
     onIndex: number; onT: number; offT: number;
-    tier: Tier; midi: number; committedLabel: string; expectedLabel: string;
+    tier: Tier; midi: number; committedLabel: string; expectedLabel: string; fill: string;
 }
 
 function svgEl(name: string, attrs: Record<string, string | number>): SVGElement {
@@ -131,6 +131,8 @@ function build(replay: Replay, showKeyLanes: boolean): void {
             x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * rowH,
             onIndex: note.onIndex, onT: note.onT, offT: note.offT, tier: note.tier, midi: note.midi,
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
+            // Ungraded notes (a live take) take their letter's colour; graded ones their tier's.
+            fill: !note.expected && note.committed ? LETTER_COLOR[note.committed.step]! : TIER_COLOR[note.tier],
         };
     }
     rects = new Array(replay.notes.length).fill(null);
@@ -202,10 +204,10 @@ function makeRect(oi: number): void {
     rect.setAttribute('x', String(L.x)); rect.setAttribute('y', String(L.y));
     rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
-    rect.setAttribute('fill', TIER_COLOR[L.tier]);
+    rect.setAttribute('fill', L.fill);
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
-    title.textContent = `${L.committedLabel} (midi ${L.midi}), expected ${L.expectedLabel}`;
+    title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);
     rect.appendChild(title);
     rect.addEventListener('click', e => { e.stopPropagation(); onSeek(L.onIndex); });
     notesGroup!.appendChild(rect);

@@ -45,7 +45,7 @@ function place(n: ReplayNote | undefined): string {
 function header(s: AppState): string[] {
     const r = s.replay;
     const out = [
-        `fixture: ${s.fixtureId}`,
+        `fixture: ${s.fixtureId === '__live__' ? 'live take (computer keyboard / MIDI)' : s.fixtureId}`,
         `speller: ${s.mode === 'rt' && s.lookAhead ? `${MODE_LONG.la} [la]` : `${MODE_LONG[s.mode]} [${s.mode}]`}`,
         `spiral:  range ±${s.spiralRange}, centre ${sgn(s.spiralCenter)}${s.repair ? ', repair ON' : ''}`
         + (s.spiralRange === SPIRAL_RANGE_DEFAULT && s.spiralCenter === SPIRAL_CENTER_DEFAULT && !s.repair
@@ -53,7 +53,8 @@ function header(s: AppState): string[] {
             : `  (what-if; shipped default is ±${SPIRAL_RANGE_DEFAULT}, ${sgn(SPIRAL_CENTER_DEFAULT)})`),
     ];
     if (s.sideOverrides.length) out.push(`side markers: ${s.sideOverrides.map(o => `onset ${o.from + 1} → ${o.comma > 0 ? 'sharp' : o.comma < 0 ? 'flat' : 'auto'}`).join(', ')}`);
-    if (r) {
+    if (r && !r.tally.total) out.push('tally:   not graded (no composer spelling)');
+    else if (r) {
         const t = r.tally, pc = (x: number) => (t.total ? (100 * x / t.total).toFixed(1) : '0.0');
         out.push(`tally:   ${pc(t.correct + t.flipped)}% correct (exact: ${pc(t.correct)}%, flipped: ${pc(t.flipped)}%)`
             + ` · ${pc(t.wrong)}% wrong (${t.wrong}) of ${t.total} scored onsets`);
@@ -76,7 +77,7 @@ export function contextReport(s: AppState): string {
     L.push('## note');
     L.push(`committed: ${pitch(snap.committed)}   (midi ${snap.midi}, t ${snap.t} ms, dur ${snap.durMs} ms)`);
     L.push(`expected:  ${pitch(snap.expected)}${at ? `   (${at})` : ''}`);
-    L.push(`tier:      ${snap.tier}`);
+    L.push(`tier:      ${snap.expected ? snap.tier : 'not graded'}`);
     L.push('');
 
     L.push('## speller state');

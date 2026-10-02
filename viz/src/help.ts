@@ -177,8 +177,13 @@ The browser asks for permission on that click, never on page load. Once connecte
 keyboard are not played through the synth: your instrument makes the sound. The button is hidden when the
 browser has no Web MIDI.</p>
 
-<p><b>What reacts.</b> Live notes drive the coiled 2D Tonnetz panel. The staff, roll, spiral and scoring
-panels keep showing the loaded piece.</p>`,
+<p><b>Free play.</b> The first note switches to a <b>&#127929; live take</b>, and every panel follows it:
+staff, roll, spiral, scoring and Tonnetz, on the same engine the pieces run on. Nothing is graded (there is
+no composer spelling to compare to), so notes take their letter's colour. Keys pressed within 50 ms count
+as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is spelled
+in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
+play the take back like a piece. <b>&#10226; new take</b> starts an empty one; picking a piece leaves the
+take in the menu.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

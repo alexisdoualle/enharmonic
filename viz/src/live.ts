@@ -16,6 +16,8 @@ export interface LiveState {
 }
 
 type Listener = (state: LiveState) => void;
+/** Where recorded input goes: `t` is the event's timeStamp; `sound` is false for MIDI (the instrument sounds). */
+export type LiveSink = (type: 'on' | 'off', midi: number, sound: boolean, t: number) => void;
 
 const pcOf = (midi: number) => ((midi % 12) + 12) % 12;
 const spellingKey = (p: { step: string; alter: number }) => `${p.step}:${p.alter}`;
@@ -39,6 +41,13 @@ export class LiveSpeller {
     private previousBackbone: Set<string> | null = null;
     private listeners = new Set<Listener>();
     private midiStatus = 'computer keyboard ready';
+    /** When set, keyboard and MIDI notes go here instead of this model's own speller (the debugger
+     *  records them into a live take). */
+    private sink: LiveSink | null = null;
+
+    setInputSink(sink: LiveSink | null): void {
+        this.sink = sink;
+    }
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -323,7 +332,9 @@ export class LiveSpeller {
         this.previousBackbone = selectSevenNodeLoF(this.filledCells, { previous: previousBackbone ?? undefined });
     }
 
-    noteOn(midi: number, sound = true): void {
+    /** `t` is the input event's timeStamp (performance.now() clock), so a chord keeps its real spread. */
+    noteOn(midi: number, sound = true, t = performance.now()): void {
+        if (this.sink) { this.sink('on', midi, sound, t); return; }
         if (this.held.has(midi)) return;
         this.speller.noteOn(midi, { t: performance.now() });
         const spelling = this.speller.getSpelling(midi);
@@ -337,7 +348,8 @@ export class LiveSpeller {
         this.emit();
     }
 
-    noteOff(midi: number): void {
+    noteOff(midi: number, t = performance.now()): void {
+        if (this.sink) { this.sink('off', midi, false, t); return; }
         if (!this.held.has(midi)) return;
         this.speller.noteOff(midi);
         this.held.delete(midi);
@@ -385,13 +397,13 @@ export function connectLiveInput(model: LiveSpeller): void {
         if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
         event.preventDefault();
         down.add(event.code);
-        model.noteOn(midi);
+        model.noteOn(midi, true, event.timeStamp);
     };
     const onKeyUp = (event: KeyboardEvent) => {
         const midi = COMPUTER_KEYS[event.code];
         if (midi === undefined) return;
         down.delete(event.code);
-        model.noteOff(midi);
+        model.noteOff(midi, event.timeStamp);
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -422,8 +434,8 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
             input.addEventListener('midimessage', event => {
                 const [status, midi, velocity] = event.data;
                 const command = status! & 0xf0;
-                if (command === 0x90 && velocity! > 0) model.noteOn(midi!, false);
-                else if (command === 0x80 || (command === 0x90 && velocity === 0)) model.noteOff(midi!);
+                if (command === 0x90 && velocity! > 0) model.noteOn(midi!, false, event.timeStamp);
+                else if (command === 0x80 || (command === 0x90 && velocity === 0)) model.noteOff(midi!, event.timeStamp);
             });
         };
         access.inputs.forEach(attach);
