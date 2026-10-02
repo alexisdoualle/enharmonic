@@ -177,29 +177,30 @@ The browser asks for permission on that click, never on page load. Once connecte
 keyboard are not played through the synth: your instrument makes the sound. The sustain pedal holds
 notes as on a piano. The button is hidden when the browser has no Web MIDI.</p>
 
-<p><b>Play.</b> Just play: the first note switches to the <b>&#127929; live take</b> and every panel
-follows it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Nothing is graded,
-so notes take their letter's colour. Keys within 50 ms count as one chord. Look-ahead and two-pass need the
-notes that come next, so while you play the take is spelled in real time, and re-spelled a second after you
-stop. This is a <b>free</b> take: it keeps adding what you play.</p>
+<p><b>Play.</b> Just play: it shows <b>&#127929; free play</b> in the fixture menu, and every panel follows
+it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Playing always goes to free
+play, from a piece or from the recording. Nothing is graded, so notes take their letter's colour. Keys within
+50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
+spelled in real time, and re-spelled a second after you stop.</p>
 
 <p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
-beside it, then records against the metronome; <b>&#9632; stop</b> or <b>Space</b> ends it. The red line on
-the roll follows the time. From a piece or a free take this makes a new <b>recorded</b> take from bar 1.</p>
+beside it, then records against the metronome into <b>&#127929; recording</b>; <b>&#9632; stop</b> or
+<b>Space</b> ends it. The red line on the roll follows the time. From anywhere but the recording this starts a
+new recording from bar 1 (&#8984;Z brings the old one back).</p>
 
-<p><b>Add to a recording.</b> On a recorded take, click a note (or empty space on the roll) to put the red line
-at the start of that bar, then record: you hear the take from the bar before, and what you play is added on
-top. After a recording the line waits at its end, so recording again carries on. A recorded take only changes
-this way: keys played outside a recording just sound. Its tempo and time signature stay fixed.</p>
+<p><b>Add to the recording.</b> In the recording, click a note (or empty space on the roll) to put the red
+line at the start of that bar, then record: you hear the recording from the bar before, and what you play is
+added on top. After a recording the line waits at its end, so recording again carries on. The recording keeps
+its tempo and time signature.</p>
 
 <p><b>Fix and undo.</b> <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.
-<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks) starts over.
-The take survives a reload in this browser.</p>
+<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks) empties the
+take in view. Both takes survive a reload in this browser.</p>
 
 <p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
 speller's spellings, a grand staff split at middle C, the key signature from the real-time speller's frame,
-and the rhythm quantised to 16ths with a pull toward the beat. A recorded take uses its grid; a free take
-gets 4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
+and the rhythm quantised to 16ths with a pull toward the beat. The recording uses its grid; free play gets
+4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
 carries a checked spelling: grading the speller against an export only means something once a person has
 corrected it.</p>`,
     },

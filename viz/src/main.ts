@@ -163,31 +163,39 @@ const IMPORTED_ID = '__imported__';
 let imported: { events: RawEvent[]; expected: Expected[]; name: string } | null = null;
 /** Friendly name for the currently loaded fixture (the imported piece's name, else its corpus id). */
 function fixtureLabel(): string {
-    if (state.fixtureId === LIVE_ID) return '🎹 live take';
+    const tk = shown();
+    if (tk) return tk.name;
     return state.fixtureId === IMPORTED_ID && imported ? `↥ ${imported.name}` : (state.fixtureId ?? '');
 }
 
-// A LIVE TAKE is a session-only fixture recorded from the computer keyboard or MIDI. It has no ground
-// truth, so nothing is graded. Each note rebuilds the replay, so every panel follows the same engine the
-// fixtures run on. A take is one of two kinds:
-//  - FREE: played without recording. Keys add to it in free time (a silence over 2 s is shortened).
-//  - RECORDED: made by ● record, on a metronome grid. It only changes by recording (which adds notes from
-//    the red time line), deleting, undoing or clearing; keys played outside a recording just sound.
-const LIVE_ID = '__live__';
+// LIVE TAKES: session-only fixtures played on the computer keyboard or MIDI. They have no ground truth, so
+// nothing is graded. Each note rebuilds the replay, so every panel follows the same engine the fixtures
+// run on. There are two, side by side in the menu:
+//  - FREE PLAY: whatever is played without recording, in free time (a silence over 2 s is shortened).
+//    Playing always goes here, from a piece or from the recording.
+//  - RECORDING: made by ● record, on a metronome grid. Recording again in its view adds notes from the red
+//    time line; from anywhere else it starts a new recording (the old one can be undone).
+interface Take {
+    id: string; name: string; key: string;   // menu value, menu label, storage key
+    events: RawEvent[];
+    grid: Grid | null;                       // the recording's grid (always null for free play)
+    held: Set<number>;                       // keys down, recorded but not yet released
+    t: number; wall: number; anchored: boolean;   // the take's clock: time at the last event, its input timeStamp
+    recHead: number;                         // the recording: where ● record starts (a bar line), the red line
+}
+const newTake = (id: string, name: string, key: string): Take =>
+    ({ id, name, key, events: [], grid: null, held: new Set(), t: 0, wall: 0, anchored: false, recHead: 0 });
+const freeTake = newTake('__free__', '🎹 free play', 'viz.liveTake');
+const recTake = newTake('__rec__', '🎹 recording', 'viz.recTake');
+const TAKES = [freeTake, recTake];
+
 const LIVE_ONSET_TOLERANCE = 50;   // ms: keys pressed together for a chord arrive this spread out
-const LIVE_GAP_CAP = 2000;         // ms: a longer silence is shortened to this in a free take
+const LIVE_GAP_CAP = 2000;         // ms: a longer silence is shortened to this in free play
 const LIVE_SETTLE = 1000;          // ms after the last release before look-ahead / two-pass re-spell the take
 const LIVE_HOLD_SEC = 30;          // a held synth note sustains up to this long
 const LEAD_MS = 120;               // ms before the first countdown click, so it is never scheduled late
-let take: RawEvent[] = [];
-const takeHeld = new Set<number>();
-let takeT = 0;                     // the take's clock at its last event
-let takeWall = 0;                  // the input timeStamp (performance clock) matching takeT
-let takeAnchored = false;          // takeWall is valid (false for an empty or just-restored take)
-let takeGrid: Grid | null = null;  // a RECORDED take's grid; null for a free take
 const metro = new Metronome();
 let rec: 'off' | 'countdown' | 'recording' = 'off';
-let recHead = 0;                   // a recorded take: where ● record starts (a bar line); the red time line
 let recFrom = 0;                   // where the current recording started
 let recNotes = 0;                  // notes played in the current recording
 let takeSettled = true;            // false while playing: look-ahead and two-pass wait for the pause
@@ -196,43 +204,58 @@ let liveFrame = 0;                 // one rebuild per animation frame, however m
 let followStep = 0;                // the playhead follows the note just played
 let holdTimer = 0;                 // while keys are held, the take refreshes so held notes grow
 const liveVoices = new Map<number, Voice>();   // held computer-keyboard notes, released on key up
-const undoStack: { take: RawEvent[]; grid: Grid | null }[] = [];
-let backing: Voice[] = [];         // the take's notes playing under a recording
+const undoStack: { tk: Take; events: RawEvent[]; grid: Grid | null }[] = [];
+let backing: Voice[] = [];         // the recording's notes playing under a new pass
 let backingTimer = 0;
 let timeLineFrame = 0;
 
+/** The take in view, or null on a piece. */
+const shown = (): Take | null => TAKES.find(tk => tk.id === state.fixtureId) ?? null;
+const isLive = () => shown() !== null;
+const onRecording = () => state.fixtureId === recTake.id;
+
 /** Insert an event in time order (after events at the same time); returns its index. Recording over a
  *  take puts notes mid-take, and the speller needs the stream in time order. */
-function insertEvent(e: RawEvent): number {
-    let i = take.length;
-    while (i > 0 && take[i - 1]!.t_ms > e.t_ms) i--;
-    take.splice(i, 0, e);
+function insertEvent(tk: Take, e: RawEvent): number {
+    let i = tk.events.length;
+    while (i > 0 && tk.events[i - 1]!.t_ms > e.t_ms) i--;
+    tk.events.splice(i, 0, e);
     return i;
 }
 
-/** Time is real while something is sounding or the metronome runs; only a free silence is shortened. */
-const clockIsReal = () => takeHeld.size > 0 || metro.running;
+/** Time is real while a key is down or the metronome runs; only a free silence is shortened. */
+const clockIsReal = (tk: Take) => tk.held.size > 0 || (tk === recTake && metro.running);
 
-/** The take's clock now (provisional: for held notes and the time line). */
-function takeClock(now = performance.now()): number {
-    if (!takeAnchored) return take.length ? takeT + LIVE_GAP_CAP : 0;
-    const gap = Math.max(0, now - takeWall);
-    return takeT + (clockIsReal() ? gap : Math.min(gap, LIVE_GAP_CAP));
+/** A take's clock now (provisional: for held notes and the time line). */
+function takeClock(tk: Take, now = performance.now()): number {
+    if (!tk.anchored) return tk.events.length ? tk.t + LIVE_GAP_CAP : 0;
+    const gap = Math.max(0, now - tk.wall);
+    return tk.t + (clockIsReal(tk) ? gap : Math.min(gap, LIVE_GAP_CAP));
 }
 
-/** Move the take's clock to `now` (an input timeStamp). */
-function advanceClock(now: number) {
-    takeT = takeClock(now);
-    takeWall = now;
-    takeAnchored = true;
+/** Move a take's clock to `now` (an input timeStamp). */
+function advanceClock(tk: Take, now: number) {
+    tk.t = takeClock(tk, now);
+    tk.wall = now;
+    tk.anchored = true;
 }
 
-const isLive = () => state.fixtureId === LIVE_ID;
+/** A take's events, with keys still held given a provisional release at its clock (so they read back
+ *  like a released note), in time order. */
+function liveEvents(tk: Take): RawEvent[] {
+    if (!tk.held.size) return tk.events;
+    const t = Math.round(takeClock(tk));
+    const evs = tk.events.slice();
+    let i = evs.length;
+    while (i > 0 && evs[i - 1]!.t_ms > t) i--;   // mid-take when recording over it
+    evs.splice(i, 0, ...[...tk.held].map(midi => ({ t_ms: t, type: 'off' as const, midi })));
+    return evs;
+}
 
-/** The start of the bar containing take time `t` on a recorded take (a note up to a 16th early belongs to
- *  the bar it was aiming at). */
+/** The start of the recording's bar containing take time `t` (a note up to a 16th early belongs to the
+ *  bar it was aiming at). */
 function barStart(t: number, early = 0): number {
-    const g = takeGrid!, bar = barMs(g);
+    const g = recTake.grid!, bar = barMs(g);
     return g.t0 + Math.max(0, Math.floor((t - g.t0 + early) / bar)) * bar;
 }
 
@@ -243,51 +266,53 @@ function liveMode(): Mode {
     return !takeSettled && (m === 'la' || m === 'tp') ? 'rt' : m;
 }
 
-/** Switch to the live take (creating its menu entry); `fresh` empties it first. */
-function enterLive(fresh: boolean) {
+function resetTake(tk: Take) {
+    tk.events = []; tk.grid = null; tk.held.clear(); tk.t = 0; tk.anchored = false; tk.recHead = 0;
+}
+
+/** Show a take (creating its menu entry). */
+function enterTake(tk: Take) {
     stopPlay();
-    if (fresh) { take = []; takeHeld.clear(); takeT = 0; takeAnchored = false; takeGrid = null; recHead = 0; }
-    addTakeOption();
-    $<HTMLSelectElement>('fixture').value = LIVE_ID;
-    state.fixtureId = LIVE_ID;
+    addTakeOption(tk);
+    $<HTMLSelectElement>('fixture').value = tk.id;
+    state.fixtureId = tk.id;
     state.sideOverrides = [];
-    rawEvents = take; rawExpected = [];
-    $('take-clear').hidden = false;
-    $('take-export').hidden = false;
-    $('take-export-xml').hidden = false;
+    rawEvents = tk.events; rawExpected = [];
+    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = false;
     syncRecUi();
 }
 
-/** One keyboard or MIDI event into the take. */
+/** One keyboard or MIDI event: into the recording while recording, else into free play. */
 function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number) {
     // Sound first: a key sounds while held, whether or not it is recorded.
-    if (type === 'on' && !liveVoices.has(midi) && !takeHeld.has(midi) && sound && soundOn) {
+    if (type === 'on' && !liveVoices.has(midi) && sound && soundOn) {
         audioEnable();
         liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22));
     } else if (type === 'off') {
         const v = liveVoices.get(midi);
         if (v) { releaseVoice(v); liveVoices.delete(midi); }
     }
+    const tk = rec !== 'off' ? recTake : freeTake;
     if (type === 'on') {
-        // Only sounding: the help page's keyboard map, the countdown, and a recorded take outside a recording.
-        if (takeHeld.has(midi) || isHelpOpen() || inCountdown(now) || (rec === 'off' && takeGrid)) return;
-        if (!isLive()) enterLive(false);   // a free take: back to it, adding to it
+        // Only sounding: the help page's keyboard map, and the countdown before the recording starts.
+        if (tk.held.has(midi) || isHelpOpen() || inCountdown(now)) return;
+        if (shown() !== tk) enterTake(tk);   // playing shows free play, from a piece or from the recording
         else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
         if (rec !== 'off') recNotes++;
-    } else if (!takeHeld.has(midi)) return;
-    advanceClock(now);
-    const at = insertEvent({ t_ms: Math.round(takeT), type, midi });
-    if (type === 'on') followStep = take.slice(0, at).filter(e => e.type === 'on').length;
-    if (type === 'on') takeHeld.add(midi); else takeHeld.delete(midi);
+    } else if (!tk.held.has(midi)) return;
+    advanceClock(tk, now);
+    const at = insertEvent(tk, { t_ms: Math.round(tk.t), type, midi });
+    if (type === 'on') followStep = tk.events.slice(0, at).filter(e => e.type === 'on').length;
+    if (type === 'on') tk.held.add(midi); else tk.held.delete(midi);
     takeSettled = false;
     clearTimeout(settleTimer);
-    if (takeHeld.size === 0) {
-        saveTake();
+    if (tk.held.size === 0) {
+        saveTake(tk);
         settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
     }
     clearInterval(holdTimer);
-    if (takeHeld.size) holdTimer = window.setInterval(() => { if (isLive() && !liveFrame) recompute(); }, 100);
-    if (!isLive() || liveFrame) return;
+    if (tk.held.size) holdTimer = window.setInterval(() => { if (shown() === tk && !liveFrame) recompute(); }, 100);
+    if (shown() !== tk || liveFrame) return;
     liveFrame = requestAnimationFrame(() => {
         liveFrame = 0;
         recompute();
@@ -296,34 +321,43 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     });
 }
 
-// The take survives a reload in this browser (a convenience; it is never uploaded).
-const TAKE_KEY = 'viz.liveTake';
-function saveTake() {
+// The takes survive a reload in this browser (a convenience; they are never uploaded).
+function saveTake(tk: Take) {
     try {
-        if (take.length || takeGrid) localStorage.setItem(TAKE_KEY, JSON.stringify({ events: take, grid: takeGrid }));
-        else localStorage.removeItem(TAKE_KEY);
+        if (tk.events.length || tk.grid) localStorage.setItem(tk.key, JSON.stringify({ events: tk.events, grid: tk.grid }));
+        else localStorage.removeItem(tk.key);
     } catch { /* storage blocked */ }
 }
-/** Restore a saved take into the menu without switching to it. */
-function restoreTake() {
-    let saved: RawEvent[] = [];
-    try {
-        const raw = JSON.parse(localStorage.getItem(TAKE_KEY) ?? '[]');
-        saved = Array.isArray(raw) ? raw : (raw.events ?? []);   // an array is the pre-metronome format
-        takeGrid = Array.isArray(raw) ? null : (raw.grid ?? null);
-    } catch { return; }
-    if (!Array.isArray(saved) || !saved.length) return;
-    take = saved.filter(e => (e.type === 'on' || e.type === 'off') && typeof e.midi === 'number' && typeof e.t_ms === 'number');
-    takeT = take.at(-1)?.t_ms ?? 0;
-    recHead = takeGrid ? (takeGrid.t1 ?? takeGrid.t0) : 0;
-    addTakeOption();
+/** Restore the saved takes into the menu without switching to them. An older single saved take that has a
+ *  grid becomes the recording. */
+function restoreTakes() {
+    const read = (key: string): { events: RawEvent[]; grid: Grid | null } | null => {
+        try {
+            const raw = JSON.parse(localStorage.getItem(key) ?? 'null');
+            if (!raw) return null;
+            const events = (Array.isArray(raw) ? raw : (raw.events ?? []) as RawEvent[])
+                .filter((e: RawEvent) => (e.type === 'on' || e.type === 'off') && typeof e.midi === 'number' && typeof e.t_ms === 'number');
+            return { events, grid: Array.isArray(raw) ? null : (raw.grid ?? null) };
+        } catch { return null; }
+    };
+    const free = read(freeTake.key), recd = read(recTake.key);
+    if (free?.grid && !recd) { load(recTake, free); saveTake(recTake); free.events = []; free.grid = null; saveTake(freeTake); }
+    else if (free) load(freeTake, { events: free.events, grid: null });
+    if (recd) load(recTake, recd);
+    function load(tk: Take, d: { events: RawEvent[]; grid: Grid | null }) {
+        tk.events = d.events; tk.grid = d.grid;
+        tk.t = tk.events.at(-1)?.t_ms ?? 0;
+        tk.recHead = tk.grid ? (tk.grid.t1 ?? tk.grid.t0) : 0;
+        if (tk.events.length) addTakeOption(tk);
+    }
 }
-function addTakeOption() {
+function addTakeOption(tk: Take) {
     const sel = $<HTMLSelectElement>('fixture');
-    if (sel.querySelector(`option[value="${LIVE_ID}"]`)) return;
+    if (sel.querySelector(`option[value="${tk.id}"]`)) return;
     const opt = document.createElement('option');
-    opt.value = LIVE_ID; opt.textContent = '🎹 live take';
-    sel.prepend(opt);
+    opt.value = tk.id; opt.textContent = tk.name;
+    if (tk === recTake && sel.querySelector(`option[value="${freeTake.id}"]`)) sel.querySelector(`option[value="${freeTake.id}"]`)!.after(opt);
+    else sel.prepend(opt);
 }
 
 /** Save `body` as a download named after the take and the time. */
@@ -331,22 +365,25 @@ function download(body: string, ext: string, type: string) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([body], { type }));
     const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
-    a.download = `live-take-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.${ext}`;
+    const what = onRecording() ? 'recording' : 'free-play';
+    a.download = `${what}-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.${ext}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/** Download the take as a fixture `events.json` (on/off events, ms). */
+/** Download the take in view as a fixture `events.json` (on/off events, ms). */
 function exportTake() {
-    if (!take.length) { flash('nothing to export: play something first'); return; }
-    download('[\n' + take.map(e => `  ${JSON.stringify({ t_ms: e.t_ms, type: e.type, midi: e.midi })}`).join(',\n') + '\n]\n',
+    const tk = shown();
+    if (!tk?.events.length) { flash('nothing to export: play something first'); return; }
+    download('[\n' + tk.events.map(e => `  ${JSON.stringify({ t_ms: e.t_ms, type: e.type, midi: e.midi })}`).join(',\n') + '\n]\n',
         'events.json', 'application/json');
 }
 
-/** Download the take as MusicXML: the shown speller's spellings on the recording's grid (or an estimated
- *  4/4 for a free take), the key signature from the real-time speller's diatonic frame. */
+/** Download the take in view as MusicXML: the shown speller's spellings on the recording's grid (or an
+ *  estimated 4/4 for free play), the key signature from the real-time speller's diatonic frame. */
 function exportMusicXml() {
-    if (!take.length) { flash('nothing to export: play something first'); return; }
+    const tk = shown();
+    if (!tk?.events.length) { flash('nothing to export: play something first'); return; }
     if (rec !== 'off') endRecording(performance.now());
     clearTimeout(settleTimer);
     takeSettled = true;   // export the chosen speller's final spellings, not the real-time stand-in
@@ -354,34 +391,31 @@ function exportMusicXml() {
     const r = state.replay!;
     const notes = r.notes.filter(n => n.committed)
         .map(n => ({ midi: n.midi, onT: n.onT, offT: n.offT, step: n.committed!.step, alter: n.committed!.alter }));
-    const frame = buildReplay('rt', liveEvents(), [], { ...spiralOpts(), onsetTolerance: LIVE_ONSET_TOLERANCE });
+    const frame = buildReplay('rt', liveEvents(tk), [], { ...spiralOpts(), onsetTolerance: LIVE_ONSET_TOLERANCE });
     const keys = frame.snapshots.filter(s => s.frameLofTonic !== undefined).map(s => ({ t: s.t, fifths: s.frameLofTonic! }));
     const speller = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
-    const input = { notes, grid: takeGrid, keys, title: 'Live take', speller, chordMs: LIVE_ONSET_TOLERANCE };
+    const input = { notes, grid: tk.grid, keys, title: onRecording() ? 'Recording' : 'Free play', speller, chordMs: LIVE_ONSET_TOLERANCE };
     const layout = layoutTake(input);
     download(toMusicXml(layout, input), 'musicxml', 'application/vnd.recordare.musicxml+xml');
-    flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${takeGrid ? '' : ' (free take: 4/4 and the tempo are estimated)'}`);
+    flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${tk.grid ? '' : ' (free play: 4/4 and the tempo are estimated)'}`);
 }
 
 // UNDO: a recording pass, a deleted note and a clear can each be undone (⌘Z / Ctrl+Z).
-function pushUndo() {
-    undoStack.push({ take: take.slice(), grid: takeGrid && { ...takeGrid } });
+function pushUndo(tk: Take) {
+    undoStack.push({ tk, events: tk.events.slice(), grid: tk.grid && { ...tk.grid } });
     if (undoStack.length > 50) undoStack.shift();
 }
 
-/** Put back the take as it was before the last change. */
-function restoreSnapshot(snap: { take: RawEvent[]; grid: Grid | null }) {
-    if (!isLive()) enterLive(false);
-    take = rawEvents = snap.take;
-    takeGrid = snap.grid;
-    takeHeld.clear();
-    takeAnchored = false;
-    takeT = take.at(-1)?.t_ms ?? 0;
-    recHead = takeGrid ? (takeGrid.t1 ?? takeGrid.t0) : 0;
-    saveTake();
+/** Put a take back as it was before its last change, and show it. */
+function restoreSnapshot(snap: { tk: Take; events: RawEvent[]; grid: Grid | null }) {
+    const tk = snap.tk;
+    tk.events = snap.events; tk.grid = snap.grid; tk.held.clear(); tk.anchored = false;
+    tk.t = tk.events.at(-1)?.t_ms ?? 0;
+    tk.recHead = tk.grid ? (tk.grid.t1 ?? tk.grid.t0) : 0;
+    saveTake(tk);
+    enterTake(tk);
     recompute();
     state.step = Math.max(0, Math.min(state.step, (state.replay?.snapshots.length ?? 1) - 1));
-    syncRecUi();
     render();
 }
 
@@ -390,15 +424,15 @@ function undo() {
     const snap = undoStack.pop();
     if (!snap) { flash('nothing to undo'); return; }
     restoreSnapshot(snap);
-    flash('undone');
+    flash(`undone (${snap.tk.name})`);
 }
 
-// RECORDING: a 4-click countdown, then the downbeat. From a piece or a free take it makes a recorded take
-// from bar 1 (what was there can be undone). On a recorded take it starts at the red time line (a bar
-// line: put there by clicking a note or empty space on the roll; after a recording it waits at the end)
-// and ADDS to the take, with its notes playing so you hear what you record over. While it runs the take's
-// clock is real time, so a pause stays a pause. Stop ends it at once; the grid closes on the bar line after
-// the last note (its `t1`).
+// RECORDING: a 4-click countdown, then the downbeat. In the recording's view it starts at the red time line
+// (a bar line: put there by clicking a note or empty space on the roll; after a recording it waits at the
+// end) and ADDS to the recording, with its notes playing so you hear what you record over. From anywhere
+// else it starts a new recording from bar 1 (the old one can be undone). While it runs the clock is real
+// time, so a pause stays a pause. Stop ends it at once; the grid closes on the bar line after the last note
+// (its `t1`).
 
 /** For each note-on in `evs`, the index of its note-off (paired first-in first-out per pitch, as the replay does). */
 function pairOffs(evs: readonly RawEvent[]): Map<number, number> {
@@ -416,25 +450,27 @@ function startRecording() {
     const now = performance.now();
     const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
     const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
-    pushUndo();
+    const tk = recTake;
+    pushUndo(tk);
     let grid: Grid;
-    if (isLive() && takeGrid) {
-        grid = takeGrid;
-        recFrom = recHead;
+    if (onRecording() && tk.grid && tk.events.length) {
+        grid = tk.grid;
+        recFrom = tk.recHead;
         startBacking(recFrom - COUNT_IN * clickMs(grid), now + LEAD_MS);
     } else {
-        // A new recorded take; the countdown runs at negative take time, and bar 1 sits a 16th in so an
+        // A new recording; the countdown runs at negative take time, and bar 1 sits a 16th in so an
         // early downbeat still shows.
         clearTimeout(settleTimer); takeSettled = true;
-        enterLive(true);
+        resetTake(tk);
+        enterTake(tk);
         state.step = 0;
         grid = { bpm, num, den, t0: 0 };
         grid.t0 = recFrom = Math.round(clickMs(grid) / 4) + 50;
-        takeGrid = grid;
+        tk.grid = grid;
     }
-    takeT = recFrom - LEAD_MS - COUNT_IN * clickMs(grid);
-    takeWall = now;
-    takeAnchored = true;
+    tk.t = recFrom - LEAD_MS - COUNT_IN * clickMs(grid);
+    tk.wall = now;
+    tk.anchored = true;
     recNotes = 0;
     const perBar = clicksPerBar(grid);
     const firstBar = Math.round((recFrom - grid.t0) / barMs(grid));   // bars before this recording starts
@@ -458,7 +494,7 @@ function startRecording() {
     render();
 }
 
-/** Play the take's notes from take time `fromT` (heard at performance time `perfAt`), under a recording. */
+/** Play the recording's notes from take time `fromT` (heard at performance time `perfAt`), under a pass. */
 function startBacking(fromT: number, perfAt: number) {
     stopBacking();
     if (!soundOn) return;
@@ -485,20 +521,20 @@ function stopBacking() {
     backing = [];
 }
 
-/** The red time line: the record start on a recorded take; moving with the clock while recording. */
+/** The red time line, in the recording's view: where recording starts; moving with the clock while it runs. */
 function syncTimeLine() {
-    if (!isLive() || !takeGrid) { setTimeLine(null, false); return; }
-    if (rec === 'off') setTimeLine(recHead, false);
-    else setTimeLine(Math.max(recFrom, takeClock()), rec === 'recording');
+    if (!onRecording() || !recTake.grid) { setTimeLine(null, false); return; }
+    if (rec === 'off') setTimeLine(recTake.recHead, false);
+    else setTimeLine(Math.max(recFrom, takeClock(recTake)), rec === 'recording');
 }
 
 /** Is `now` still in the countdown? Decided by time, not by the click display: a downbeat played a little
  *  early (up to a 16th) belongs to the recording. */
 function inCountdown(now: number): boolean {
-    return rec !== 'off' && !!takeGrid && takeClock(now) < recFrom - clickMs(takeGrid) / 4;
+    return rec !== 'off' && !!recTake.grid && takeClock(recTake, now) < recFrom - clickMs(recTake.grid) / 4;
 }
 
-/** Stop at once. A recording with no notes played (stopped in the countdown, say) is cancelled. */
+/** Stop at once. A pass with no notes played (stopped in the countdown, say) is cancelled. */
 function stopRecording() {
     if (rec !== 'off') endRecording(performance.now());
 }
@@ -507,7 +543,8 @@ function stopRecording() {
  *  (its start, or its release less a 16th), so pressing stop just after the music ends adds no empty bar,
  *  and the time line waits there, ready to carry on. */
 function endRecording(at: number) {
-    advanceClock(at);   // the time up to now was real
+    const tk = recTake;
+    advanceClock(tk, at);   // the time up to now was real
     metro.stop();
     stopBacking();
     cancelAnimationFrame(timeLineFrame);
@@ -519,18 +556,18 @@ function endRecording(at: number) {
         flash('recording cancelled');
         return;
     }
-    const g = takeGrid!, sixteenth = barMs(g) / (g.num * 16 / g.den);
+    const g = tk.grid!, sixteenth = barMs(g) / (g.num * 16 / g.den);
     let last = -Infinity;
-    for (const e of take) last = Math.max(last, e.type === 'on' ? e.t_ms : e.t_ms - sixteenth);
-    for (const _ of takeHeld) last = Math.max(last, takeT - sixteenth);   // still held at the stop
+    for (const e of tk.events) last = Math.max(last, e.type === 'on' ? e.t_ms : e.t_ms - sixteenth);
+    for (const _ of tk.held) last = Math.max(last, tk.t - sixteenth);   // still held at the stop
     const bars = Math.max(1, Math.ceil((last - g.t0) / barMs(g) + 1e-6));
     g.t1 = g.t0 + bars * barMs(g);
-    recHead = g.t1;
-    flash(`recorded · ${bars} bar${bars === 1 ? '' : 's'} in the take`);
-    takeT = Math.max(takeT, take.at(-1)?.t_ms ?? 0);
-    takeWall = performance.now();
+    tk.recHead = g.t1;
+    flash(`recorded · ${bars} bar${bars === 1 ? '' : 's'}`);
+    tk.t = Math.max(tk.t, tk.events.at(-1)?.t_ms ?? 0);
+    tk.wall = performance.now();
     syncRecUi();
-    saveTake();
+    saveTake(tk);
     if (isLive()) recompute();
 }
 
@@ -538,48 +575,53 @@ function syncRecUi() {
     const btn = $('metro-toggle');
     btn.textContent = rec === 'off' ? '● record' : '■ stop';
     btn.classList.toggle('recording', rec !== 'off');
-    // A recorded take keeps its tempo and time signature: the fields show them, locked (clear unlocks).
-    const recorded = isLive() && !!takeGrid;
-    if (recorded) {
-        $<HTMLInputElement>('metro-bpm').value = String(takeGrid!.bpm);
-        $<HTMLSelectElement>('metro-meter').value = `${takeGrid!.num}/${takeGrid!.den}`;
+    // In the recording's view its tempo and time signature are shown, locked (clear unlocks them).
+    const locked = onRecording() && !!recTake.grid && recTake.events.length > 0;
+    if (locked) {
+        $<HTMLInputElement>('metro-bpm').value = String(recTake.grid!.bpm);
+        $<HTMLSelectElement>('metro-meter').value = `${recTake.grid!.num}/${recTake.grid!.den}`;
     }
-    $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off' || recorded;
-    $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off' || recorded;
+    $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off' || locked;
+    $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off' || locked;
     btn.title = rec !== 'off' ? 'stop recording (Space)'
-        : recorded ? 'record from the red line, adding to the take (Enter)' : 'record a new take against the metronome (Enter)';
+        : locked ? 'record from the red line, adding to the recording (Enter)' : 'record a new take against the metronome (Enter)';
     syncTimeLine();
 }
 
-/** Remove the note at `step` from the take (Backspace / Delete on the live take). */
+/** Remove the note at `step` from the take in view (Backspace / Delete). */
 function deleteNote(step: number) {
-    const ons = take.map((e, i) => e.type === 'on' ? i : -1).filter(i => i >= 0);
+    const tk = shown();
+    if (!tk) return;
+    const ons = tk.events.map((e, i) => e.type === 'on' ? i : -1).filter(i => i >= 0);
     const on = ons[step];
     if (on === undefined) return;
-    const off = pairOffs(take).get(on);
+    const off = pairOffs(tk.events).get(on);
     if (off === undefined) { flash('release the key first'); return; }
     const spelled = state.replay?.notes[step]?.committed;
-    pushUndo();
-    take.splice(off, 1);
-    take.splice(on, 1);
+    pushUndo(tk);
+    tk.events.splice(off, 1);
+    tk.events.splice(on, 1);
     recompute();
     state.step = Math.max(0, Math.min(step, (state.replay?.snapshots.length ?? 1) - 1));
     render();
-    saveTake();
+    saveTake(tk);
     flash(`deleted ${spelled ? label(spelled) : 'note'}`);
 }
 
-/** Throw the take away and start an empty one (undoable). */
+/** Empty the take in view (undoable). */
 function clearTake() {
+    const tk = shown();
+    if (!tk) return;
     if (rec !== 'off') endRecording(performance.now());
-    pushUndo();
+    pushUndo(tk);
     clearTimeout(settleTimer);
     clearInterval(holdTimer);
     for (const v of liveVoices.values()) releaseVoice(v);
     liveVoices.clear();
-    try { localStorage.removeItem(TAKE_KEY); } catch { /* storage blocked */ }
     takeSettled = true;
-    enterLive(true);
+    resetTake(tk);
+    saveTake(tk);
+    enterTake(tk);
     state.step = 0;
     recompute();
 }
@@ -590,18 +632,6 @@ function effMode(): Mode {
     return state.mode === 'rt' && state.lookAhead ? 'la' : state.mode;
 }
 
-/** The take's events, with keys still held given a provisional release at the take's clock (so they read
- *  back like a released note). */
-function liveEvents(): RawEvent[] {
-    if (!takeHeld.size) return take;
-    const t = Math.round(takeClock());
-    const evs = take.slice();
-    let i = evs.length;
-    while (i > 0 && evs[i - 1]!.t_ms > t) i--;   // mid-take when recording over it
-    evs.splice(i, 0, ...[...takeHeld].map(midi => ({ t_ms: t, type: 'off' as const, midi })));
-    return evs;
-}
-
 /** The spiral what-if settings, as buildReplay takes them. */
 function spiralOpts() {
     return { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame };
@@ -610,7 +640,7 @@ function spiralOpts() {
 function recompute() {
     if (!state.fixtureId) return;
     const live = isLive();
-    state.replay = buildReplay(live ? liveMode() : effMode(), live ? liveEvents() : rawEvents, rawExpected,
+    state.replay = buildReplay(live ? liveMode() : effMode(), live ? liveEvents(shown()!) : rawEvents, rawExpected,
         { ...spiralOpts(), ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
@@ -661,8 +691,8 @@ function renderStatus() {
     const modeName = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
     if (isLive()) {
         const waiting = liveMode() !== effMode();
-        const kind = takeGrid ? `recorded · ${takeGrid.bpm} bpm ${takeGrid.num}/${takeGrid.den}` : 'free';
-        $('status').innerHTML = `${fixtureLabel()} (${kind}) · ${modeName} · ${r.snapshots.length} onsets · <span class="dim">not graded`
+        const g = shown()!.grid;
+        $('status').innerHTML = `${fixtureLabel()}${g ? ` (${g.bpm} bpm ${g.num}/${g.den})` : ''} · ${modeName} · ${r.snapshots.length} onsets · <span class="dim">not graded`
             + (waiting ? ' · spelled real-time while you play, re-spelled when you pause' : '') + '</span>';
         return;
     }
@@ -691,7 +721,7 @@ function render() {
     if (state.replay) {
         if (isLive()) renderLiveStaff(state.replay, state.step);
         else renderStaff(state.replay, state.step);
-        renderPianoRoll(state.replay, state.step, state.showKeyLanes, isLive() ? takeGrid : null);
+        renderPianoRoll(state.replay, state.step, state.showKeyLanes, shown()?.grid ?? null);
         syncTimeLine();
     }
     renderStrip();
@@ -746,9 +776,9 @@ function seek(i: number, audible = false, resume = true) {
     stopPlay();
     allNotesOff();       // silence whatever was ringing, so the new position starts clean
     state.step = clampStep(state, i);
-    // On a recorded take, picking a note puts the record start at the beginning of its bar.
+    // In the recording, picking a note puts the record start at the beginning of its bar.
     const picked = state.replay?.notes[state.step];
-    if (isLive() && takeGrid && rec === 'off' && picked) recHead = barStart(picked.onT, clickMs(takeGrid) / 4);
+    if (onRecording() && recTake.grid && rec === 'off' && picked) recTake.recHead = barStart(picked.onT, clickMs(recTake.grid) / 4);
     render();
     syncUrl();
     if (wasPlaying && resume) {
@@ -923,7 +953,7 @@ function syncUrl() {
     if (!state.fixtureId) return;
     const u = new URL(location.href);
     // An imported fixture is session-only (can't be reloaded from a URL), so keep it out of the link.
-    if (state.fixtureId === IMPORTED_ID || state.fixtureId === LIVE_ID) u.searchParams.delete('fixture');
+    if (state.fixtureId === IMPORTED_ID || isLive()) u.searchParams.delete('fixture');
     else u.searchParams.set('fixture', state.fixtureId);
     u.searchParams.set('mode', state.mode);
     u.searchParams.set('step', String(state.step + 1));
@@ -990,15 +1020,17 @@ async function importMusicXmlFile(file: File) {
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
-    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = id !== LIVE_ID;
-    if (id !== LIVE_ID && rec !== 'off') endRecording(performance.now());
-    if (id === LIVE_ID) {   // back to the take: land on its latest note
-        enterLive(false); recompute();
+    const tk = TAKES.find(x => x.id === id);
+    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = !tk;
+    if (rec !== 'off' && id !== recTake.id) endRecording(performance.now());
+    if (tk) {   // a take: land on its latest note
+        enterTake(tk); recompute();
         state.step = (state.replay?.snapshots.length ?? 1) - 1;
         render(); syncUrl(); return;
     }
     if (state.fixtureId !== id && !preserveMarkers) state.sideOverrides = [];
     state.fixtureId = id;
+    syncRecUi();
     const f = await loadFixture(id);
     rawEvents = f.events; rawExpected = f.expected;
     state.step = step;
@@ -1008,10 +1040,10 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
 
 function wire() {
     initPianoRoll(seek, t => {   // empty space on the roll: the record start goes to that bar
-        if (isLive() && takeGrid && rec === 'off') { recHead = barStart(t); syncTimeLine(); }
+        if (onRecording() && recTake.grid && rec === 'off') { recTake.recHead = barStart(t); syncTimeLine(); }
     });
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
-    liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
+    liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes go to free play (or the recording)
     // Clear asks twice: the first click arms it for 3 s, the second clears.
     let clearArmed = 0;
     const disarmClear = () => { clearTimeout(clearArmed); clearArmed = 0; $('take-clear').textContent = 'clear'; $('take-clear').classList.remove('armed'); };
@@ -1139,7 +1171,7 @@ async function boot() {
     updatePlayBtn();
     const ids = await listFixtures();
     $<HTMLSelectElement>('fixture').innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join('');
-    restoreTake();
+    restoreTakes();
     const p = new URLSearchParams(location.search);
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');

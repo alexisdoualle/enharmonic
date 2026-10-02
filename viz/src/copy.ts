@@ -45,7 +45,7 @@ function place(n: ReplayNote | undefined): string {
 function header(s: AppState): string[] {
     const r = s.replay;
     const out = [
-        `fixture: ${s.fixtureId === '__live__' ? 'live take (computer keyboard / MIDI)' : s.fixtureId}`,
+        `fixture: ${s.fixtureId === '__free__' ? 'free play (computer keyboard / MIDI)' : s.fixtureId === '__rec__' ? 'recording (computer keyboard / MIDI)' : s.fixtureId}`,
         `speller: ${s.mode === 'rt' && s.lookAhead ? `${MODE_LONG.la} [la]` : `${MODE_LONG[s.mode]} [${s.mode}]`}`,
         `spiral:  range ±${s.spiralRange}, centre ${sgn(s.spiralCenter)}${s.repair ? ', repair ON' : ''}`
         + (s.spiralRange === SPIRAL_RANGE_DEFAULT && s.spiralCenter === SPIRAL_CENTER_DEFAULT && !s.repair

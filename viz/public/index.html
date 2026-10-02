@@ -20,8 +20,8 @@
     <strong>enharmonic</strong> <span class="sub">speller debugger</span>
     <label>fixture <select id="fixture"></select></label>
     <button class="ctl" id="import-btn" title="import a MusicXML score (.musicxml / .xml / .mxl) as a gradeable fixture — or drop the file anywhere">↥ import</button>
-    <button class="ctl" id="take-export-xml" title="download the live take as MusicXML, spelled by the speller shown, on the metronome grid" hidden>⤓ MusicXML</button>
-    <button class="ctl" id="take-export" title="download the live take as a fixture events.json" hidden>⤓ events</button>
+    <button class="ctl" id="take-export-xml" title="download the take shown as MusicXML, spelled by the speller shown" hidden>⤓ MusicXML</button>
+    <button class="ctl" id="take-export" title="download the take shown as a fixture events.json" hidden>⤓ events</button>
     <input type="file" id="import-file" accept=".musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,text/xml" hidden />
     <label>speller
       <select id="mode">
@@ -55,7 +55,7 @@
     <button class="ctl midi-btn" id="midi-enable" title="connect a MIDI keyboard (asks for permission on click)">🎹 MIDI</button>
     <span class="ctl metro" title="record against a metronome: a 4-click countdown, then bar 1; stop (or Space) ends it">
       <button class="ctl midi-btn" id="metro-toggle" type="button">● record</button>
-      <button class="ctl midi-btn" id="take-clear" type="button" title="clear the live take" hidden>clear</button>
+      <button class="ctl midi-btn" id="take-clear" type="button" title="empty the take shown (undo with ⌘Z)" hidden>clear</button>
       <input type="number" id="metro-bpm" min="30" max="260" step="1" value="90" aria-label="tempo in beats per minute" /> bpm
       <select id="metro-meter" aria-label="time signature"><option>2/4</option><option>3/4</option><option selected>4/4</option><option>6/8</option></select>
       <span id="metro-beat" class="metro-beat"></span></span>
