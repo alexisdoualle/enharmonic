@@ -177,33 +177,31 @@ The browser asks for permission on that click, never on page load. Once connecte
 keyboard are not played through the synth: your instrument makes the sound. The sustain pedal holds
 notes as on a piano. The button is hidden when the browser has no Web MIDI.</p>
 
-<p><b>Free play.</b> Playing switches to the <b>&#127929; live take</b> and adds to it, and every panel follows it:
-staff, roll, spiral, scoring and Tonnetz, on the same engine the pieces run on. Nothing is graded (there is
-no composer spelling to compare to), so notes take their letter's colour. Keys pressed within 50 ms count
-as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is spelled
-in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
-play the take back like a piece. Only <b>clear</b>, next to <b>&#9679; record</b>, empties it: picking a piece
-leaves the take in the menu, and it survives a reload in this browser.</p>
+<p><b>Play.</b> Just play: the first note switches to the <b>&#127929; live take</b> and every panel
+follows it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Nothing is graded,
+so notes take their letter's colour. Keys within 50 ms count as one chord. Look-ahead and two-pass need the
+notes that come next, so while you play the take is spelled in real time, and re-spelled a second after you
+stop. This is a <b>free</b> take: it keeps adding what you play.</p>
 
-<p><b>Export.</b> <b>&#10515; MusicXML</b> writes the take as a score for MuseScore, Sibelius or Dorico:
-the shown speller's spellings, quantised to the metronome grid (16ths at the finest, with a pull toward the
-beat so a slightly early chord lands on it), on a grand staff split at middle C, with the key signature
-from the real-time speller's frame. With a recording, only its bars are written. A take without the
-metronome gets 4/4 and a guessed tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>.
-Neither carries a checked spelling: importing the MusicXML back to grade the speller only means something
-once a person has corrected it.</p>
+<p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
+beside it, then records against the metronome; <b>&#9632; stop</b> or <b>Space</b> ends it. The red line on
+the roll follows the time. From a piece or a free take this makes a new <b>recorded</b> take from bar 1.</p>
 
-<p><b>Recording with a metronome.</b> <b>&#9679; record</b> in the transport bar counts down four
-clicks at the tempo and time signature next to it, then records against that grid (the piano roll draws it).
-From a piece it starts a fresh take at bar 1. Notes during the countdown sound but are not recorded. While
-recording a pause stays a pause, so the take keeps its real rhythm. <b>&#9632; stop</b> or <b>Space</b> ends
-the recording at once; the last bar is filled with a rest. Notes played outside the recording are washed out:
-export leaves them out.</p>
+<p><b>Add to a recording.</b> On a recorded take, click a note (or empty space on the roll) to put the red line
+at the start of that bar, then record: you hear the take from the bar before, and what you play is added on
+top. After a recording the line waits at its end, so recording again carries on. A recorded take only changes
+this way: keys played outside a recording just sound. Its tempo and time signature stay fixed.</p>
 
-<p><b>Recording over a take.</b> Move the playhead and press <b>&#9679; record</b>: after the countdown it
-records from the playhead note's bar, and the new notes are added to what is already there (on the last
-note, it carries on after the end). On a take played without the metronome, bar 1 is the playhead note.
-<b>Backspace</b> or <b>Delete</b> removes the note under the playhead.</p>`,
+<p><b>Fix and undo.</b> <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.
+<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks) starts over.
+The take survives a reload in this browser.</p>
+
+<p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
+speller's spellings, a grand staff split at middle C, the key signature from the real-time speller's frame,
+and the rhythm quantised to 16ths with a pull toward the beat. A recorded take uses its grid; a free take
+gets 4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
+carries a checked spelling: grading the speller against an export only means something once a person has
+corrected it.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

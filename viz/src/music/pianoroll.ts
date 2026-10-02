@@ -49,7 +49,6 @@ interface Layout {
     x: number; w: number; y: number;
     onIndex: number; onT: number; offT: number;
     tier: Tier; midi: number; committedLabel: string; expectedLabel: string; fill: string;
-    outside: boolean;   // a live take's note outside its recording (washed out: export leaves it out)
 }
 
 function svgEl(name: string, attrs: Record<string, string | number>): SVGElement {
@@ -58,13 +57,28 @@ function svgEl(name: string, attrs: Record<string, string | number>): SVGElement
     return n as SVGElement;
 }
 
-/** Is a note (onset `t`) outside the take's recording? Export leaves such notes out. */
-export function outsideRecording(t: number, g: Grid): boolean {
-    return t < g.t0 - clickMs(g) / 4 || (g.t1 !== undefined && t >= g.t1);
-}
-
 let onSeek: (step: number) => void = () => {};
-export function initPianoRoll(seek: (step: number) => void): void { onSeek = seek; }
+let onTime: (t: number) => void = () => {};
+/** `time` is told the time of a click on empty space (after `seek` moves to the nearest note). */
+export function initPianoRoll(seek: (step: number) => void, time?: (t: number) => void): void { onSeek = seek; if (time) onTime = time; }
+
+// The red TIME LINE of a live take: where recording starts, or the recording clock while it runs.
+let timeLine: SVGLineElement | null = null;
+let timeLineAt: number | null = null, timeLineMoving = false;
+export function setTimeLine(t: number | null, moving: boolean): void {
+    timeLineAt = t; timeLineMoving = moving;
+    if (!timeLine) return;
+    if (t === null || t < 0) { timeLine.setAttribute('visibility', 'hidden'); return; }
+    const x = PAD + t * pxPerMs;
+    timeLine.setAttribute('visibility', 'visible');
+    timeLine.setAttribute('x1', String(x)); timeLine.setAttribute('x2', String(x));
+    timeLine.setAttribute('stroke-dasharray', moving ? '' : '4 3');
+    const host = document.getElementById('pianoroll')!;
+    if (moving && x > host.scrollLeft + host.clientWidth - 60) {   // keep the moving line in view
+        host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
+        expectedScrollLeft = host.scrollLeft;
+    }
+}
 
 // The replay we last built the SVG for: rebuild keys off OBJECT IDENTITY. main.ts makes a fresh
 // Replay on every fixture/mode change, so any such change rebuilds automatically; a mere seek (same
@@ -151,7 +165,6 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
             // Ungraded notes (a live take) take their letter's colour; graded ones their tier's.
             fill: !note.expected && note.committed ? LETTER_COLOR[note.committed.step]! : TIER_COLOR[note.tier],
-            outside: !!grid && outsideRecording(note.onT, grid),
         };
     }
     rects = new Array(replay.notes.length).fill(null);
@@ -176,8 +189,17 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     svg.addEventListener('click', e => {
         const rect = svg.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (width / rect.width);
-        onSeek(nearestNoteAtTime(replay, (x - PAD) / pxPerMs));
+        const t = (x - PAD) / pxPerMs;
+        onSeek(nearestNoteAtTime(replay, t));
+        onTime(t);
     });
+
+    timeLine = document.createElementNS(SVGNS, 'line') as SVGLineElement;
+    timeLine.setAttribute('y1', String(PAD)); timeLine.setAttribute('y2', String(PAD + noteH));
+    timeLine.setAttribute('stroke', '#e06c75'); timeLine.setAttribute('stroke-width', '2');
+    timeLine.setAttribute('pointer-events', 'none');
+    svg.appendChild(timeLine);
+    setTimeLine(timeLineAt, timeLineMoving);
 
     host.appendChild(svg);
     if (!scrollBound) {
@@ -224,7 +246,6 @@ function makeRect(oi: number): void {
     rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
     rect.setAttribute('fill', L.fill);
-    if (L.outside) rect.setAttribute('fill-opacity', '0.28');
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
     title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);
