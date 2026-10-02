@@ -197,7 +197,7 @@ function liveMode(): Mode {
     return !takeSettled && (m === 'la' || m === 'tp') ? 'rt' : m;
 }
 
-/** Switch to the live take (creating its menu entry), starting it empty when coming from a fixture. */
+/** Switch to the live take (creating its menu entry); `fresh` empties it first. */
 function enterLive(fresh: boolean) {
     stopPlay();
     if (fresh) { take = []; takeHeld.clear(); takeT = 0; }
@@ -222,7 +222,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     }
     if (type === 'on') {
         if (takeHeld.has(midi) || isHelpOpen()) return;   // the help page's keyboard map only lights and sounds
-        if (!isLive()) enterLive(true);
+        if (!isLive()) enterLive(false);   // back to the take, adding to it (only ⟲ new take starts over)
         else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
     } else if (!takeHeld.has(midi)) return;
     // Only a silence (nothing held) is capped; time under a held key is sounding.
