@@ -168,6 +168,11 @@ export interface EngineOptions {
      *  picks F♯. Gated to out-of-collection pcs, so a diatonic flat (D♭ in D♭ major) is never touched.
      *  Risk: worsens a chromatic already side-locked sharp (D♭→C♯). 0 = off. */
     chromaticSharpLean?: number;
+    /** ONSET TOLERANCE (in `t` units, ms for live input): a note joins the current onset if it starts
+     *  within this much of the onset's FIRST note and its pitch is not already in the onset. Performed
+     *  chords arrive spread over a few tens of ms; exact-`t` grouping splits them into several onsets.
+     *  Causal (no waiting). 0 = exact `t` equality (default). */
+    onsetTolerance?: number;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -296,6 +301,7 @@ export class SpellingEngine {
     private readonly frameSide: 'continuity' | 'drift';
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
+    private readonly onsetTolerance: number;
     /** 'diatonic' keep-alive: letter slot → the committed chromatic alteration it holds over the collection. */
     private kept = new Map<number, number>();
 
@@ -314,6 +320,8 @@ export class SpellingEngine {
     private pcWindow: number[][] = [];
     /** The current onset's raw pcs, flushed into pcWindow when the onset advances. */
     private curOnsetPcs: number[] = [];
+    /** The current onset's midis: with an onset tolerance, a repeated pitch starts a new onset. */
+    private curOnsetMidis = new Set<number>();
     /** Fold DEBOUNCE state: the direction (±12) currently favoured, and for how many consecutive onsets. */
     private pendingDir = 0;
     private pendingCount = 0;
@@ -360,6 +368,7 @@ export class SpellingEngine {
         this.frameSide = opts.frameSide ?? 'continuity';
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
+        this.onsetTolerance = opts.onsetTolerance ?? 0;
     }
 
     /**
@@ -370,7 +379,12 @@ export class SpellingEngine {
      */
     noteOn(midi: number, t?: number, resolveDir = 0): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
-        if (t === undefined || t !== this.lastT) {
+        const newOnset = t === undefined || (this.onsetTolerance > 0
+            // NaN lastT: new onset. A repeated pitch arriving LATER is a re-strike (a same-instant unison stays).
+            ? !(t - this.lastT <= this.onsetTolerance) || (t !== this.lastT && this.curOnsetMidis.has(midi))
+            : t !== this.lastT);
+        if (newOnset) {
+            this.curOnsetMidis.clear();
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
                 // Keep enough onsets for whichever consumer needs the most: the economy fold (foldWindow) or
@@ -383,6 +397,7 @@ export class SpellingEngine {
             this.onset++;
         }
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
+        this.curOnsetMidis.add(midi);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -685,6 +700,7 @@ export class SpellingEngine {
         this.lastT = NaN;
         this.pcWindow = [];
         this.curOnsetPcs = [];
+        this.curOnsetMidis.clear();
         this.pendingDir = 0;
         this.pendingCount = 0;
         this.committedLof = [];

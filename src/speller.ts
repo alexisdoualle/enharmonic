@@ -33,6 +33,12 @@ export interface SpellerOptions {
      * See the `fold-center-is-sharp-side-basin` finding.
      */
     keyTonic?: number;
+    /**
+     * Group notes that start within this many `t` units (ms for live input) of an onset's first note into
+     * that onset, unless the pitch repeats. Performed chords arrive spread over a few tens of ms; with the
+     * default exact-`t` grouping each note is its own onset. Causal: no note waits. Default 0.
+     */
+    onsetTolerance?: number;
 }
 
 export class Speller {
@@ -41,7 +47,8 @@ export class Speller {
 
     constructor(opts: SpellerOptions = {}) {
         this.lookAhead = opts.lookAhead ?? false;
-        this.engine = new SpellingEngine(this.lookAhead ? LA_PRESET : RT_PRESET);
+        const preset = this.lookAhead ? LA_PRESET : RT_PRESET;
+        this.engine = new SpellingEngine(opts.onsetTolerance ? { ...preset, onsetTolerance: opts.onsetTolerance } : preset);
         // An initial key is just setKey at t=0 plus a matching frame seed (see setKey / keyTonic).
         if (opts.keyTonic !== undefined) { this.engine.setKey(opts.keyTonic); this.engine.reset(collectionAt(opts.keyTonic + 2)); }
     }

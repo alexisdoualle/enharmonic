@@ -56,6 +56,9 @@ export interface TwoPassOptions {
      * diminished seventh). Default `false`; a near-wash on top of the merge, kept for future noisy work.
      */
     honorResolution?: boolean;
+    /** Group notes starting within this many `t` units of an onset's first note into that onset, in both
+     *  passes (the backward pass sees reversed note-offs as its onsets). Default 0 (exact `t`). */
+    onsetTolerance?: number;
 }
 
 /** One note's per-pass reconciliation trace (introspection / visualiser only). */
@@ -107,8 +110,8 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
 
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied. */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null): number[] {
-    const s = new SpellingEngine(TP_PASS_PRESET);
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, onsetTolerance = 0): number[] {
+    const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
     notes.forEach((n, i) => { evs.push({ t: n.tOn, on: true, i }); evs.push({ t: n.tOff, on: false, i }); });
@@ -162,7 +165,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     if (n === 0) return { spellings: [], forward: [], backward: [], agrees: [], firstStable: 0, lastStable: -1 };
 
     const dirsF = resolveDirs(N);
-    const fwd = drivePass(N, dirsF);
+    const fwd = drivePass(N, dirsF, opts.onsetTolerance ?? 0);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
@@ -170,7 +173,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     // Backward look-ahead uses the note's FORWARD resolveDir: processing in reverse, the resolution target
     // is already committed. bNotes[k] = original n-1-k.
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null);
+    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, opts.onsetTolerance ?? 0);
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
 
