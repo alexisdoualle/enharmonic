@@ -647,10 +647,6 @@ function wire() {
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
         else if (ev.key === 'End') { ev.preventDefault(); seek((state.replay?.snapshots.length ?? 1) - 1); }
-        else if (state.mode === 'tp' && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); setSideOverride(1); }
-        else if (state.mode === 'tp' && (ev.key === 'f' || ev.key === 'F')) { ev.preventDefault(); setSideOverride(-1); }
-        else if (state.mode === 'tp' && (ev.key === 'a' || ev.key === 'A')) { ev.preventDefault(); setSideOverride(0); }
-        else if (state.mode === 'tp' && (ev.key === 'x' || ev.key === 'X')) { ev.preventDefault(); state.sideOverrides = []; recompute(); syncUrl(); }
     });
 }
 

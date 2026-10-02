@@ -364,7 +364,7 @@ export class LiveSpeller {
 }
 
 // The same compact two-row piano layout used by the standalone tonnetz app.
-const COMPUTER_KEYS: Record<string, number> = {
+export const COMPUTER_KEYS: Record<string, number> = {
     KeyQ: 60, KeyW: 62, KeyE: 64, KeyR: 65, KeyT: 67, KeyY: 69, KeyU: 71,
     KeyI: 72, KeyO: 74, KeyP: 76, BracketLeft: 77, BracketRight: 79,
     Digit2: 61, Digit3: 63, Digit5: 66, Digit6: 68, Digit7: 70,

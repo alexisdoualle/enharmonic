@@ -5,7 +5,41 @@
  * library in `src/`. It never touches the engine.
  */
 
+import { COMPUTER_KEYS } from './live.js';
+
 interface Page { id: string; nav: string; title: string; body: string; }
+
+/** Keyboard rows as physical keycaps, with each row's stagger in key widths. */
+const KEY_ROWS: { offset: number; keys: [code: string, cap: string][] }[] = [
+    { offset: 0, keys: [['Digit1', '1'], ['Digit2', '2'], ['Digit3', '3'], ['Digit4', '4'], ['Digit5', '5'], ['Digit6', '6'],
+        ['Digit7', '7'], ['Digit8', '8'], ['Digit9', '9'], ['Digit0', '0'], ['Minus', '-'], ['Equal', '=']] },
+    { offset: 0.5, keys: [['KeyQ', 'Q'], ['KeyW', 'W'], ['KeyE', 'E'], ['KeyR', 'R'], ['KeyT', 'T'], ['KeyY', 'Y'],
+        ['KeyU', 'U'], ['KeyI', 'I'], ['KeyO', 'O'], ['KeyP', 'P'], ['BracketLeft', '['], ['BracketRight', ']']] },
+    { offset: 0.75, keys: [['KeyA', 'A'], ['KeyS', 'S'], ['KeyD', 'D'], ['KeyF', 'F'], ['KeyG', 'G'], ['KeyH', 'H'],
+        ['KeyJ', 'J'], ['KeyK', 'K'], ['KeyL', 'L'], ['Semicolon', ';'], ['Quote', "'"]] },
+    { offset: 1.25, keys: [['KeyZ', 'Z'], ['KeyX', 'X'], ['KeyC', 'C'], ['KeyV', 'V'], ['KeyB', 'B'], ['KeyN', 'N'],
+        ['KeyM', 'M'], ['Comma', ','], ['Period', '.'], ['Slash', '/']] },
+];
+const WHITE_NAME = ['C', '', 'D', '', 'E', 'F', '', 'G', '', 'A', '', 'B'];
+const BLACK_NAME = ['', 'C&sharp;<br>D&flat;', '', 'D&sharp;<br>E&flat;', '', '', 'F&sharp;<br>G&flat;', '',
+    'G&sharp;<br>A&flat;', '', 'A&sharp;<br>B&flat;', ''];
+
+/** The computer-keyboard map, drawn from the live input table so it cannot drift from it. A black key
+ *  shows both names: which one is right is the speller's call. */
+function keyboardMap(): string {
+    const rows = KEY_ROWS.map(({ offset, keys }) => {
+        const cells = keys.map(([code, cap]) => {
+            const midi = COMPUTER_KEYS[code];
+            if (midi === undefined) return `<span class="kb-key kb-off" data-code="${code}"><i>${cap}</i></span>`;
+            const pc = midi % 12;
+            const white = WHITE_NAME[pc]!;
+            const name = white ? `${white}${Math.floor(midi / 12) - 1}` : BLACK_NAME[pc]!;
+            return `<span class="kb-key ${white ? 'kb-white' : 'kb-black'}" data-code="${code}"><i>${cap}</i><b>${name}</b></span>`;
+        }).join('');
+        return `<div class="kb-row" style="--kb-offset:${offset}">${cells}</div>`;
+    }).join('');
+    return `<div class="kb-map" aria-label="computer keyboard note map">${rows}</div>`;
+}
 
 const SEEN_KEY = 'enharmonic:help-seen';
 
@@ -116,11 +150,35 @@ onset).</p>
 or end. Drag the scrub bar to scrub.</li>
 <li><b>tempo</b> sets playback speed (centre is 1&times;). <b>sync</b> delays the playhead to match audio
 latency; raise it for Bluetooth headphones.</li>
-<li><b>&#128266;</b> plays each onset through a small synth. <b>&#127929; MIDI</b> connects a keyboard so
-you can feed live notes into the speller.</li>
+<li><b>&#128266;</b> plays each onset through a small synth. <b>&#127929; MIDI</b> connects a MIDI keyboard
+(see <b>Play live</b>).</li>
 <li><b>&#8984;/Ctrl+C</b> copies the current onset (settings, state, and the full scoring) as text to
 paste to an agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
 </ul>`,
+    },
+    {
+        id: 'live', nav: 'Play live', title: 'Play notes yourself',
+        body: `
+<p>The computer keyboard is a small piano. Press a key to play a note into the real-time speller
+(<code>new Speller()</code>). Try it here: the keys below light up.</p>
+${keyboardMap()}
+<ul>
+<li><b>Upper piano</b>: the <b>Q</b> row is the white keys from C4 to G5, the number row above it the black keys.</li>
+<li><b>Lower piano</b>: the <b>Z</b> row is the white keys from C3 to E4, the <b>S D G H J</b> keys the black keys.
+<b>, . /</b> are the same C4, D4, E4 as <b>Q W E</b>.</li>
+<li>Keys go by position, not letter: AZERTY and other layouts use the same keys as drawn.</li>
+<li>Hold keys together for a chord. A key with Shift, Alt, Ctrl or &#8984; held plays nothing, so browser
+shortcuts keep working. Space, the arrows, Home and End stay transport keys.</li>
+</ul>
+
+<p><b>A MIDI keyboard.</b> The <b>&#127929; MIDI</b> button in the transport bar connects every MIDI input.
+The browser asks for permission on that click, never on page load. Once connected the button reads
+<b>&#127929; MIDI &check;</b>, and a device plugged in later is picked up on its own. Notes from a MIDI
+keyboard are not played through the synth: your instrument makes the sound. The button is hidden when the
+browser has no Web MIDI.</p>
+
+<p><b>What reacts.</b> Live notes drive the coiled 2D Tonnetz panel. The staff, roll, spiral and scoring
+panels keep showing the loaded piece.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
@@ -335,4 +393,11 @@ function build(): void {
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape' && isHelpOpen()) { e.preventDefault(); closeHelp(); }
     });
+    // The keyboard map lights the keys being held (live notes still play while the overlay is up).
+    const light = (e: KeyboardEvent, on: boolean) => {
+        if (on && (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)) return;
+        contentEl?.querySelector(`.kb-key[data-code="${e.code}"]`)?.classList.toggle('kb-down', on);
+    };
+    document.addEventListener('keydown', e => light(e, true));
+    document.addEventListener('keyup', e => light(e, false));
 }
