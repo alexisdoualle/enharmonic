@@ -284,22 +284,24 @@ function enterTake(tk: Take) {
 
 /** One keyboard or MIDI event: into the recording while recording, else into free play. */
 function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number) {
-    // Sound first: a key sounds while held, whether or not it is recorded.
-    if (type === 'on' && !liveVoices.has(midi) && sound && soundOn) {
-        audioEnable();
-        liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22));
-    } else if (type === 'off') {
-        const v = liveVoices.get(midi);
-        if (v) { releaseVoice(v); liveVoices.delete(midi); }
-    }
     const tk = rec !== 'off' ? recTake : freeTake;
     if (type === 'on') {
         // Only sounding: the help page's keyboard map, and the countdown before the recording starts.
-        if (tk.held.has(midi) || isHelpOpen() || inCountdown(now)) return;
-        if (shown() !== tk) enterTake(tk);   // playing shows free play, from a piece or from the recording
-        else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
+        const recorded = !tk.held.has(midi) && !isHelpOpen() && !inCountdown(now);
+        // Switch views and stop playback BEFORE the note sounds: both silence everything ringing.
+        if (recorded && shown() !== tk) enterTake(tk);   // playing shows free play, from a piece or the recording
+        else if (recorded && (raf || pending)) stopPlay();
+        if (!liveVoices.has(midi) && sound && soundOn) {   // a key sounds while held, recorded or not
+            audioEnable();
+            liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22));
+        }
+        if (!recorded) return;
         if (rec !== 'off') recNotes++;
-    } else if (!tk.held.has(midi)) return;
+    } else {
+        const v = liveVoices.get(midi);
+        if (v) { releaseVoice(v); liveVoices.delete(midi); }
+        if (!tk.held.has(midi)) return;
+    }
     advanceClock(tk, now);
     const at = insertEvent(tk, { t_ms: Math.round(tk.t), type, midi });
     if (type === 'on') followStep = tk.events.slice(0, at).filter(e => e.type === 'on').length;

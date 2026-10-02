@@ -353,3 +353,8 @@ footer code, footer b { color: var(--ink); }
 #transport button#take-clear { color: #d98a8f; border-color: #6e3a3f; background: color-mix(in srgb, #e06c75 10%, var(--panel)); }
 #transport button#take-clear:hover { color: #f0a0a5; border-color: #b0545b; }
 #transport button#take-clear.armed { color: #fff; border-color: #c25a62; background: #8f3b42; }
+
+/* Help: shortcut table */
+.help-content .help-keys { border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
+.help-content .help-keys td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.help-content .help-keys td:first-child { white-space: nowrap; color: var(--ink); }

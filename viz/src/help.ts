@@ -148,6 +148,8 @@ onset).</p>
 <ul>
 <li><b>Space</b> play / pause. <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
 or end. Drag the scrub bar to scrub.</li>
+<li><b>Enter</b> records, <b>Backspace</b> / <b>Delete</b> removes a note of a live take, <b>&#8984;Z</b>
+undoes (see <b>Record &amp; export</b>).</li>
 <li><b>tempo</b> sets playback speed (centre is 1&times;). <b>sync</b> delays the playhead to match audio
 latency; raise it for Bluetooth headphones.</li>
 <li><b>&#128266;</b> plays each onset through a small synth. <b>&#127929; MIDI</b> connects a MIDI keyboard
@@ -182,6 +184,26 @@ it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on.
 play, from a piece or from the recording. Nothing is graded, so notes take their letter's colour. Keys within
 50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
 spelled in real time, and re-spelled a second after you stop.</p>
+
+<p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
+    },
+    {
+        id: 'record', nav: 'Record & export', title: 'Record, fix and export',
+        body: `
+<p>There are two takes, side by side at the top of the fixture menu:</p>
+<ul>
+<li><b>&#127929; free play</b>: whatever you play without recording, in free time.</li>
+<li><b>&#127929; recording</b>: made with <b>&#9679; record</b>, on a metronome grid.</li>
+</ul>
+
+<table class="help-keys">
+<tr><td><b>Enter</b> or <b>&#9679; record</b></td><td>count in four clicks, then record</td></tr>
+<tr><td><b>Space</b> or <b>&#9632; stop</b></td><td>stop recording (otherwise play / pause)</td></tr>
+<tr><td>click a note or empty roll</td><td>in the recording: move the red line to that bar</td></tr>
+<tr><td><b>Backspace</b> / <b>Delete</b></td><td>remove the note under the playhead</td></tr>
+<tr><td><b>&#8984;Z</b> / Ctrl+Z</td><td>undo the last recording, deletion or clear</td></tr>
+<tr><td><b>clear</b> (two clicks)</td><td>empty the take shown</td></tr>
+</table>
 
 <p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
 beside it, then records against the metronome into <b>&#127929; recording</b>; <b>&#9632; stop</b> or
