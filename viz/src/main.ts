@@ -17,6 +17,7 @@ import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
 import { parseMusicXml, readMxl } from './import/musicxml.js';
 import { Metronome, clicksPerBar, clickMs, barMs, COUNT_IN, type Grid } from './metronome.js';
+import { layoutTake, toMusicXml } from './export/musicxml.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
@@ -226,6 +227,7 @@ function enterLive(fresh: boolean) {
     rawEvents = take; rawExpected = [];
     $('take-clear').hidden = false;
     $('take-export').hidden = false;
+    $('take-export-xml').hidden = false;
 }
 
 /** One keyboard or MIDI event into the take. */
@@ -293,16 +295,41 @@ function addTakeOption() {
     sel.prepend(opt);
 }
 
+/** Save `body` as a download named after the take and the time. */
+function download(body: string, ext: string, type: string) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type }));
+    const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
+    a.download = `live-take-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /** Download the take as a fixture `events.json` (on/off events, ms). */
 function exportTake() {
     if (!take.length) { flash('nothing to export: play something first'); return; }
-    const body = '[\n' + take.map(e => `  ${JSON.stringify({ t_ms: e.t_ms, type: e.type, midi: e.midi })}`).join(',\n') + '\n]\n';
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
-    const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
-    a.download = `live-take-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.events.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    download('[\n' + take.map(e => `  ${JSON.stringify({ t_ms: e.t_ms, type: e.type, midi: e.midi })}`).join(',\n') + '\n]\n',
+        'events.json', 'application/json');
+}
+
+/** Download the take as MusicXML: the shown speller's spellings on the metronome grid (or an estimated
+ *  4/4 for a free-time take), the key signature from the real-time speller's diatonic frame. */
+function exportMusicXml() {
+    if (!take.length) { flash('nothing to export: play something first'); return; }
+    if (rec !== 'off') endRecording(performance.now());
+    clearTimeout(settleTimer);
+    takeSettled = true;   // export the chosen speller's final spellings, not the real-time stand-in
+    recompute();
+    const r = state.replay!;
+    const notes = r.notes.filter(n => n.committed)
+        .map(n => ({ midi: n.midi, onT: n.onT, offT: n.offT, step: n.committed!.step, alter: n.committed!.alter }));
+    const frame = buildReplay('rt', liveEvents(), [], { ...spiralOpts(), onsetTolerance: LIVE_ONSET_TOLERANCE });
+    const keys = frame.snapshots.filter(s => s.frameLofTonic !== undefined).map(s => ({ t: s.t, fifths: s.frameLofTonic! }));
+    const speller = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
+    const input = { notes, grid: takeGrid, keys, title: 'Live take', speller, chordMs: LIVE_ONSET_TOLERANCE };
+    const layout = layoutTake(input);
+    download(toMusicXml(layout, input), 'musicxml', 'application/vnd.recordare.musicxml+xml');
+    flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${takeGrid ? '' : ' (no metronome: 4/4 and the tempo are guesses)'}`);
 }
 
 // RECORDING with the metronome: a 4-click countdown, then bar 1. From a piece it starts a fresh take; on
@@ -351,13 +378,21 @@ function stopRecording() {
     endRecording(performance.now());
 }
 
-/** End the recording at `at` (performance clock); the grid closes on the bar line at or after it, so the
- *  bar being played ends with a rest. */
+/** End the recording at `at` (performance clock). The grid closes on the bar line after the last note
+ *  played (its start, or its release less a 16th), so pressing stop just after the music ends adds no
+ *  empty bar, and the last bar ends with a rest. */
 function endRecording(at: number) {
     advanceClock(at);   // the time up to now was real
     metro.stop();
     if (takeGrid) {
-        const bars = Math.max(0, Math.ceil((takeT - takeGrid.t0) / barMs(takeGrid) - 1e-6));
+        const g = takeGrid, sixteenth = barMs(g) / (g.num * 16 / g.den);
+        let last = -Infinity;
+        for (const e of take) {
+            if (e.t_ms < g.t0 - sixteenth) continue;
+            last = Math.max(last, e.type === 'on' ? e.t_ms : e.t_ms - sixteenth);
+        }
+        for (const _ of takeHeld) last = Math.max(last, takeT - sixteenth);   // still held at the stop
+        const bars = last === -Infinity ? 0 : Math.max(1, Math.ceil((last - g.t0) / barMs(g) + 1e-6));
         takeGrid.t1 = takeGrid.t0 + bars * barMs(takeGrid);
         flash(bars ? `recorded ${bars} bar${bars === 1 ? '' : 's'}` : 'recording cancelled');
         if (!bars) takeGrid = null;
@@ -397,14 +432,22 @@ function effMode(): Mode {
     return state.mode === 'rt' && state.lookAhead ? 'la' : state.mode;
 }
 
+/** The take's events, with keys still held given a provisional release at the take's clock (so they read
+ *  back like a released note). */
+function liveEvents(): RawEvent[] {
+    return [...take, ...[...takeHeld].map(midi => ({ t_ms: Math.round(takeClock()), type: 'off' as const, midi }))];
+}
+
+/** The spiral what-if settings, as buildReplay takes them. */
+function spiralOpts() {
+    return { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame };
+}
+
 function recompute() {
     if (!state.fixtureId) return;
     const live = isLive();
-    // Keys still held get a provisional release at the take's clock, so they read back like a released note.
-    const events = live ? [...take, ...[...takeHeld].map(midi => ({ t_ms: Math.round(takeClock()), type: 'off' as const, midi }))] : rawEvents;
-    state.replay = buildReplay(live ? liveMode() : effMode(), events, rawExpected,
-        { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame,
-          ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
+    state.replay = buildReplay(live ? liveMode() : effMode(), live ? liveEvents() : rawEvents, rawExpected,
+        { ...spiralOpts(), ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
     renderStatus();
@@ -763,6 +806,9 @@ async function importMusicXmlFile(file: File) {
         opt.title = r.name;
         sel.value = IMPORTED_ID;
         await pickFixture(IMPORTED_ID, 0);
+        // A file our own exporter wrote carries the speller's spellings: grading the speller against them
+        // proves nothing until a person has corrected them.
+        if (xml.includes('<software>enharmonic viz</software>')) r.warnings.unshift('these spellings came from the speller itself: grading it against them proves nothing until they are corrected');
         const tail = r.warnings.length ? ` (${r.warnings.join('; ')})` : '';
         flash(`imported ${r.name} · ${r.expected.length} notes${tail}`);
     } catch (e) {
@@ -775,7 +821,7 @@ async function importMusicXmlFile(file: File) {
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
-    $('take-clear').hidden = $('take-export').hidden = id !== LIVE_ID;
+    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = id !== LIVE_ID;
     if (id !== LIVE_ID && rec !== 'off') endRecording(performance.now());
     if (id === LIVE_ID) {   // back to the take: land on its latest note
         enterLive(false); recompute();
@@ -797,6 +843,7 @@ function wire() {
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
     $('take-clear').addEventListener('click', clearTake);
     $('take-export').addEventListener('click', exportTake);
+    $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;

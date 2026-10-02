@@ -183,8 +183,15 @@ no composer spelling to compare to), so notes take their letter's colour. Keys p
 as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is spelled
 in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
 play the take back like a piece. Only <b>&#10226; new take</b> starts an empty one: picking a piece
-leaves the take in the menu, and it survives a reload in this browser. <b>&#10515; export</b> downloads it as a
-fixture <code>events.json</code> (no spellings: those come from a person, never from the speller).</p>
+leaves the take in the menu, and it survives a reload in this browser.</p>
+
+<p><b>Export.</b> <b>&#10515; MusicXML</b> writes the take as a score for MuseScore, Sibelius or Dorico:
+the shown speller's spellings, quantised to the metronome grid (16ths at the finest, with a pull toward the
+beat so a slightly early chord lands on it), on a grand staff split at middle C, with the key signature
+from the real-time speller's frame. With a recording, only its bars are written. A take without the
+metronome gets 4/4 and a guessed tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>.
+Neither carries a checked spelling: importing the MusicXML back to grade the speller only means something
+once a person has corrected it.</p>
 
 <p><b>Recording with a metronome.</b> <b>&#9679; record</b> in the transport bar counts down four
 clicks at the tempo and time signature next to it, then records from bar 1 against that grid (the piano roll
