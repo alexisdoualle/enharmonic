@@ -364,7 +364,8 @@ function pairOffs(evs: readonly RawEvent[]): Map<number, number> {
 
 function startRecording() {
     audioEnable();
-    if (!isLive()) { clearTimeout(settleTimer); takeSettled = true; enterLive(true); }
+    // From a piece: a fresh, empty take (the piece's replay and playhead must not leak into it).
+    if (!isLive()) { clearTimeout(settleTimer); takeSettled = true; enterLive(true); state.step = 0; recompute(); }
     if (liveFrame) { cancelAnimationFrame(liveFrame); liveFrame = 0; recompute(); }   // the replay must include every note
     const now = performance.now();
     const lead = 120;   // ms before the first countdown click, so it is never scheduled late
