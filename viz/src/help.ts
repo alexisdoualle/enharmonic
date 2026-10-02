@@ -194,11 +194,16 @@ Neither carries a checked spelling: importing the MusicXML back to grade the spe
 once a person has corrected it.</p>
 
 <p><b>Recording with a metronome.</b> <b>&#9679; record</b> in the transport bar counts down four
-clicks at the tempo and time signature next to it, then records from bar 1 against that grid (the piano roll
-draws it). From a piece it starts a fresh take; on the take it records onto it. Notes during the countdown
-sound but are not recorded. While recording a pause stays a pause, so the take keeps its real rhythm.
-<b>&#9632; stop</b> or <b>Space</b> ends the recording at once; the bar you were in is filled with a rest.
-Free play still adds to the take afterwards.</p>`,
+clicks at the tempo and time signature next to it, then records against that grid (the piano roll draws it).
+From a piece it starts a fresh take at bar 1. Notes during the countdown sound but are not recorded. While
+recording a pause stays a pause, so the take keeps its real rhythm. <b>&#9632; stop</b> or <b>Space</b> ends
+the recording at once; the last bar is filled with a rest. Notes played outside the recording are washed out:
+export leaves them out.</p>
+
+<p><b>Re-recording.</b> On a take that has a recording, move the playhead and press <b>&#9679; record</b>:
+after the countdown it records over the playhead note's bar and replaces everything from there to the end
+(on the last note, it carries on after the recording). Stopping during the countdown leaves the take as it
+was. <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

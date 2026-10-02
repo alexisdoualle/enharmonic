@@ -12,6 +12,8 @@
  */
 import { Renderer, Stave, StaveNote, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
+import type { Grid } from '../metronome.js';
+import { outsideRecording } from './pianoroll.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // measures shown
@@ -98,8 +100,8 @@ const LIVE_GROUP_MS = 50; // notes this close to a chord's first note stack with
 
 /** A live take has no meter and no composer spelling: engrave the speller's own spellings in onset order,
  *  chords stacked, as plain quarter notes on one stave with no barlines. Accidentals carry across the
- *  whole stave, as they would within one long bar. */
-export function renderLiveStaff(replay: Replay, step: number): void {
+ *  whole stave, as they would within one long bar. Notes outside the take's recording are washed out. */
+export function renderLiveStaff(replay: Replay, step: number, grid: Grid | null = null): void {
     const host = document.getElementById('staff')!;
     builtForReplay = null;   // a fixture shown next rebuilds from scratch
     if (!replay.notes.length) { host.innerHTML = emptyMsg('play a note'); return; }
@@ -128,7 +130,8 @@ export function renderLiveStaff(replay: Replay, step: number): void {
             });
             const sn = new StaveNote({ clef, keys, duration: 'q' });
             sorted.forEach((n, i) => {
-                const color = g === curGroup || sounding.has(n.onIndex) ? '#1f6feb' : '#222';
+                const color = g === curGroup || sounding.has(n.onIndex) ? '#1f6feb'
+                    : grid && outsideRecording(n.onT, grid) ? '#b4b8bf' : '#222';   // washed out: not exported
                 sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });
             });
             return sn;

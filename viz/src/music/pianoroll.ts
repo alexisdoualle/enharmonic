@@ -49,12 +49,18 @@ interface Layout {
     x: number; w: number; y: number;
     onIndex: number; onT: number; offT: number;
     tier: Tier; midi: number; committedLabel: string; expectedLabel: string; fill: string;
+    outside: boolean;   // a live take's note outside its recording (washed out: export leaves it out)
 }
 
 function svgEl(name: string, attrs: Record<string, string | number>): SVGElement {
     const n = document.createElementNS(SVGNS, name);
     for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
     return n as SVGElement;
+}
+
+/** Is a note (onset `t`) outside the take's recording? Export leaves such notes out. */
+export function outsideRecording(t: number, g: Grid): boolean {
+    return t < g.t0 - clickMs(g) / 4 || (g.t1 !== undefined && t >= g.t1);
 }
 
 let onSeek: (step: number) => void = () => {};
@@ -145,6 +151,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
             // Ungraded notes (a live take) take their letter's colour; graded ones their tier's.
             fill: !note.expected && note.committed ? LETTER_COLOR[note.committed.step]! : TIER_COLOR[note.tier],
+            outside: !!grid && outsideRecording(note.onT, grid),
         };
     }
     rects = new Array(replay.notes.length).fill(null);
@@ -217,6 +224,7 @@ function makeRect(oi: number): void {
     rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
     rect.setAttribute('fill', L.fill);
+    if (L.outside) rect.setAttribute('fill-opacity', '0.28');
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
     title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);

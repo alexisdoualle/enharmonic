@@ -332,49 +332,116 @@ function exportMusicXml() {
     flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${takeGrid ? '' : ' (no metronome: 4/4 and the tempo are guesses)'}`);
 }
 
-// RECORDING with the metronome: a 4-click countdown, then bar 1. From a piece it starts a fresh take; on
-// the take it stamps a grid on it (nothing is discarded). While it runs the take's clock is real time, so a
-// pause stays a pause. Stop ends it at once; the grid closes on the bar line after (its `t1`).
+// RECORDING with the metronome: a 4-click countdown, then a downbeat. From a piece it starts a fresh take
+// (bar 1). On a take that has a recording it records FROM THE PLAYHEAD on the same grid: the take is cut at
+// the start of the playhead note's bar (at the recording's end when the playhead is on the last note) and
+// everything from there is replaced. On a take without one it stamps a grid after the take's end. While it
+// runs the take's clock is real time, so a pause stays a pause. Stop ends it at once; the grid closes on
+// the bar line after the last note (its `t1`).
+let recFrom = 0;                                       // take time where this recording starts (a bar line)
+let recBackup: { take: RawEvent[]; grid: Grid | null } | null = null;   // restored if the countdown is cancelled
+
+/** For each note-on in `evs`, the index of its note-off (paired first-in first-out per pitch, as the replay does). */
+function pairOffs(evs: readonly RawEvent[]): Map<number, number> {
+    const open = new Map<number, number[]>(), pair = new Map<number, number>();
+    evs.forEach((e, i) => {
+        if (e.type === 'on') (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(i);
+        else if (e.type === 'off') { const q = open.get(e.midi!); if (q?.length) pair.set(q.shift()!, i); }
+    });
+    return pair;
+}
+
+/** The take cut at `t`: what starts before stays, a note still sounding at `t` ends there. */
+function cutTake(t: number): RawEvent[] {
+    const pair = pairOffs(take), keep: RawEvent[] = [], ends: RawEvent[] = [];
+    take.forEach((e, i) => {
+        if (e.t_ms >= t) return;
+        if (e.type === 'on') {
+            const off = pair.get(i);
+            if (off !== undefined && take[off]!.t_ms >= t) ends.push({ t_ms: Math.round(t), type: 'off', midi: e.midi });
+        }
+        keep.push(e);
+    });
+    return [...keep, ...ends];
+}
+
 function startRecording() {
     audioEnable();
     if (!isLive()) { clearTimeout(settleTimer); takeSettled = true; enterLive(true); }
-    const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
-    const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
     const now = performance.now();
-    advanceClock(now);
     const lead = 120;   // ms before the first countdown click, so it is never scheduled late
-    const grid: Grid = { bpm, num, den, t0: 0 };
-    grid.t0 = Math.round(takeT + lead + COUNT_IN * clickMs(grid));
-    takeGrid = grid;
+    const notes = state.replay?.notes ?? [];
+    let grid: Grid;
+    if (takeGrid && notes.length) {
+        // Record from the playhead on the existing grid.
+        grid = takeGrid;
+        $<HTMLInputElement>('metro-bpm').value = String(grid.bpm);
+        $<HTMLSelectElement>('metro-meter').value = `${grid.num}/${grid.den}`;
+        const bar = barMs(grid), step = Math.min(state.step, notes.length - 1);
+        const onT = notes[step]!.onT;
+        recFrom = step === notes.length - 1 && grid.t1 !== undefined && onT < grid.t1
+            ? grid.t1
+            : grid.t0 + Math.max(0, Math.floor((onT - grid.t0 + clickMs(grid) / 4) / bar)) * bar;
+        recBackup = { take, grid: { ...grid } };
+        take = cutTake(recFrom - clickMs(grid) / 4);   // a downbeat played a little early belongs to the bar
+        rawEvents = take;
+        delete grid.t1;
+        takeT = recFrom - lead - COUNT_IN * clickMs(grid);
+        takeWall = now;
+        takeAnchored = true;
+    } else {
+        const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
+        const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
+        advanceClock(now);
+        grid = { bpm, num, den, t0: 0 };
+        grid.t0 = recFrom = Math.round(takeT + lead + COUNT_IN * clickMs(grid));
+        recBackup = { take, grid: null };
+        takeGrid = grid;
+    }
     const perBar = clicksPerBar(grid);
+    const firstBar = Math.round((recFrom - grid.t0) / barMs(grid));   // bars before this recording starts
     rec = 'countdown';
-    metro.start(bpm, perBar, now + lead, k => {
+    metro.start(grid.bpm, perBar, now + lead, k => {
         const el = $('metro-beat');
         if (k < COUNT_IN) el.textContent = String(COUNT_IN - k);
         else {
-            if (rec === 'countdown') rec = 'recording';
+            if (rec === 'countdown') { rec = 'recording'; recBackup = null; }
             const b = k - COUNT_IN;
-            el.textContent = `● ${Math.floor(b / perBar) + 1}.${(b % perBar) + 1}`;
+            el.textContent = `● ${firstBar + Math.floor(b / perBar) + 1}.${(b % perBar) + 1}`;
         }
         el.classList.toggle('downbeat', k < COUNT_IN ? k === 0 : (k - COUNT_IN) % perBar === 0);
         el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
         syncRecUi();
     });
     syncRecUi();
-    saveTake();
     recompute();
+    state.step = Math.max(0, (state.replay?.snapshots.length ?? 1) - 1);
+    render();
 }
 
 /** Is `now` still in the countdown? Decided by time, not by the click display: a downbeat played a little
- *  early (up to a 16th) belongs to bar 1. */
+ *  early (up to a 16th) belongs to the recording. */
 function inCountdown(now: number): boolean {
-    return rec !== 'off' && !!takeGrid && takeClock(now) < takeGrid.t0 - clickMs(takeGrid) / 4;
+    return rec !== 'off' && !!takeGrid && takeClock(now) < recFrom - clickMs(takeGrid) / 4;
 }
 
 /** Stop at once. During the countdown nothing was recorded, so it cancels. */
 function stopRecording() {
     if (rec === 'off') return;
-    if (inCountdown(performance.now())) { takeGrid = null; endRecording(performance.now()); flash('recording cancelled'); return; }
+    if (inCountdown(performance.now()) && recBackup) {   // nothing recorded yet: put the take back as it was
+        metro.stop();
+        take = rawEvents = recBackup.take;
+        takeGrid = recBackup.grid;
+        recBackup = null;
+        rec = 'off';
+        takeAnchored = false;
+        takeT = take.at(-1)?.t_ms ?? 0;
+        $('metro-beat').textContent = '';
+        syncRecUi();
+        recompute();
+        flash('recording cancelled');
+        return;
+    }
     endRecording(performance.now());
 }
 
@@ -410,6 +477,23 @@ function syncRecUi() {
     btn.classList.toggle('recording', rec !== 'off');
     $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off';
     $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off';
+}
+
+/** Remove the note at `step` from the take (Backspace / Delete on the live take). */
+function deleteNote(step: number) {
+    const ons = take.map((e, i) => e.type === 'on' ? i : -1).filter(i => i >= 0);
+    const on = ons[step];
+    if (on === undefined) return;
+    const off = pairOffs(take).get(on);
+    if (off === undefined) { flash('release the key first'); return; }
+    const spelled = state.replay?.notes[step]?.committed;
+    take.splice(off, 1);
+    take.splice(on, 1);
+    recompute();
+    state.step = Math.max(0, Math.min(step, (state.replay?.snapshots.length ?? 1) - 1));
+    render();
+    saveTake();
+    flash(`deleted ${spelled ? label(spelled) : 'note'}`);
 }
 
 /** Throw the take away and start an empty one. */
@@ -524,7 +608,7 @@ function render() {
     // subscription in the boot block), so whichever view is on tracks both playback and live input.
     liveTonnetz?.renderPlaybackSnapshot(snap);
     if (state.replay) {
-        if (isLive()) renderLiveStaff(state.replay, state.step);
+        if (isLive()) renderLiveStaff(state.replay, state.step, takeGrid);
         else renderStaff(state.replay, state.step);
         renderPianoRoll(state.replay, state.step, state.showKeyLanes, isLive() ? takeGrid : null);
     }
@@ -949,6 +1033,7 @@ function wire() {
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
         if (ev.key === ' ') { ev.preventDefault(); if (rec !== 'off') stopRecording(); else togglePlay(); return; }
+        if ((ev.key === 'Backspace' || ev.key === 'Delete') && isLive() && rec === 'off') { ev.preventDefault(); deleteNote(state.step); return; }
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
