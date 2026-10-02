@@ -182,7 +182,7 @@ staff, roll, spiral, scoring and Tonnetz, on the same engine the pieces run on. 
 no composer spelling to compare to), so notes take their letter's colour. Keys pressed within 50 ms count
 as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is spelled
 in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
-play the take back like a piece. Only <b>&#10226; new take</b> starts an empty one: picking a piece
+play the take back like a piece. Only <b>clear</b>, next to <b>&#9679; record</b>, empties it: picking a piece
 leaves the take in the menu, and it survives a reload in this browser.</p>
 
 <p><b>Export.</b> <b>&#10515; MusicXML</b> writes the take as a score for MuseScore, Sibelius or Dorico:

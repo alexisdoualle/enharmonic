@@ -243,7 +243,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     if (type === 'on') {
         // The help page's keyboard map only lights and sounds; so does the countdown before bar 1.
         if (takeHeld.has(midi) || isHelpOpen() || inCountdown(now)) return;
-        if (!isLive()) enterLive(false);   // back to the take, adding to it (only ⟲ new take starts over)
+        if (!isLive()) enterLive(false);   // back to the take, adding to it (only clear empties it)
         else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
     } else if (!takeHeld.has(midi)) return;
     advanceClock(now);
