@@ -77,6 +77,31 @@ suite('Speller smoke', () => {
     });
 });
 
+suite('onset tolerance', () => {
+    // A performed chord: the k-th distinct pitch of each onset arrives 7k ms late (a unison keeps its
+    // pitch's time, so it stays one onset).
+    const spread = (events: ReturnType<typeof loadEvents>) => {
+        let t0 = NaN, k = 0;
+        const at = new Map<number, number>();
+        return events.map(e => {
+            if (e.type !== 'on') return e;
+            if (e.t !== t0) { t0 = e.t; k = 0; at.clear(); }
+            if (!at.has(e.midi)) at.set(e.midi, e.t + 7 * k++);
+            return { ...e, t: at.get(e.midi)! };
+        });
+    };
+
+    for (const id of FIXTURES) {
+        test(`${id}: spread chords with onsetTolerance spell as exact-t chords`, () => {
+            const ev = loadEvents(id);
+            const exact = drive(new Speller(), ev);
+            const spreadOut = drive(new Speller({ onsetTolerance: 50 }), spread(ev));
+            const diff = exact.findIndex((t, i) => t !== spreadOut[i]);
+            assert(diff < 0, `${id}: onset ${diff}: ${exact[diff]} vs ${spreadOut[diff]}`);
+        });
+    }
+});
+
 suite('curated fixtures', () => {
     for (const id of FIXTURES) {
         test(`${id}: real-time commits one spelling per onset`, () => {
