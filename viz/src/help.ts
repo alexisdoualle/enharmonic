@@ -184,7 +184,11 @@ as one chord. Look-ahead and two-pass need the notes that come next, so while yo
 in real time, and it is re-spelled in the chosen mode a second after you stop. When you stop, scrub and
 play the take back like a piece. Only <b>&#10226; new take</b> starts an empty one: picking a piece
 leaves the take in the menu, and it survives a reload in this browser. <b>&#10515; export</b> downloads it as a
-fixture <code>events.json</code> (no spellings: those come from a person, never from the speller).</p>`,
+fixture <code>events.json</code> (no spellings: those come from a person, never from the speller).</p>
+
+<p><b>Metronome.</b> <b>&#9833; metronome</b> in the transport bar clicks at the tempo and time signature
+next to it, after one bar of count-in, and stamps that grid on the take (the piano roll draws it). While it
+runs a pause stays a pause, so the take keeps its real rhythm. Stopping it keeps the take.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',

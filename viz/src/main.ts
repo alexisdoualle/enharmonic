@@ -16,6 +16,7 @@ import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { label } from './format.js';
 import { parseMusicXml, readMxl } from './import/musicxml.js';
+import { Metronome, clicksPerBar, barMs, type Grid } from './metronome.js';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
@@ -175,7 +176,10 @@ const LIVE_SETTLE = 1000;          // ms after the last release before look-ahea
 let take: RawEvent[] = [];
 const takeHeld = new Set<number>();
 let takeT = 0;                     // the take's clock at its last event
-let takeWall = 0;                  // the input timeStamp of its last event
+let takeWall = 0;                  // the input timeStamp (performance clock) matching takeT
+let takeAnchored = false;          // takeWall is valid (false for an empty or just-restored take)
+let takeGrid: Grid | null = null;  // the metronome grid, once a metronome has run in this take
+const metro = new Metronome();
 let takeSettled = true;            // false while playing: look-ahead and two-pass wait for the pause
 let settleTimer = 0;
 let liveFrame = 0;                 // one rebuild per animation frame, however many notes arrived
@@ -183,9 +187,21 @@ let holdTimer = 0;                 // while keys are held, the take refreshes so
 const liveVoices = new Map<number, Voice>();   // held computer-keyboard notes, released on key up
 const LIVE_HOLD_SEC = 30;          // a held synth note sustains up to this long
 
-/** The take's clock now: a held note is sounding, so its time is not a silence and is never capped. */
-function takeClock(): number {
-    return takeHeld.size ? takeT + (performance.now() - takeWall) : takeT;
+/** Time is real while something is sounding or the metronome runs; only a free silence is shortened. */
+const clockIsReal = () => takeHeld.size > 0 || metro.running;
+
+/** The take's clock now (provisional: for held notes and the metronome start). */
+function takeClock(now = performance.now()): number {
+    if (!takeAnchored) return take.length ? takeT + LIVE_GAP_CAP : 0;
+    const gap = Math.max(0, now - takeWall);
+    return takeT + (clockIsReal() ? gap : Math.min(gap, LIVE_GAP_CAP));
+}
+
+/** Move the take's clock to `now` (an input timeStamp). */
+function advanceClock(now: number) {
+    takeT = takeClock(now);
+    takeWall = now;
+    takeAnchored = true;
 }
 
 const isLive = () => state.fixtureId === LIVE_ID;
@@ -200,7 +216,7 @@ function liveMode(): Mode {
 /** Switch to the live take (creating its menu entry); `fresh` empties it first. */
 function enterLive(fresh: boolean) {
     stopPlay();
-    if (fresh) { take = []; takeHeld.clear(); takeT = 0; }
+    if (fresh) { take = []; takeHeld.clear(); takeT = 0; takeAnchored = false; takeGrid = null; }
     addTakeOption();
     $<HTMLSelectElement>('fixture').value = LIVE_ID;
     state.fixtureId = LIVE_ID;
@@ -225,10 +241,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
         if (!isLive()) enterLive(false);   // back to the take, adding to it (only ⟲ new take starts over)
         else if (raf || pending) stopPlay();   // playing the take back: stop it (held keys keep ringing)
     } else if (!takeHeld.has(midi)) return;
-    // Only a silence (nothing held) is capped; time under a held key is sounding.
-    const gap = now - takeWall;
-    takeT = take.length ? takeT + (takeHeld.size ? gap : Math.min(gap, LIVE_GAP_CAP)) : 0;
-    takeWall = now;
+    advanceClock(now);
     take.push({ t_ms: Math.round(takeT), type, midi });
     if (type === 'on') takeHeld.add(midi); else takeHeld.delete(midi);
     takeSettled = false;
@@ -251,12 +264,19 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
 // The take survives a reload in this browser (a convenience; it is never uploaded).
 const TAKE_KEY = 'viz.liveTake';
 function saveTake() {
-    try { take.length ? localStorage.setItem(TAKE_KEY, JSON.stringify(take)) : localStorage.removeItem(TAKE_KEY); } catch { /* storage blocked */ }
+    try {
+        if (take.length || takeGrid) localStorage.setItem(TAKE_KEY, JSON.stringify({ events: take, grid: takeGrid }));
+        else localStorage.removeItem(TAKE_KEY);
+    } catch { /* storage blocked */ }
 }
 /** Restore a saved take into the menu without switching to it. */
 function restoreTake() {
     let saved: RawEvent[] = [];
-    try { saved = JSON.parse(localStorage.getItem(TAKE_KEY) ?? '[]'); } catch { return; }
+    try {
+        const raw = JSON.parse(localStorage.getItem(TAKE_KEY) ?? '[]');
+        saved = Array.isArray(raw) ? raw : (raw.events ?? []);   // an array is the pre-metronome format
+        takeGrid = Array.isArray(raw) ? null : (raw.grid ?? null);
+    } catch { return; }
     if (!Array.isArray(saved) || !saved.length) return;
     take = saved.filter(e => (e.type === 'on' || e.type === 'off') && typeof e.midi === 'number' && typeof e.t_ms === 'number');
     takeT = take.at(-1)?.t_ms ?? 0;
@@ -282,8 +302,48 @@ function exportTake() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// METRONOME: starting it stamps a grid on the current take (nothing is discarded). Bar 1 begins after a
+// one-bar count-in; while it runs the take's clock is real time, so a pause stays a pause.
+function startMetronome() {
+    audioEnable();
+    if (!isLive()) enterLive(false);
+    const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
+    const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
+    const now = performance.now();
+    advanceClock(now);
+    const lead = 120;   // ms before the first count-in click, so it is never scheduled late
+    takeGrid = { bpm, num, den, t0: 0 };
+    takeGrid.t0 = Math.round(takeT + lead + barMs(takeGrid));
+    const perBar = clicksPerBar(takeGrid);
+    metro.start(bpm, perBar, now + lead, k => {
+        const el = $('metro-beat');
+        el.textContent = k < perBar ? `count-in ${k + 1}` : `${Math.floor(k / perBar)}.${(k % perBar) + 1}`;
+        el.classList.toggle('downbeat', k % perBar === 0);
+        el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+    });
+    syncMetroUi();
+    saveTake();
+    recompute();
+}
+
+function stopMetronome() {
+    if (!metro.running) return;
+    advanceClock(performance.now());   // the time up to now was real
+    metro.stop();
+    $('metro-beat').textContent = '';
+    syncMetroUi();
+}
+
+function syncMetroUi() {
+    const on = metro.running;
+    $('metro-toggle').textContent = on ? '■ metronome' : '♩ metronome';
+    $<HTMLInputElement>('metro-bpm').disabled = on;
+    $<HTMLSelectElement>('metro-meter').disabled = on;
+}
+
 /** Throw the take away and start an empty one. */
 function clearTake() {
+    stopMetronome();
     clearTimeout(settleTimer);
     clearInterval(holdTimer);
     for (const v of liveVoices.values()) releaseVoice(v);
@@ -387,7 +447,7 @@ function render() {
     if (state.replay) {
         if (isLive()) renderLiveStaff(state.replay, state.step);
         else renderStaff(state.replay, state.step);
-        renderPianoRoll(state.replay, state.step, state.showKeyLanes);
+        renderPianoRoll(state.replay, state.step, state.showKeyLanes, isLive() ? takeGrid : null);
     }
     renderStrip();
     $('scrub').setAttribute('max', String(Math.max(0, (state.replay?.snapshots.length ?? 1) - 1)));
@@ -680,6 +740,7 @@ async function importMusicXmlFile(file: File) {
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
     $('take-clear').hidden = $('take-export').hidden = id !== LIVE_ID;
+    if (id !== LIVE_ID) stopMetronome();
     if (id === LIVE_ID) {   // back to the take: land on its latest note
         enterLive(false); recompute();
         state.step = (state.replay?.snapshots.length ?? 1) - 1;
@@ -700,6 +761,7 @@ function wire() {
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes record into the live take
     $('take-clear').addEventListener('click', clearTake);
     $('take-export').addEventListener('click', exportTake);
+    $('metro-toggle').addEventListener('click', () => metro.running ? stopMetronome() : startMetronome());
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and

@@ -14,6 +14,7 @@
  * so there is exactly one key lane.
  */
 import type { Replay, ReplayNote, Tier } from '../replay.js';
+import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
 
@@ -82,17 +83,18 @@ let follow = true;
 let expectedScrollLeft = -1;
 
 let builtWithKeyLanes = false;
+let builtGrid: Grid | null = null;
 let builtMobile = false;
 // Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
 const isMobile = () => window.matchMedia('(max-width: 720px)').matches;
-export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false): void {
-    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile) {
-        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile();
+export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null): void {
+    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid) {
+        build(replay, showKeyLanes, grid); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile(); builtGrid = grid;
     }
     updatePlayhead(replay, step);
 }
 
-function build(replay: Replay, showKeyLanes: boolean): void {
+function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
     rects = []; rendered = new Set(); prevActive = [];
@@ -114,6 +116,16 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     svg.setAttribute('height', String(height));
     svg.style.display = 'block';
 
+    // A live take's metronome grid: one line per click, brighter on each bar (the count-in bar included).
+    if (grid) {
+        const per = clicksPerBar(grid), ms = clickMs(grid);
+        for (let k = -per; grid.t0 + k * ms <= replay.durationMs + ms; k++) {
+            const x = PAD + (grid.t0 + k * ms) * pxPerMs;
+            if (x < 0) continue;
+            const bar = ((k % per) + per) % per === 0;
+            svg.appendChild(svgEl('line', { x1: x, x2: x, y1: PAD, y2: PAD + noteH, stroke: bar ? '#3a4352' : '#262c36', 'stroke-width': 1 }));
+        }
+    }
     // faint row guides at octave Cs
     for (let m = lo; m <= hi; m++) {
         if (m % 12 !== 0) continue;

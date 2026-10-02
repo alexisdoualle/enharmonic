@@ -196,3 +196,28 @@ export function playChord(midis: number[], durSec = 0.9): void {
     const per = 0.28 / Math.sqrt(Math.max(1, midis.length));
     for (const m of midis) playMidi(m, durSec, per);
 }
+
+/** The audio-clock time at which a sound must be scheduled to REACH THE SPEAKERS at `perfMs` (the
+ *  performance clock): getOutputTimestamp pairs the sample now being heard with its performance time,
+ *  so output latency is folded in. Without it, falls back to the reported latency. */
+export function ctxTimeAt(perfMs: number): number {
+    const c = ensure();
+    const ts = c.getOutputTimestamp?.();
+    if (ts && ts.performanceTime && ts.contextTime != null) return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
+    return c.currentTime + (perfMs - performance.now()) / 1000 - (c.outputLatency || c.baseLatency || 0);
+}
+
+/** A short metronome click at audio-clock time `when`; the downbeat is higher and louder. */
+export function playClick(when: number, accent: boolean): void {
+    const c = ensure();
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'square';
+    o.frequency.value = accent ? 1760 : 1320;
+    const peak = accent ? 0.16 : 0.09;
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(peak, when + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0008, when + 0.035);
+    g.gain.linearRampToValueAtTime(0, when + 0.04);
+    o.connect(g).connect(master!);
+    o.start(when); o.stop(when + 0.05);
+}
