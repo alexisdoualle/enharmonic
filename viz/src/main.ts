@@ -603,6 +603,11 @@ function deleteNote(step: number) {
     pushUndo(tk);
     tk.events.splice(off, 1);
     tk.events.splice(on, 1);
+    if (tk === freeTake) {   // free play carries on from the last note still there, not from a deleted one
+        tk.t = Math.max(0, ...tk.events.map(e => e.t_ms));
+        tk.wall = performance.now();
+        tk.anchored = true;
+    }
     recompute();
     state.step = Math.max(0, Math.min(step, (state.replay?.snapshots.length ?? 1) - 1));
     render();
