@@ -146,7 +146,7 @@ side, at a modulation, not the intervals.</p>`,
 <p>The transport bar drives the playhead. It steps by <b>onset</b> (all notes struck together are one
 onset).</p>
 <ul>
-<li><b>Space</b> play / pause. <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
+<li><b>Space</b> play / pause (it stops a recording, or free play's write head, first). <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
 or end. Drag the scrub bar to scrub.</li>
 <li><b>Enter</b> records, <b>Backspace</b> / <b>Delete</b> removes a note of a live take, <b>&#8984;Z</b>
 undoes (see <b>Record &amp; export</b>).</li>
@@ -185,7 +185,8 @@ play, from a piece or from the recording. Nothing is graded, so notes take their
 50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
 spelled in real time, and re-spelled a second after you stop. A grey line on the roll is the write head:
 where the next note will land. It runs on after your last note and stops two seconds later, so a long pause
-never leaves a long gap.</p>
+never leaves a long gap. <b>Space</b> while it moves stops it there, so the next note follows right
+away.</p>
 
 <p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
     },
@@ -200,7 +201,7 @@ never leaves a long gap.</p>
 
 <table class="help-keys">
 <tr><td><b>Enter</b> or <b>&#9679; record</b></td><td>count in four clicks, then record</td></tr>
-<tr><td><b>Space</b> or <b>&#9632; stop</b></td><td>stop recording (otherwise play / pause)</td></tr>
+<tr><td><b>Space</b></td><td>stops what is moving: a recording, playback, free play's write head; otherwise plays</td></tr>
 <tr><td>click a note or empty roll</td><td>in the recording: move the red line to that bar</td></tr>
 <tr><td><b>Backspace</b> / <b>Delete</b></td><td>remove the note under the playhead</td></tr>
 <tr><td><b>&#8984;Z</b> / Ctrl+Z</td><td>undo the last recording, deletion or clear</td></tr>

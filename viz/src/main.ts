@@ -181,10 +181,11 @@ interface Take {
     grid: Grid | null;                       // the recording's grid (always null for free play)
     held: Set<number>;                       // keys down, recorded but not yet released
     t: number; wall: number; anchored: boolean;   // the take's clock: time at the last event, its input timeStamp
+    parked: boolean;                         // free play: Space stopped the write head; the next note lands at t
     recHead: number;                         // the recording: where ● record starts (a bar line), the red line
 }
 const newTake = (id: string, name: string, key: string): Take =>
-    ({ id, name, key, events: [], grid: null, held: new Set(), t: 0, wall: 0, anchored: false, recHead: 0 });
+    ({ id, name, key, events: [], grid: null, held: new Set(), t: 0, wall: 0, anchored: false, parked: false, recHead: 0 });
 const freeTake = newTake('__free__', '🎹 free play', 'viz.liveTake');
 const recTake = newTake('__rec__', '🎹 recording', 'viz.recTake');
 const TAKES = [freeTake, recTake];
@@ -229,6 +230,7 @@ const clockIsReal = (tk: Take) => tk.held.size > 0 || (tk === recTake && metro.r
 
 /** A take's clock now (provisional: for held notes and the time line). */
 function takeClock(tk: Take, now = performance.now()): number {
+    if (tk.parked) return tk.t;
     if (!tk.anchored) return tk.events.length ? tk.t + LIVE_GAP_CAP : 0;
     const gap = Math.max(0, now - tk.wall);
     return tk.t + (clockIsReal(tk) ? gap : Math.min(gap, LIVE_GAP_CAP));
@@ -239,6 +241,22 @@ function advanceClock(tk: Take, now: number) {
     tk.t = takeClock(tk, now);
     tk.wall = now;
     tk.anchored = true;
+    tk.parked = false;
+}
+
+/** Is free play's write head still moving (shown, after a note, within the 2 s cap)? */
+function writeHeadMoving(now = performance.now()): boolean {
+    const tk = freeTake;
+    return shown() === tk && tk.events.length > 0 && !tk.parked && tk.anchored && !tk.held.size && now - tk.wall < LIVE_GAP_CAP;
+}
+
+/** Stop free play's write head where it is: the next note lands right there. */
+function parkWriteHead() {
+    const now = performance.now();
+    freeTake.t = takeClock(freeTake, now);
+    freeTake.wall = now;
+    freeTake.parked = true;
+    syncTimeLine();
 }
 
 /** A take's events, with keys still held given a provisional release at its clock (so they read back
@@ -268,7 +286,7 @@ function liveMode(): Mode {
 }
 
 function resetTake(tk: Take) {
-    tk.events = []; tk.grid = null; tk.held.clear(); tk.t = 0; tk.anchored = false; tk.recHead = 0;
+    tk.events = []; tk.grid = null; tk.held.clear(); tk.t = 0; tk.anchored = false; tk.parked = false; tk.recHead = 0;
 }
 
 /** Show a take (creating its menu entry). */
@@ -414,7 +432,7 @@ function pushUndo(tk: Take) {
 /** Put a take back as it was before its last change, and show it. */
 function restoreSnapshot(snap: { tk: Take; events: RawEvent[]; grid: Grid | null }) {
     const tk = snap.tk;
-    tk.events = snap.events; tk.grid = snap.grid; tk.held.clear(); tk.anchored = false;
+    tk.events = snap.events; tk.grid = snap.grid; tk.held.clear(); tk.anchored = false; tk.parked = false;
     tk.t = tk.events.at(-1)?.t_ms ?? 0;
     tk.recHead = tk.grid ? (tk.grid.t1 ?? tk.grid.t0) : 0;
     saveTake(tk);
@@ -544,7 +562,7 @@ function runWriteHead() {
         writeHeadFrame = 0;
         if (shown() !== freeTake) return;
         syncTimeLine();
-        const parked = !freeTake.held.size && (!freeTake.anchored || performance.now() - freeTake.wall >= LIVE_GAP_CAP);
+        const parked = !freeTake.held.size && (freeTake.parked || !freeTake.anchored || performance.now() - freeTake.wall >= LIVE_GAP_CAP);
         if (!parked) writeHeadFrame = requestAnimationFrame(tick);
     };
     writeHeadFrame = requestAnimationFrame(tick);
@@ -627,6 +645,7 @@ function deleteNote(step: number) {
         tk.t = Math.max(0, ...tk.events.map(e => e.t_ms));
         tk.wall = performance.now();
         tk.anchored = true;
+        tk.parked = false;
         runWriteHead();
     }
     recompute();
@@ -1180,7 +1199,15 @@ function wire() {
         if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && (ev.key === 'z' || ev.key === 'Z') && isLive() && !isTextField(target)) { ev.preventDefault(); undo(); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
-        if (ev.key === ' ') { ev.preventDefault(); if (rec !== 'off') stopRecording(); else togglePlay(); return; }
+        // Space stops whatever is moving (a recording, playback, free play's write head); otherwise it plays.
+        if (ev.key === ' ') {
+            ev.preventDefault();
+            if (rec !== 'off') stopRecording();
+            else if (raf || pending) togglePlay();
+            else if (writeHeadMoving()) parkWriteHead();
+            else togglePlay();
+            return;
+        }
         // Enter records (letters are notes); a focused button or menu keeps its own Enter.
         if (ev.key === 'Enter' && !(target instanceof HTMLButtonElement || target instanceof HTMLSelectElement)) {
             ev.preventDefault(); if (rec !== 'off') stopRecording(); else startRecording(); return;
