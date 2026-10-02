@@ -320,3 +320,19 @@ footer code, footer b { color: var(--ink); }
   border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 #import-overlay .import-msg { color: var(--dim); font-size: 13px; letter-spacing: .3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Help: computer-keyboard note map. Key width = 1/12.75 of the row, so it fits any dialog width. */
+.kb-map { margin: 4px 0 14px; padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; user-select: none; }
+.kb-row { display: flex; gap: 3px; padding-left: calc(var(--kb-offset) * (100% / 12.75)); }
+.kb-key { flex: 0 0 calc(100% / 12.75 - 3px); aspect-ratio: 1 / 1.05; box-sizing: border-box; border-radius: 4px; border: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; font-size: clamp(8px, 1.4vw, 11px); }
+.kb-key i { font-style: normal; font-size: .82em; opacity: .6; }
+.help-content .kb-key b { font-weight: 600; text-align: center; color: inherit; }
+.kb-white { background: #e9ebef; color: #3a3e45; border-color: #c4c8d0; }
+.kb-white i { opacity: .75; }
+.kb-black { background: #07080a; color: var(--ink); border-color: #3a404b; }
+.kb-black b { font-size: .86em; font-weight: 500; }
+.kb-off { color: var(--dim); opacity: .45; }
+.kb-key.kb-down { outline: 2px solid var(--accent); outline-offset: -1px; }
+.kb-white.kb-down { background: #c9d6ee; }
+.kb-black.kb-down { background: #26324a; }

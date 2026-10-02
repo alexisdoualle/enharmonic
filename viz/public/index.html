@@ -42,8 +42,9 @@
     <span id="pos" class="pos">0 / 0</span>
     <!-- TODO: editorial side overrides are hidden until re-wired into the engine. The buttons and their
          handlers still work, but buildReplay ignores the markers (see replay.ts `void sideOverrides`), so
-         they don't change the spelling yet. Un-hide once the SpellingEngine gets a per-onset side hook. -->
-    <span class="ctl side-ctl" style="display: none" title="editorial enharmonic side from the current onset; S sharp, F flat, A auto, X clear">side <button id="side-sharp" title="favor sharp side from here">♯</button><button id="side-flat" title="favor flat side from here">♭</button><button id="side-auto" title="return to auto from here">auto</button><button id="side-clear" title="clear all markers">×</button><span id="side-state" class="pos"></span></span>
+         they don't change the spelling yet. Un-hide once the SpellingEngine gets a per-onset side hook. Their old
+         S/F/A/X shortcuts were removed: those letters play notes (live keyboard). Pick new keys when re-wiring. -->
+    <span class="ctl side-ctl" style="display: none" title="editorial enharmonic side from the current onset">side <button id="side-sharp" title="favor sharp side from here">♯</button><button id="side-flat" title="favor flat side from here">♭</button><button id="side-auto" title="return to auto from here">auto</button><button id="side-clear" title="clear all markers">×</button><span id="side-state" class="pos"></span></span>
     <label class="ctl" title="play audio (Web Audio EP synth)"><input type="checkbox" id="sound" checked /> 🔊</label>
     <label class="ctl" title="output volume">
       <input type="range" id="volume" min="0" max="100" step="1" value="90" />
@@ -85,7 +86,7 @@
   <footer>
     Streams the real shipped speller (<code>src/</code>) note by note — <b>correct</b> / <b>flipped</b>
     (right pitch, coherent enharmonic side) / <b>wrong</b>. Keys: ← → step, Home / End jump,
-    <b>S/F/A/X</b> mark sharp/flat/auto/clear in two-pass, <b>⌘/Ctrl+C</b> copy this onset (settings + state + scoring) for pasting to an agent,
+    <b>⌘/Ctrl+C</b> copy this onset (settings + state + scoring) for pasting to an agent,
     <b>⌘/Ctrl+⇧+C</b> copy the whole run.
   </footer>
 
