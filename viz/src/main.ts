@@ -7,7 +7,7 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden } from './music/pianoroll.js';
+import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
@@ -618,7 +618,14 @@ function endRecording(at: number) {
     tk.wall = performance.now();
     syncRecUi();
     saveTake(tk);
-    if (isLive()) recompute();
+    if (isLive()) {
+        recompute();
+        // The playhead goes to the start of what was just recorded, so Space plays it back.
+        const from = recFrom - clickMs(g) / 4;
+        const first = state.replay?.notes.findIndex(n => n.onT >= from) ?? -1;
+        if (first >= 0) state.step = first;
+        render();
+    }
 }
 
 function syncRecUi() {
@@ -927,7 +934,7 @@ let raf = 0, pending = false, t0Perf = 0, t0Ctx = 0, basePlay = 0, audioIdx = 0;
 // `silence` cuts the notes already committed to the audio clock (the LOOKAHEAD buffer keeps ringing
 // otherwise, so a pause would let sound run on past the stopped playhead). The natural end of the
 // piece passes false so the final chord rings out instead of being clipped.
-function stopPlay(silence = true) { pending = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } if (silence && soundOn) allNotesOff(); updatePlayBtn(); }
+function stopPlay(silence = true) { pending = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } setPlayheadTime(null); if (silence && soundOn) allNotesOff(); updatePlayBtn(); }
 function updatePlayBtn() { $('play').textContent = (raf || pending) ? '⏸' : '▶'; }
 
 function play() {
@@ -987,6 +994,11 @@ function frame() {
     let i = state.step;
     while (i < notes.length - 1 && tl[i + 1]! <= nowVisual) i++;
     if (i !== state.step) { state.step = i; render(); }
+    // The roll's playhead glides with time between onsets (the timeline shortens long gaps, so map back).
+    const a = notes[i]!, b = notes[i + 1];
+    const span = b ? tl[i + 1]! - tl[i]! : 0;
+    const f = span > 0 ? Math.max(0, Math.min(1, (nowVisual - tl[i]!) / span)) : 0;
+    setPlayheadTime(a.onT + f * ((b?.onT ?? a.onT) - a.onT));
     // Stop once the playhead reached the end AND all audio has been handed off to the clock.
     if (state.step >= notes.length - 1 && (!soundOn || audioIdx >= notes.length)) { stopPlay(false); render(); return; }
     raf = requestAnimationFrame(frame);

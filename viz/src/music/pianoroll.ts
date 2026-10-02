@@ -62,6 +62,16 @@ let onTime: (t: number) => void = () => {};
 /** `time` is told the time of a click on empty space (after `seek` moves to the nearest note). */
 export function initPianoRoll(seek: (step: number) => void, time?: (t: number) => void): void { onSeek = seek; if (time) onTime = time; }
 
+/** During playback the playhead glides with time: `t` overrides its onset position; null returns it to
+ *  the current note. */
+let playheadAt: number | null = null;
+export function setPlayheadTime(t: number | null): void {
+    playheadAt = t;
+    if (t === null || !playhead) return;
+    const x = PAD + t * pxPerMs;
+    playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
+}
+
 /** Hide the blue playhead (while recording, the red time line is the head). */
 let playheadHidden = false;
 export function setPlayheadHidden(hidden: boolean): void {
@@ -408,7 +418,7 @@ function updatePlayhead(replay: Replay, step: number): void {
     }
     lastStep = step;
     const cur = replay.notes[Math.max(0, Math.min(replay.notes.length - 1, step))]!;
-    const x = PAD + cur.onT * pxPerMs;
+    const x = PAD + (playheadAt ?? cur.onT) * pxPerMs;
     playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
 
     // autoscroll to keep the playhead in view, then materialize the new viewport. While the user
