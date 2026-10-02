@@ -180,9 +180,8 @@ let takeWall = 0;                  // the input timeStamp (performance clock) ma
 let takeAnchored = false;          // takeWall is valid (false for an empty or just-restored take)
 let takeGrid: Grid | null = null;  // the metronome grid, once a metronome has run in this take
 const metro = new Metronome();
-/** Recording against the metronome: off, counting down, recording, or finishing the current bar. */
-let rec: 'off' | 'countdown' | 'recording' | 'stopping' = 'off';
-let recEndTimer = 0;
+/** Recording against the metronome: off, counting down, or recording. */
+let rec: 'off' | 'countdown' | 'recording' = 'off';
 let takeSettled = true;            // false while playing: look-ahead and two-pass wait for the pause
 let settleTimer = 0;
 let liveFrame = 0;                 // one rebuild per animation frame, however many notes arrived
@@ -306,12 +305,12 @@ function exportTake() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-// RECORDING with the metronome: a 4-click countdown, then bar 1. It stamps a grid on the current take
-// (nothing is discarded). While it runs the take's clock is real time, so a pause stays a pause. Stop
-// finishes the bar being played and ends the recording on its bar line (the grid's `t1`).
+// RECORDING with the metronome: a 4-click countdown, then bar 1. From a piece it starts a fresh take; on
+// the take it stamps a grid on it (nothing is discarded). While it runs the take's clock is real time, so a
+// pause stays a pause. Stop ends it at once; the grid closes on the bar line after (its `t1`).
 function startRecording() {
     audioEnable();
-    if (!isLive()) enterLive(false);
+    if (!isLive()) { clearTimeout(settleTimer); takeSettled = true; enterLive(true); }
     const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
     const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
     const now = performance.now();
@@ -328,7 +327,7 @@ function startRecording() {
         else {
             if (rec === 'countdown') rec = 'recording';
             const b = k - COUNT_IN;
-            el.textContent = `${rec === 'stopping' ? '■' : '●'} ${Math.floor(b / perBar) + 1}.${(b % perBar) + 1}`;
+            el.textContent = `● ${Math.floor(b / perBar) + 1}.${(b % perBar) + 1}`;
         }
         el.classList.toggle('downbeat', k < COUNT_IN ? k === 0 : (k - COUNT_IN) % perBar === 0);
         el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
@@ -345,29 +344,20 @@ function inCountdown(now: number): boolean {
     return rec !== 'off' && !!takeGrid && takeClock(now) < takeGrid.t0 - clickMs(takeGrid) / 4;
 }
 
-/** Stop: during the countdown, cancel; while recording, finish the current bar; when already finishing,
- *  end now. */
+/** Stop at once. During the countdown nothing was recorded, so it cancels. */
 function stopRecording() {
     if (rec === 'off') return;
     if (inCountdown(performance.now())) { takeGrid = null; endRecording(performance.now()); flash('recording cancelled'); return; }
-    if (rec === 'stopping') { endRecording(performance.now()); return; }
-    const perBar = clicksPerBar(takeGrid!);
-    const k = metro.clickAt(performance.now());
-    const bars = Math.max(1, Math.ceil((k - COUNT_IN + 1e-6) / perBar));   // bars begun so far
-    const endK = COUNT_IN + bars * perBar;
-    rec = 'stopping';
-    metro.stopAt(endK);
-    recEndTimer = window.setTimeout(() => endRecording(metro.perfOf(endK)), Math.max(0, metro.perfOf(endK) - performance.now()));
-    syncRecUi();
+    endRecording(performance.now());
 }
 
-/** End the recording at performance time `at`, closing the grid on the last whole bar. */
+/** End the recording at `at` (performance clock); the grid closes on the bar line at or after it, so the
+ *  bar being played ends with a rest. */
 function endRecording(at: number) {
-    clearTimeout(recEndTimer);
-    advanceClock(Math.min(at, performance.now()));   // the time up to now was real
+    advanceClock(at);   // the time up to now was real
     metro.stop();
     if (takeGrid) {
-        const bars = Math.max(0, Math.round((takeT - takeGrid.t0) / barMs(takeGrid)));
+        const bars = Math.max(0, Math.ceil((takeT - takeGrid.t0) / barMs(takeGrid) - 1e-6));
         takeGrid.t1 = takeGrid.t0 + bars * barMs(takeGrid);
         flash(bars ? `recorded ${bars} bar${bars === 1 ? '' : 's'}` : 'recording cancelled');
         if (!bars) takeGrid = null;
@@ -381,7 +371,7 @@ function endRecording(at: number) {
 
 function syncRecUi() {
     const btn = $('metro-toggle');
-    btn.textContent = rec === 'off' ? '● record' : rec === 'stopping' ? '■ stop now' : '■ stop';
+    btn.textContent = rec === 'off' ? '● record' : '■ stop';
     btn.classList.toggle('recording', rec !== 'off');
     $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off';
     $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off';
@@ -903,7 +893,7 @@ function wire() {
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
-        if (ev.key === ' ') { ev.preventDefault(); togglePlay(); return; }
+        if (ev.key === ' ') { ev.preventDefault(); if (rec !== 'off') stopRecording(); else togglePlay(); return; }
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }

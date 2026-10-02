@@ -24,8 +24,6 @@ export class Metronome {
     private timer = 0;
     private next = 0;          // index of the next click to schedule (0 = first count-in click)
     private perf0 = 0;         // performance-clock time of click 0
-    private ms = 500;
-    private limit = Infinity;  // first click index NOT to play (set by stopAt)
     running = false;
 
     /** Start clicking at `perf0` (performance clock). Clicks 0..COUNT_IN-1 are the countdown; bar 1 starts
@@ -35,11 +33,10 @@ export class Metronome {
         this.running = true;
         this.perf0 = perf0;
         this.next = 0;
-        this.limit = Infinity;
-        const ms = this.ms = 60000 / bpm;
+        const ms = 60000 / bpm;
         const tick = () => {
             const horizon = performance.now() + LOOKAHEAD_MS;
-            while (this.next < this.limit && this.perf0 + this.next * ms < horizon) {
+            while (this.perf0 + this.next * ms < horizon) {
                 const k = this.next++, at = this.perf0 + k * ms;
                 const when = ctxTimeAt(at);
                 const accent = k < COUNT_IN ? k === 0 : (k - COUNT_IN) % perBar === 0;
@@ -50,13 +47,6 @@ export class Metronome {
         tick();
         this.timer = window.setInterval(tick, TICK_MS);
     }
-
-    /** The click index sounding at performance time `perf` (fractional). */
-    clickAt(perf: number): number { return (perf - this.perf0) / this.ms; }
-    /** Performance time of click `k`. */
-    perfOf(k: number): number { return this.perf0 + k * this.ms; }
-    /** Play no click from index `k` on (already scheduled ones still sound). */
-    stopAt(k: number): void { this.limit = k; }
 
     stop(): void {
         clearInterval(this.timer);

@@ -188,9 +188,10 @@ fixture <code>events.json</code> (no spellings: those come from a person, never 
 
 <p><b>Recording with a metronome.</b> <b>&#9679; record</b> in the transport bar counts down four
 clicks at the tempo and time signature next to it, then records from bar 1 against that grid (the piano roll
-draws it). Notes during the countdown sound but are not recorded. While recording a pause stays a pause, so
-the take keeps its real rhythm. <b>&#9632; stop</b> finishes the bar you are in and ends the recording on its
-bar line; pressing again ends it at once. The take is kept, and free play still adds to it afterwards.</p>`,
+draws it). From a piece it starts a fresh take; on the take it records onto it. Notes during the countdown
+sound but are not recorded. While recording a pause stays a pause, so the take keeps its real rhythm.
+<b>&#9632; stop</b> or <b>Space</b> ends the recording at once; the bar you were in is filled with a rest.
+Free play still adds to the take afterwards.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
