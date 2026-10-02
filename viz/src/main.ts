@@ -393,8 +393,17 @@ function startRecording() {
         takeT = recFrom - lead - COUNT_IN * clickMs(grid);
         takeWall = now;
         takeAnchored = true;
+    } else if (!take.length) {
+        // A fresh take: bar 1 at the start of the roll (a 16th in, so an early downbeat still shows); the
+        // countdown runs at negative take time, where nothing is recorded.
+        grid = { bpm, num, den, t0: 0 };
+        grid.t0 = recFrom = Math.round(clickMs(grid) / 4) + 50;
+        takeGrid = grid;
+        takeT = recFrom - lead - COUNT_IN * clickMs(grid);
+        takeWall = now;
+        takeAnchored = true;
     } else {
-        // A fresh take, or carrying on after a free take's end: a new grid after the countdown.
+        // Carrying on after a free take's end: a new grid after the countdown.
         advanceClock(now);
         grid = { bpm, num, den, t0: 0 };
         grid.t0 = recFrom = Math.round(takeT + lead + COUNT_IN * clickMs(grid));

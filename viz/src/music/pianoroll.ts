@@ -367,7 +367,13 @@ function nearestNoteAtTime(replay: Replay, t: number): number {
 let lastStep = 0;
 
 function updatePlayhead(replay: Replay, step: number): void {
-    if (!svg || !playhead || !replay.notes.length) return;
+    if (!svg || !playhead) return;
+    if (!replay.notes.length) {   // an empty take: the playhead waits at the start, in view
+        playhead.setAttribute('x1', String(PAD)); playhead.setAttribute('x2', String(PAD));
+        const host = document.getElementById('pianoroll')!;
+        host.scrollLeft = 0; expectedScrollLeft = 0; follow = true;
+        return;
+    }
     lastStep = step;
     const cur = replay.notes[Math.max(0, Math.min(replay.notes.length - 1, step))]!;
     const x = PAD + cur.onT * pxPerMs;
