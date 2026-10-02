@@ -62,6 +62,13 @@ let onTime: (t: number) => void = () => {};
 /** `time` is told the time of a click on empty space (after `seek` moves to the nearest note). */
 export function initPianoRoll(seek: (step: number) => void, time?: (t: number) => void): void { onSeek = seek; if (time) onTime = time; }
 
+/** Hide the blue playhead (while recording, the red time line is the head). */
+let playheadHidden = false;
+export function setPlayheadHidden(hidden: boolean): void {
+    playheadHidden = hidden;
+    playhead?.setAttribute('visibility', hidden ? 'hidden' : 'visible');
+}
+
 // The TIME LINE of a live take. The recording's is red: where recording starts (dashed), or its clock while
 // it runs. Free play's is grey: its write head, where the next note will land.
 let timeLine: SVGLineElement | null = null;
@@ -185,6 +192,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     playhead.setAttribute('y1', String(PAD)); playhead.setAttribute('y2', String(lanesBottom));
     playhead.setAttribute('stroke', '#6ea8fe'); playhead.setAttribute('stroke-width', '1.5');   // literal: var() is invalid in an SVG presentation attribute
     svg.appendChild(playhead);
+    setPlayheadHidden(playheadHidden);
 
     // click background → seek to the onset nearest the clicked time. Map the click through the svg's
     // rendered rect (rect.width is the on-screen width, `width` its internal px), so the position stays

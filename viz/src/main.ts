@@ -7,7 +7,7 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, renderPianoRoll, setTimeLine } from './music/pianoroll.js';
+import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
@@ -491,14 +491,14 @@ function startRecording() {
         recFrom = tk.recHead;
         startBacking(recFrom - COUNT_IN * clickMs(grid), now + LEAD_MS);
     } else {
-        // A new recording; the countdown runs at negative take time, and bar 1 sits a 16th in so an
-        // early downbeat still shows.
+        // A new recording: bar 1 at 0 (where the guide lines already start, so nothing shifts); the
+        // countdown runs at negative take time.
         clearTimeout(settleTimer); takeSettled = true;
         resetTake(tk);
         enterTake(tk);
         state.step = 0;
         grid = { bpm, num, den, t0: 0 };
-        grid.t0 = recFrom = Math.round(clickMs(grid) / 4) + 50;
+        recFrom = 0;
         tk.grid = grid;
     }
     tk.t = recFrom - LEAD_MS - COUNT_IN * clickMs(grid);
@@ -622,6 +622,7 @@ function endRecording(at: number) {
 }
 
 function syncRecUi() {
+    setPlayheadHidden(rec !== 'off');   // while recording the red line is the head
     const btn = $('metro-toggle');
     btn.textContent = rec === 'off' ? '● record' : '■ stop';
     btn.classList.toggle('recording', rec !== 'off');
