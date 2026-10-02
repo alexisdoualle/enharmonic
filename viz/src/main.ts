@@ -208,6 +208,7 @@ const undoStack: { tk: Take; events: RawEvent[]; grid: Grid | null }[] = [];
 let backing: Voice[] = [];         // the recording's notes playing under a new pass
 let backingTimer = 0;
 let timeLineFrame = 0;
+let writeHeadFrame = 0;
 
 /** The take in view, or null on a piece. */
 const shown = (): Take | null => TAKES.find(tk => tk.id === state.fixtureId) ?? null;
@@ -280,6 +281,7 @@ function enterTake(tk: Take) {
     rawEvents = tk.events; rawExpected = [];
     $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = false;
     syncRecUi();
+    if (tk === freeTake) runWriteHead();
 }
 
 /** One keyboard or MIDI event: into the recording while recording, else into free play. */
@@ -303,6 +305,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
         if (!tk.held.has(midi)) return;
     }
     advanceClock(tk, now);
+    if (tk === freeTake) runWriteHead();
     const at = insertEvent(tk, { t_ms: Math.round(tk.t), type, midi });
     if (type === 'on') followStep = tk.events.slice(0, at).filter(e => e.type === 'on').length;
     if (type === 'on') tk.held.add(midi); else tk.held.delete(midi);
@@ -523,11 +526,28 @@ function stopBacking() {
     backing = [];
 }
 
-/** The red time line, in the recording's view: where recording starts; moving with the clock while it runs. */
+/** The time line. In the recording: red, where recording starts, moving with the clock while it runs. In
+ *  free play: the grey write head, where the next note will land (it runs on after the last note and stops
+ *  once the silence reaches the 2 s cap). */
 function syncTimeLine() {
+    const tk = shown();
+    if (tk === freeTake) { setTimeLine(tk.events.length ? takeClock(tk) : null, true, 'write'); return; }
     if (!onRecording() || !recTake.grid) { setTimeLine(null, false); return; }
     if (rec === 'off') setTimeLine(recTake.recHead, false);
     else setTimeLine(Math.max(recFrom, takeClock(recTake)), rec === 'recording');
+}
+
+/** Keep free play's write head moving until it parks (at the 2 s cap after the last note). */
+function runWriteHead() {
+    if (writeHeadFrame) return;
+    const tick = () => {
+        writeHeadFrame = 0;
+        if (shown() !== freeTake) return;
+        syncTimeLine();
+        const parked = !freeTake.held.size && (!freeTake.anchored || performance.now() - freeTake.wall >= LIVE_GAP_CAP);
+        if (!parked) writeHeadFrame = requestAnimationFrame(tick);
+    };
+    writeHeadFrame = requestAnimationFrame(tick);
 }
 
 /** Is `now` still in the countdown? Decided by time, not by the click display: a downbeat played a little
@@ -607,6 +627,7 @@ function deleteNote(step: number) {
         tk.t = Math.max(0, ...tk.events.map(e => e.t_ms));
         tk.wall = performance.now();
         tk.anchored = true;
+        runWriteHead();
     }
     recompute();
     state.step = Math.max(0, Math.min(step, (state.replay?.snapshots.length ?? 1) - 1));

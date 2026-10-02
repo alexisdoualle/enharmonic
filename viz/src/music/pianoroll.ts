@@ -62,17 +62,20 @@ let onTime: (t: number) => void = () => {};
 /** `time` is told the time of a click on empty space (after `seek` moves to the nearest note). */
 export function initPianoRoll(seek: (step: number) => void, time?: (t: number) => void): void { onSeek = seek; if (time) onTime = time; }
 
-// The red TIME LINE of a live take: where recording starts, or the recording clock while it runs.
+// The TIME LINE of a live take. The recording's is red: where recording starts (dashed), or its clock while
+// it runs. Free play's is grey: its write head, where the next note will land.
 let timeLine: SVGLineElement | null = null;
-let timeLineAt: number | null = null, timeLineMoving = false;
-export function setTimeLine(t: number | null, moving: boolean): void {
-    timeLineAt = t; timeLineMoving = moving;
+let timeLineAt: number | null = null, timeLineMoving = false, timeLineKind: 'record' | 'write' = 'record';
+export function setTimeLine(t: number | null, moving: boolean, kind: 'record' | 'write' = 'record'): void {
+    timeLineAt = t; timeLineMoving = moving; timeLineKind = kind;
     if (!timeLine) return;
     if (t === null || t < 0) { timeLine.setAttribute('visibility', 'hidden'); return; }
     const x = PAD + t * pxPerMs;
     timeLine.setAttribute('visibility', 'visible');
     timeLine.setAttribute('x1', String(x)); timeLine.setAttribute('x2', String(x));
-    timeLine.setAttribute('stroke-dasharray', moving ? '' : '4 3');
+    timeLine.setAttribute('stroke', kind === 'record' ? '#e06c75' : '#7d8696');
+    timeLine.setAttribute('stroke-width', kind === 'record' ? '2' : '1.5');
+    timeLine.setAttribute('stroke-dasharray', moving || kind === 'write' ? '' : '4 3');
     const host = document.getElementById('pianoroll')!;
     if (moving && x > host.scrollLeft + host.clientWidth - 60) {   // keep the moving line in view
         host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
@@ -199,7 +202,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     timeLine.setAttribute('stroke', '#e06c75'); timeLine.setAttribute('stroke-width', '2');
     timeLine.setAttribute('pointer-events', 'none');
     svg.appendChild(timeLine);
-    setTimeLine(timeLineAt, timeLineMoving);
+    setTimeLine(timeLineAt, timeLineMoving, timeLineKind);
 
     host.appendChild(svg);
     if (!scrollBound) {
