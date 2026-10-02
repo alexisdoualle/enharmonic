@@ -191,7 +191,7 @@ const recTake = newTake('__rec__', '🎹 recording', 'viz.recTake');
 const TAKES = [freeTake, recTake];
 
 const LIVE_ONSET_TOLERANCE = 50;   // ms: keys pressed together for a chord arrive this spread out
-const LIVE_GAP_CAP = 2000;         // ms: the longest silence free play keeps (it normally stops on a beat line)
+const LIVE_GAP_CAP = 2000;         // ms: the longest silence kept by a take that is not shown against a bar grid
 const LIVE_SETTLE = 1000;          // ms after the last release before look-ahead / two-pass re-spell the take
 const LIVE_HOLD_SEC = 30;          // a held synth note sustains up to this long
 const LEAD_MS = 120;               // ms before the first countdown click, so it is never scheduled late
@@ -234,17 +234,15 @@ function takeClock(tk: Take, now = performance.now()): number {
     if (!tk.anchored) return !tk.events.length ? 0 : tk === freeTake ? beatEnd(tk.t) : tk.t + LIVE_GAP_CAP;
     const gap = Math.max(0, now - tk.wall);
     if (clockIsReal(tk)) return tk.t + gap;
-    // Free play's silence runs on to a beat line (at least a beat on) and stops there.
+    // Free play's silence runs on to the end of the bar and stops there.
     return tk === freeTake ? Math.min(tk.t + gap, beatEnd(tk.t)) : tk.t + Math.min(gap, LIVE_GAP_CAP);
 }
 
-/** Where free play's silence stops after a release at `t`: the first beat line of the guide (tempo field,
- *  from 0) at least a beat later, so a rest shorter than a beat keeps its length and a pause ends on a beat;
- *  at most 2 s away. */
+/** Where free play's silence stops after a release at `t`: the next bar line of the guide (tempo and time
+ *  signature fields, from 0). Rests inside a bar keep their length; a pause ends on a downbeat. */
 function beatEnd(t: number): number {
-    const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
-    const beat = 60000 / bpm;
-    return Math.min(Math.ceil((t + beat) / beat - 1e-6) * beat, t + LIVE_GAP_CAP);
+    const g = rollGridFor(freeTake)!, bar = barMs(g);
+    return Math.ceil(t / bar - 1e-6) * bar;
 }
 
 /** Move a take's clock to `now` (an input timeStamp). */
@@ -255,7 +253,7 @@ function advanceClock(tk: Take, now: number) {
     tk.parked = false;
 }
 
-/** Is free play's write head still moving (shown, after a note, before the beat line it stops on)? */
+/** Is free play's write head still moving (shown, after a note, before the bar line it stops on)? */
 function writeHeadMoving(now = performance.now()): boolean {
     const tk = freeTake;
     return shown() === tk && tk.events.length > 0 && !tk.parked && tk.anchored && !tk.held.size
@@ -558,7 +556,7 @@ function stopBacking() {
 
 /** The time line. In the recording: red, where recording starts, moving with the clock while it runs. In
  *  free play: the grey write head, where the next note will land (it runs on after the last note and stops
- *  on a beat line at least a beat later). */
+ *  at the end of the bar). */
 function syncTimeLine() {
     const tk = shown();
     if (tk === freeTake) { setTimeLine(tk.events.length ? takeClock(tk) : null, true, 'write'); return; }
@@ -697,7 +695,9 @@ function effMode(): Mode {
 let guideGrid: Grid | null = null;
 function rollGrid(): Grid | null {
     const tk = shown();
-    if (!tk) return null;
+    return tk ? rollGridFor(tk) : null;
+}
+function rollGridFor(tk: Take): Grid {
     if (tk.grid) return tk.grid;
     const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
     const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
