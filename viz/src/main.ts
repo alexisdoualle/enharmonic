@@ -679,6 +679,20 @@ function effMode(): Mode {
     return state.mode === 'rt' && state.lookAhead ? 'la' : state.mode;
 }
 
+/** The bar and beat lines on a take's roll: the recording's grid, else a guide from the tempo and time
+ *  signature fields (free play is not recorded against it). One object per setting, so the roll only
+ *  rebuilds when it changes. */
+let guideGrid: Grid | null = null;
+function rollGrid(): Grid | null {
+    const tk = shown();
+    if (!tk) return null;
+    if (tk.grid) return tk.grid;
+    const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
+    const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
+    if (!guideGrid || guideGrid.bpm !== bpm || guideGrid.num !== num || guideGrid.den !== den) guideGrid = { bpm, num, den, t0: 0 };
+    return guideGrid;
+}
+
 /** The spiral what-if settings, as buildReplay takes them. */
 function spiralOpts() {
     return { spiralRange: state.spiralRange, spiralCenter: state.spiralCenter, spiralEven: state.spiralEven, repair: state.repair, meanFrame: state.meanFrame };
@@ -768,7 +782,7 @@ function render() {
     if (state.replay) {
         if (isLive()) renderLiveStaff(state.replay, state.step);
         else renderStaff(state.replay, state.step);
-        renderPianoRoll(state.replay, state.step, state.showKeyLanes, shown()?.grid ?? null);
+        renderPianoRoll(state.replay, state.step, state.showKeyLanes, rollGrid());
         syncTimeLine();
     }
     renderStrip();
@@ -1103,6 +1117,8 @@ function wire() {
     $('take-export').addEventListener('click', exportTake);
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
+    // The guide lines on free play follow the tempo and time signature fields.
+    for (const id of ['metro-bpm', 'metro-meter']) $(id).addEventListener('input', () => { if (isLive()) render(); });
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and

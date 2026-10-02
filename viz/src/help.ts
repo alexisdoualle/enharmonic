@@ -188,6 +188,9 @@ where the next note will land. It runs on after your last note and stops two sec
 never leaves a long gap. <b>Space</b> while it moves stops it there, so the next note follows right
 away.</p>
 
+<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar: a guide only, since
+free play is not recorded against them.</p>
+
 <p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
     },
     {

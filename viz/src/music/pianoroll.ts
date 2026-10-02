@@ -139,14 +139,14 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     svg.setAttribute('height', String(height));
     svg.style.display = 'block';
 
-    // A live take's metronome grid: one line per click, brighter on each bar (the count-in bar included).
+    // A live take's bar and beat lines: one per click, brighter on each bar, over the whole visible width.
     if (grid) {
         const per = clicksPerBar(grid), ms = clickMs(grid);
-        for (let k = -per; grid.t0 + k * ms <= replay.durationMs + ms; k++) {
+        for (let k = -per; PAD + (grid.t0 + k * ms) * pxPerMs <= width; k++) {
             const x = PAD + (grid.t0 + k * ms) * pxPerMs;
             if (x < 0) continue;
             const bar = ((k % per) + per) % per === 0;
-            svg.appendChild(svgEl('line', { x1: x, x2: x, y1: PAD, y2: PAD + noteH, stroke: bar ? '#3a4352' : '#262c36', 'stroke-width': 1 }));
+            svg.appendChild(svgEl('line', { x1: x, x2: x, y1: PAD, y2: PAD + noteH, stroke: bar ? '#4d5869' : '#2f3643', 'stroke-width': 1 }));
         }
     }
     // faint row guides at octave Cs
