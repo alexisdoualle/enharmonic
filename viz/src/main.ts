@@ -191,7 +191,7 @@ const recTake = newTake('__rec__', '🎹 recording', 'viz.recTake');
 const TAKES = [freeTake, recTake];
 
 const LIVE_ONSET_TOLERANCE = 50;   // ms: keys pressed together for a chord arrive this spread out
-const LIVE_GAP_CAP = 2000;         // ms: a longer silence is shortened to this in free play
+const LIVE_GAP_CAP = 2000;         // ms: the longest silence free play keeps (it normally stops on a beat line)
 const LIVE_SETTLE = 1000;          // ms after the last release before look-ahead / two-pass re-spell the take
 const LIVE_HOLD_SEC = 30;          // a held synth note sustains up to this long
 const LEAD_MS = 120;               // ms before the first countdown click, so it is never scheduled late
@@ -231,9 +231,20 @@ const clockIsReal = (tk: Take) => tk.held.size > 0 || (tk === recTake && metro.r
 /** A take's clock now (provisional: for held notes and the time line). */
 function takeClock(tk: Take, now = performance.now()): number {
     if (tk.parked) return tk.t;
-    if (!tk.anchored) return tk.events.length ? tk.t + LIVE_GAP_CAP : 0;
+    if (!tk.anchored) return !tk.events.length ? 0 : tk === freeTake ? beatEnd(tk.t) : tk.t + LIVE_GAP_CAP;
     const gap = Math.max(0, now - tk.wall);
-    return tk.t + (clockIsReal(tk) ? gap : Math.min(gap, LIVE_GAP_CAP));
+    if (clockIsReal(tk)) return tk.t + gap;
+    // Free play's silence runs on to a beat line (at least a beat on) and stops there.
+    return tk === freeTake ? Math.min(tk.t + gap, beatEnd(tk.t)) : tk.t + Math.min(gap, LIVE_GAP_CAP);
+}
+
+/** Where free play's silence stops after a release at `t`: the first beat line of the guide (tempo field,
+ *  from 0) at least a beat later, so a rest shorter than a beat keeps its length and a pause ends on a beat;
+ *  at most 2 s away. */
+function beatEnd(t: number): number {
+    const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
+    const beat = 60000 / bpm;
+    return Math.min(Math.ceil((t + beat) / beat - 1e-6) * beat, t + LIVE_GAP_CAP);
 }
 
 /** Move a take's clock to `now` (an input timeStamp). */
@@ -244,10 +255,11 @@ function advanceClock(tk: Take, now: number) {
     tk.parked = false;
 }
 
-/** Is free play's write head still moving (shown, after a note, within the 2 s cap)? */
+/** Is free play's write head still moving (shown, after a note, before the beat line it stops on)? */
 function writeHeadMoving(now = performance.now()): boolean {
     const tk = freeTake;
-    return shown() === tk && tk.events.length > 0 && !tk.parked && tk.anchored && !tk.held.size && now - tk.wall < LIVE_GAP_CAP;
+    return shown() === tk && tk.events.length > 0 && !tk.parked && tk.anchored && !tk.held.size
+        && tk.t + (now - tk.wall) < beatEnd(tk.t);
 }
 
 /** Stop free play's write head where it is: the next note lands right there. */
@@ -546,7 +558,7 @@ function stopBacking() {
 
 /** The time line. In the recording: red, where recording starts, moving with the clock while it runs. In
  *  free play: the grey write head, where the next note will land (it runs on after the last note and stops
- *  once the silence reaches the 2 s cap). */
+ *  on a beat line at least a beat later). */
 function syncTimeLine() {
     const tk = shown();
     if (tk === freeTake) { setTimeLine(tk.events.length ? takeClock(tk) : null, true, 'write'); return; }
@@ -562,7 +574,7 @@ function runWriteHead() {
         writeHeadFrame = 0;
         if (shown() !== freeTake) return;
         syncTimeLine();
-        const parked = !freeTake.held.size && (freeTake.parked || !freeTake.anchored || performance.now() - freeTake.wall >= LIVE_GAP_CAP);
+        const parked = !freeTake.held.size && !writeHeadMoving();
         if (!parked) writeHeadFrame = requestAnimationFrame(tick);
     };
     writeHeadFrame = requestAnimationFrame(tick);
@@ -1118,7 +1130,7 @@ function wire() {
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
     // The guide lines on free play follow the tempo and time signature fields.
-    for (const id of ['metro-bpm', 'metro-meter']) $(id).addEventListener('input', () => { if (isLive()) render(); });
+    for (const id of ['metro-bpm', 'metro-meter']) $(id).addEventListener('input', () => { if (isLive()) { render(); runWriteHead(); } });
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and

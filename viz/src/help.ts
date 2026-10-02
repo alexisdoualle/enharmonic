@@ -184,12 +184,12 @@ it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on.
 play, from a piece or from the recording. Nothing is graded, so notes take their letter's colour. Keys within
 50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
 spelled in real time, and re-spelled a second after you stop. A grey line on the roll is the write head:
-where the next note will land. It runs on after your last note and stops two seconds later, so a long pause
-never leaves a long gap. <b>Space</b> while it moves stops it there, so the next note follows right
+where the next note will land. When you let go of the keys it runs on and stops on a beat line at least a beat
+later: a rest shorter than a beat keeps its length, and after a pause the next note starts on a beat. <b>Space</b> while it moves stops it there, so the next note follows right
 away.</p>
 
-<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar: a guide only, since
-free play is not recorded against them.</p>
+<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar. Free play is not
+quantised to them; only a pause stops on a beat line.</p>
 
 <p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
     },
