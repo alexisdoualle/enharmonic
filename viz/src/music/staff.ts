@@ -22,7 +22,7 @@ const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very de
 const GAP = 70;             // the bass stave's top, below the treble stave's (a grand staff, split at middle C)
 const REST_KEY: Record<string, string> = { treble: 'b/4', bass: 'd/3' };
 const inStaff = (clef: string) => (n: ReplayNote) => (n.midi >= 60) === (clef === 'treble');
-const STAFF_SCALE = 0.62;  // engrave small, so a grand staff (and most ledger lines) fits the band without scrolling
+const STAFF_SCALE = 0.8;  // engrave small, so a grand staff (and most ledger lines) fits the band without scrolling
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -318,27 +318,29 @@ function watchScroll(host: HTMLElement): void {
 export function resetStaffScroll(): void { userScrollTop = null; }
 
 function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zoom: number, totalW: number, narrow: boolean): void {
+    void clef; void narrow;
     const svg = host.querySelector('svg');
     if (svg instanceof SVGSVGElement && firstStave) {
         try {
-            const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
-            const bandH = host.clientHeight || 100;
-            const pad = 6;
+            // VexFlow zooms by the viewBox: the drawing is in its own units, the SVG element in screen px.
+            // So crop the viewBox in drawing units (the whole width, the drawn height, at least a band's
+            // worth around the middle) and size the element in px.
+            const bb = svg.getBBox();          // what is drawn, in drawing units
+            const bandU = (host.clientHeight || 100) / zoom;
+            const pad = 6 / zoom;
             // Centre the band on what is drawn (staff plus ledger-line notes), so a high or low passage is
             // framed instead of sitting at the edge.
             const centerY = bb.y + bb.height / 2;
-            void clef; void narrow;
-            const top = Math.min(bb.y - pad, centerY - bandH / 2);
-            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
-            const w = Math.ceil(totalW * zoom);
-            const h = Math.ceil(bottom - top);
-            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${w} ${h}`);
-            svg.setAttribute('width', String(w));
-            svg.setAttribute('height', String(h));
-            svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
-            svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
+            const top = Math.min(bb.y - pad, centerY - bandU / 2);
+            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandU / 2);
+            const wPx = Math.ceil(totalW * zoom), hPx = Math.ceil((bottom - top) * zoom);
+            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${totalW} ${(bottom - top).toFixed(1)}`);
+            svg.setAttribute('width', String(wPx));
+            svg.setAttribute('height', String(hPx));
+            svg.style.width = `${wPx}px`;      // VexFlow sets an inline style height that wins over the
+            svg.style.height = `${hPx}px`;     // attribute, so override it here too or the crop is ignored
             // The user's own scroll wins until the piece changes (resetStaffScroll); otherwise centre.
-            host.scrollTop = userScrollTop ?? Math.max(0, centerY - top - bandH / 2);
+            host.scrollTop = userScrollTop ?? Math.max(0, (centerY - top - bandU / 2) * zoom);
             expectedScrollTop = host.scrollTop;
             watchScroll(host);
         } catch { /* getBBox unavailable (detached node): leave the fixed-size engraving */ }
