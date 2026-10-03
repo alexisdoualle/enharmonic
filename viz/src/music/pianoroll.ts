@@ -66,6 +66,7 @@ export function initPianoRoll(seek: (step: number) => void, time?: (t: number) =
  *  the current note. */
 let playheadAt: number | null = null;
 export function setPlayheadTime(t: number | null): void {
+    if (t !== null && playheadAt === null) follow = true;   // playback starting: follow again
     playheadAt = t;
     if (t === null || !playhead) return;
     const x = PAD + t * pxPerMs;
@@ -75,12 +76,15 @@ export function setPlayheadTime(t: number | null): void {
 }
 
 /** A moving line (playback, recording, the write head) scrolls the roll smoothly once it passes the middle
- *  of the view, so it stays there. Off while the user has scrolled away; back once the line is in view. */
+ *  of the view, so it stays there. Once the user scrolls, it lets go until the line reaches the middle of
+ *  the view they scrolled to (it catches up with a look ahead and carries on from there, no jump). */
 function keepAtMiddle(x: number): void {
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, w = host.clientWidth;
-    if (!follow && x >= left && x <= left + w) follow = true;
-    if (!follow) return;
+    if (!follow) {
+        if (x < left + w / 2 || x > left + w) return;
+        follow = true;
+    }
     if (x < left) host.scrollLeft = Math.max(0, x - 60);   // behind the view (playback started there): bring it in
     else if (x > left + w / 2) host.scrollLeft = x - w / 2;
     else return;
@@ -437,8 +441,8 @@ function updatePlayhead(replay: Replay, step: number): void {
     // playhead drifts back into view on its own.
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, right = left + host.clientWidth;
-    if (!follow && x >= left + 60 && x <= right - 60) follow = true;
     // During playback the gliding playhead scrolls the roll itself (keepAtMiddle); stepping still jumps.
+    if (!follow && playheadAt === null && x >= left + 60 && x <= right - 60) follow = true;
     if (follow && playheadAt === null && (x < left + 60 || x > right - 60)) {
         host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
         expectedScrollLeft = host.scrollLeft;   // record what WE set, so the scroll listener knows it wasn't the user
