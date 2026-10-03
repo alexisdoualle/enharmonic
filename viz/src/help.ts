@@ -146,7 +146,7 @@ side, at a modulation, not the intervals.</p>`,
 <p>The transport bar drives the playhead. It steps by <b>onset</b> (all notes struck together are one
 onset).</p>
 <ul>
-<li><b>Space</b> play / pause (it stops a recording, or free play's write head, first). <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
+<li><b>Space</b> play / pause (it stops a recording, or the free take's write head, first). <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
 or end. Drag the scrub bar to scrub.</li>
 <li><b>Enter</b> records, <b>Backspace</b> / <b>Delete</b> removes a note of a live take, <b>&#8984;Z</b>
 undoes (see <b>Record &amp; export</b>).</li>
@@ -180,16 +180,16 @@ on its own. MIDI notes play through the synth, as loud as you play them (turn of
 instrument has its own sound). The sustain pedal holds notes as on a piano. The button is hidden when the
 browser has no Web MIDI.</p>
 
-<p><b>Play.</b> Just play: it shows <b>&#127929; free play</b> in the fixture menu, and every panel follows
-it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Playing always goes to free
-play, from a piece or from the recording. Nothing is graded, so notes take their letter's colour. Keys within
+<p><b>Play.</b> Just play: it shows <b>&#127929; free</b> in the fixture menu, and every panel follows
+it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Playing always goes to the
+free take, from a piece or from the metronome take. Nothing is graded, so notes take their letter's colour. Keys within
 50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
 spelled in real time, and re-spelled a second after you stop. A grey line on the roll is the write head:
 where the next note will land. When you let go of the keys it runs on to the end of the bar and stops there:
 rests inside a bar keep their length, and after a pause the next note starts on a downbeat. <b>Space</b> while it moves stops it there, so the next note follows right
 away.</p>
 
-<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar. Free play is not
+<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar. The free take is not
 quantised to them; only a pause stops on a beat line.</p>
 
 <p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
@@ -199,27 +199,27 @@ quantised to them; only a pause stops on a beat line.</p>
         body: `
 <p>There are two takes, side by side at the top of the fixture menu:</p>
 <ul>
-<li><b>&#127929; free play</b>: whatever you play without recording, in free time.</li>
-<li><b>&#127929; recording</b>: made with <b>&#9679; record</b>, on a metronome grid.</li>
+<li><b>&#127929; free</b>: whatever you play, in free time. No click; the write head stops at the end of the bar.</li>
+<li><b>&#127929; metronome</b>: made with <b>&#9679; record</b>, on the metronome's grid.</li>
 </ul>
 
 <table class="help-keys">
 <tr><td><b>Enter</b> or <b>&#9679; record</b></td><td>count in four clicks, then record</td></tr>
-<tr><td><b>Space</b></td><td>stops what is moving: a recording, playback, free play's write head; otherwise plays</td></tr>
-<tr><td>click a note or empty roll</td><td>in the recording: move the red line to that bar</td></tr>
+<tr><td><b>Space</b></td><td>stops what is moving: a recording, playback, the free take's write head; otherwise plays</td></tr>
+<tr><td>click a note or empty roll</td><td>in the metronome take: move the red line to that bar</td></tr>
 <tr><td><b>Backspace</b> / <b>Delete</b></td><td>remove the note under the playhead</td></tr>
 <tr><td><b>&#8984;Z</b> / Ctrl+Z</td><td>undo the last recording, deletion or clear</td></tr>
 <tr><td><b>clear</b> or <b>&#8679;X</b>, twice</td><td>empty the take shown</td></tr>
 </table>
 
 <p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
-beside it, then records against the metronome into <b>&#127929; recording</b>; <b>&#9632; stop</b> or
-<b>Space</b> ends it. The red line on the roll follows the time. From anywhere but the recording this starts a
-new recording from bar 1 (&#8984;Z brings the old one back).</p>
+beside it, then records against the metronome into <b>&#127929; metronome</b>; <b>&#9632; stop</b> or
+<b>Space</b> ends it. The red line on the roll follows the time. From anywhere but the metronome take this starts
+it again from bar 1 (&#8984;Z brings the old one back).</p>
 
-<p><b>Add to the recording.</b> In the recording, click a note (or empty space on the roll) to put the red
-line at the start of that bar, then record: you hear the recording from the bar before, and what you play is
-added on top. After a recording the line waits at its end, so recording again carries on. The recording keeps
+<p><b>Add to the metronome take.</b> In it, click a note (or empty space on the roll) to put the red
+line at the start of that bar, then record: you hear the take from the bar before, and what you play is
+added on top. After a recording the line waits at its end, so recording again carries on. The take keeps
 its tempo and time signature.</p>
 
 <p><b>Fix and undo.</b> <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.
@@ -228,8 +228,8 @@ take in view. Both takes survive a reload in this browser.</p>
 
 <p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
 speller's spellings, a grand staff split at middle C, the key signature from the real-time speller's frame,
-and the rhythm quantised to 16ths with a pull toward the beat. The recording uses its grid; free play gets
-4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
+and the rhythm quantised to 16ths with a pull toward the beat. The metronome take uses its grid; the free take
+gets 4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
 carries a checked spelling: grading the speller against an export only means something once a person has
 corrected it.</p>`,
     },

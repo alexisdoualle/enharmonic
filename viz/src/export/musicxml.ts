@@ -62,7 +62,7 @@ export function layoutTake(input: ExportInput): Layout {
     const all = input.notes.slice().sort((a, b) => a.onT - b.onT);
     const grid = input.grid ?? estimateGrid(all);
     const sixteenthMs = compound(grid) ? clickMs(grid) / 6 : clickMs(grid) * grid.den / 16;
-    // With a recording, only its bars: free play before it (or after it) is left out, and a note still
+    // With a metronome take, only its bars: notes before it (or after it) is left out, and a note still
     // sounding at the end is cut at the last bar line.
     const t1 = input.grid?.t1;
     const notes = input.grid

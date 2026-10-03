@@ -98,8 +98,8 @@ export function setPlayheadHidden(hidden: boolean): void {
     playhead?.setAttribute('visibility', hidden ? 'hidden' : 'visible');
 }
 
-// The TIME LINE of a live take. The recording's is red: where recording starts (dashed), or its clock while
-// it runs. Free play's is grey: its write head, where the next note will land.
+// The TIME LINE of a live take. The metronome take's is red: where recording starts (dashed), or its clock while
+// it runs. The free take's is grey: its write head, where the next note will land.
 let timeLine: SVGLineElement | null = null;
 let timeLineAt: number | null = null, timeLineMoving = false, timeLineKind: 'record' | 'write' = 'record';
 export function setTimeLine(t: number | null, moving: boolean, kind: 'record' | 'write' = 'record'): void {

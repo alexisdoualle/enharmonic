@@ -181,23 +181,23 @@ function fixtureLabel(): string {
 // LIVE TAKES: session-only fixtures played on the computer keyboard or MIDI. They have no ground truth, so
 // nothing is graded. Each note rebuilds the replay, so every panel follows the same engine the fixtures
 // run on. There are two, side by side in the menu:
-//  - FREE PLAY: whatever is played without recording, in free time (a silence over 2 s is shortened).
-//    Playing always goes here, from a piece or from the recording.
-//  - RECORDING: made by ● record, on a metronome grid. Recording again in its view adds notes from the red
+//  - FREE: whatever is played, in free time (a silence runs to the end of the bar and stops).
+//    Playing always goes here, from a piece or from the metronome take.
+//  - METRONOME: made by ● record, on a metronome grid. Recording again in its view adds notes from the red
 //    time line; from anywhere else it starts a new recording (the old one can be undone).
 interface Take {
     id: string; name: string; key: string;   // menu value, menu label, storage key
     events: RawEvent[];
-    grid: Grid | null;                       // the recording's grid (always null for free play)
+    grid: Grid | null;                       // the metronome take's grid (always null for the free take)
     held: Set<number>;                       // keys down, recorded but not yet released
     t: number; wall: number; anchored: boolean;   // the take's clock: time at the last event, its input timeStamp
-    parked: boolean;                         // free play: Space stopped the write head; the next note lands at t
-    recHead: number;                         // the recording: where ● record starts (a bar line), the red line
+    parked: boolean;                         // the free take: Space stopped the write head; the next note lands at t
+    recHead: number;                         // the metronome take: where ● record starts (a bar line), the red line
 }
 const newTake = (id: string, name: string, key: string): Take =>
     ({ id, name, key, events: [], grid: null, held: new Set(), t: 0, wall: 0, anchored: false, parked: false, recHead: 0 });
-const freeTake = newTake('__free__', '🎹 free play', 'viz.liveTake');
-const recTake = newTake('__rec__', '🎹 recording', 'viz.recTake');
+const freeTake = newTake('__free__', '🎹 free', 'viz.liveTake');
+const recTake = newTake('__rec__', '🎹 metronome', 'viz.recTake');
 const TAKES = [freeTake, recTake];
 
 const LIVE_ONSET_TOLERANCE = 50;   // ms: keys pressed together for a chord arrive this spread out
@@ -216,7 +216,7 @@ let followStep = 0;                // the playhead follows the note just played
 let holdTimer = 0;                 // while keys are held, the take refreshes so held notes grow
 const liveVoices = new Map<number, Voice>();   // held computer-keyboard notes, released on key up
 const undoStack: { tk: Take; events: RawEvent[]; grid: Grid | null }[] = [];
-let backing: Voice[] = [];         // the recording's notes playing under a new pass
+let backing: Voice[] = [];         // the metronome take's notes playing under a new pass
 let backingTimer = 0;
 let timeLineFrame = 0;
 let writeHeadFrame = 0;
@@ -244,11 +244,11 @@ function takeClock(tk: Take, now = performance.now()): number {
     if (!tk.anchored) return !tk.events.length ? 0 : tk === freeTake ? beatEnd(tk.t) : tk.t + LIVE_GAP_CAP;
     const gap = Math.max(0, now - tk.wall);
     if (clockIsReal(tk)) return tk.t + gap;
-    // Free play's silence runs on to the end of the bar and stops there.
+    // The free take's silence runs on to the end of the bar and stops there.
     return tk === freeTake ? Math.min(tk.t + gap, beatEnd(tk.t)) : tk.t + Math.min(gap, LIVE_GAP_CAP);
 }
 
-/** Where free play's silence stops after a release at `t`: the next bar line of the guide (tempo and time
+/** Where the free take's silence stops after a release at `t`: the next bar line of the guide (tempo and time
  *  signature fields, from 0). Rests inside a bar keep their length; a pause ends on a downbeat. */
 function beatEnd(t: number): number {
     const g = rollGridFor(freeTake)!, bar = barMs(g);
@@ -263,14 +263,14 @@ function advanceClock(tk: Take, now: number) {
     tk.parked = false;
 }
 
-/** Is free play's write head still moving (shown, after a note, before the bar line it stops on)? */
+/** Is the free take's write head still moving (shown, after a note, before the bar line it stops on)? */
 function writeHeadMoving(now = performance.now()): boolean {
     const tk = freeTake;
     return shown() === tk && tk.events.length > 0 && !tk.parked && tk.anchored && !tk.held.size
         && tk.t + (now - tk.wall) < beatEnd(tk.t);
 }
 
-/** Stop free play's write head where it is: the next note lands right there. */
+/** Stop the free take's write head where it is: the next note lands right there. */
 function parkWriteHead() {
     const now = performance.now();
     freeTake.t = takeClock(freeTake, now);
@@ -291,7 +291,7 @@ function liveEvents(tk: Take): RawEvent[] {
     return evs;
 }
 
-/** The start of the recording's bar containing take time `t` (a note up to a 16th early belongs to the
+/** The start of the metronome take's bar containing take time `t` (a note up to a 16th early belongs to the
  *  bar it was aiming at). */
 function barStart(t: number, early = 0): number {
     const g = recTake.grid!, bar = barMs(g);
@@ -323,14 +323,14 @@ function enterTake(tk: Take) {
     if (tk === freeTake) runWriteHead();
 }
 
-/** One keyboard or MIDI event: into the recording while recording, else into free play. */
+/** One keyboard or MIDI event: into the metronome take while recording, else into the free take. */
 function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number, velocity = 100) {
     const tk = rec !== 'off' ? recTake : freeTake;
     if (type === 'on') {
         // Only sounding: the help page's keyboard map, and the countdown before the recording starts.
         const recorded = !tk.held.has(midi) && !isHelpOpen() && !inCountdown(now);
         // Switch views and stop playback BEFORE the note sounds: both silence everything ringing.
-        if (recorded && shown() !== tk) enterTake(tk);   // playing shows free play, from a piece or the recording
+        if (recorded && shown() !== tk) enterTake(tk);   // playing shows the free take, from a piece or the metronome take
         else if (recorded && (raf || pending)) stopPlay();
         if (!liveVoices.has(midi) && sound && soundOn) {   // a key sounds while held, recorded or not
             audioEnable();
@@ -373,7 +373,7 @@ function saveTake(tk: Take) {
     } catch { /* storage blocked */ }
 }
 /** Restore the saved takes into the menu without switching to them. An older single saved take that has a
- *  grid becomes the recording. */
+ *  grid becomes the metronome take. */
 function restoreTakes() {
     const read = (key: string): { events: RawEvent[]; grid: Grid | null } | null => {
         try {
@@ -409,7 +409,7 @@ function download(body: string, ext: string, type: string) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([body], { type }));
     const d = new Date(), z = (n: number) => String(n).padStart(2, '0');
-    const what = onRecording() ? 'recording' : 'free-play';
+    const what = onRecording() ? 'metronome' : 'free';
     a.download = `${what}-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.${ext}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -423,8 +423,8 @@ function exportTake() {
         'events.json', 'application/json');
 }
 
-/** Download the take in view as MusicXML: the shown speller's spellings on the recording's grid (or an
- *  estimated 4/4 for free play), the key signature from the real-time speller's diatonic frame. */
+/** Download the take in view as MusicXML: the shown speller's spellings on the metronome take's grid (or an
+ *  estimated 4/4 for the free take), the key signature from the real-time speller's diatonic frame. */
 function exportMusicXml() {
     const tk = shown();
     if (!tk?.events.length) { flash('nothing to export: play something first'); return; }
@@ -438,10 +438,10 @@ function exportMusicXml() {
     const frame = buildReplay('rt', liveEvents(tk), [], { ...spiralOpts(), onsetTolerance: LIVE_ONSET_TOLERANCE });
     const keys = frame.snapshots.filter(s => s.frameLofTonic !== undefined).map(s => ({ t: s.t, fifths: s.frameLofTonic! }));
     const speller = MODE_NAME[state.mode] + (state.mode === 'rt' && state.lookAhead ? ' + look-ahead' : '');
-    const input = { notes, grid: tk.grid, keys, title: onRecording() ? 'Recording' : 'Free play', speller, chordMs: LIVE_ONSET_TOLERANCE };
+    const input = { notes, grid: tk.grid, keys, title: onRecording() ? 'Metronome take' : 'Free take', speller, chordMs: LIVE_ONSET_TOLERANCE };
     const layout = layoutTake(input);
     download(toMusicXml(layout, input), 'musicxml', 'application/vnd.recordare.musicxml+xml');
-    flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${tk.grid ? '' : ' (free play: 4/4 and the tempo are estimated)'}`);
+    flash(`exported ${layout.bars} bar${layout.bars === 1 ? '' : 's'}${tk.grid ? '' : ' (free take: 4/4 and the tempo are estimated)'}`);
 }
 
 // UNDO: a recording pass, a deleted note and a clear can each be undone (⌘Z / Ctrl+Z).
@@ -471,9 +471,9 @@ function undo() {
     flash(`undone (${snap.tk.name})`);
 }
 
-// RECORDING: a 4-click countdown, then the downbeat. In the recording's view it starts at the red time line
+// RECORDING: a 4-click countdown, then the downbeat. In the metronome take's view it starts at the red time line
 // (a bar line: put there by clicking a note or empty space on the roll; after a recording it waits at the
-// end) and ADDS to the recording, with its notes playing so you hear what you record over. From anywhere
+// end) and ADDS to the metronome take, with its notes playing so you hear what you record over. From anywhere
 // else it starts a new recording from bar 1 (the old one can be undone). While it runs the clock is real
 // time, so a pause stays a pause. Stop ends it at once; the grid closes on the bar line after the last note
 // (its `t1`).
@@ -538,7 +538,7 @@ function startRecording() {
     render();
 }
 
-/** Play the recording's notes from take time `fromT` (heard at performance time `perfAt`), under a pass. */
+/** Play the metronome take's notes from take time `fromT` (heard at performance time `perfAt`), under a pass. */
 function startBacking(fromT: number, perfAt: number) {
     stopBacking();
     if (!soundOn) return;
@@ -565,8 +565,8 @@ function stopBacking() {
     backing = [];
 }
 
-/** The time line. In the recording: red, where recording starts, moving with the clock while it runs. In
- *  free play: the grey write head, where the next note will land (it runs on after the last note and stops
+/** The time line. In the metronome take: red, where recording starts, moving with the clock while it runs. In
+ *  the free take: the grey write head, where the next note will land (it runs on after the last note and stops
  *  at the end of the bar). */
 function syncTimeLine() {
     const tk = shown();
@@ -576,7 +576,7 @@ function syncTimeLine() {
     else setTimeLine(Math.max(recFrom, takeClock(recTake)), rec === 'recording');
 }
 
-/** Keep free play's write head moving until it parks (at the 2 s cap after the last note). */
+/** Keep the free take's write head moving until it parks (at the bar line after the last note). */
 function runWriteHead() {
     if (writeHeadFrame) return;
     const tick = () => {
@@ -590,7 +590,7 @@ function runWriteHead() {
 }
 
 /** Is `now` still in the countdown? Decided by time, not by the click display: a downbeat played a little
- *  early (up to a 16th) belongs to the recording. */
+ *  early (up to a 16th) belongs to the metronome take. */
 function inCountdown(now: number): boolean {
     return rec !== 'off' && !!recTake.grid && takeClock(recTake, now) < recFrom - clickMs(recTake.grid) / 4;
 }
@@ -644,7 +644,7 @@ function syncRecUi() {
     const btn = $('metro-toggle');
     btn.textContent = rec === 'off' ? '● record' : '■ stop';
     btn.classList.toggle('recording', rec !== 'off');
-    // In the recording's view its tempo and time signature are shown, locked (clear unlocks them).
+    // In the metronome take's view its tempo and time signature are shown, locked (clear unlocks them).
     const locked = onRecording() && !!recTake.grid && recTake.events.length > 0;
     if (locked) {
         $<HTMLInputElement>('metro-bpm').value = String(recTake.grid!.bpm);
@@ -653,7 +653,7 @@ function syncRecUi() {
     $<HTMLInputElement>('metro-bpm').disabled = rec !== 'off' || locked;
     $<HTMLSelectElement>('metro-meter').disabled = rec !== 'off' || locked;
     btn.title = rec !== 'off' ? 'stop recording (Space)'
-        : locked ? 'record from the red line, adding to the recording (Enter)' : 'record a new take against the metronome (Enter)';
+        : locked ? 'record from the red line, adding to the metronome take (Enter)' : 'record a new take against the metronome (Enter)';
     syncTimeLine();
 }
 
@@ -670,7 +670,7 @@ function deleteNote(step: number) {
     pushUndo(tk);
     tk.events.splice(off, 1);
     tk.events.splice(on, 1);
-    if (tk === freeTake) {   // free play carries on from the last note still there, not from a deleted one
+    if (tk === freeTake) {   // the free take carries on from the last note still there, not from a deleted one
         tk.t = Math.max(0, ...tk.events.map(e => e.t_ms));
         tk.wall = performance.now();
         tk.anchored = true;
@@ -708,8 +708,8 @@ function effMode(): Mode {
     return state.mode === 'rt' && state.lookAhead ? 'la' : state.mode;
 }
 
-/** The bar and beat lines on a take's roll: the recording's grid, else a guide from the tempo and time
- *  signature fields (free play is not recorded against it). One object per setting, so the roll only
+/** The bar and beat lines on a take's roll: the metronome take's grid, else a guide from the tempo and time
+ *  signature fields (the free take is not recorded against it). One object per setting, so the roll only
  *  rebuilds when it changes. */
 let guideGrid: Grid | null = null;
 function rollGrid(): Grid | null {
@@ -872,7 +872,7 @@ function seek(i: number, audible = false, resume = true) {
     stopPlay();
     allNotesOff();       // silence whatever was ringing, so the new position starts clean
     state.step = clampStep(state, i);
-    // In the recording, picking a note puts the record start at the beginning of its bar.
+    // In the metronome take, picking a note puts the record start at the beginning of its bar.
     const picked = state.replay?.notes[state.step];
     if (onRecording() && recTake.grid && rec === 'off' && picked) recTake.recHead = barStart(picked.onT, clickMs(recTake.grid) / 4);
     render();
@@ -1154,7 +1154,7 @@ function wire() {
         if (onRecording() && recTake.grid && rec === 'off') { recTake.recHead = barStart(t); syncTimeLine(); }
     });
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
-    liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes go to free play (or the recording)
+    liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes go to the free take (or the metronome take)
     // Clear asks twice: the first click arms it for 3 s, the second clears.
     let clearArmed = 0;
     const disarmClear = () => { clearTimeout(clearArmed); clearArmed = 0; $('take-clear').textContent = 'clear'; $('take-clear').classList.remove('armed'); };
@@ -1167,7 +1167,7 @@ function wire() {
     $('take-export').addEventListener('click', exportTake);
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
-    // The guide lines on free play follow the tempo and time signature fields.
+    // The guide lines on the free take follow the tempo and time signature fields.
     for (const id of ['metro-bpm', 'metro-meter']) $(id).addEventListener('input', () => { if (isLive()) { render(); runWriteHead(); } });
     // The panel's own reset belongs to its standalone page; here a fresh take is the toolbar's job.
     $('live-tonnetz').querySelector<HTMLElement>('.live-reset')!.hidden = true;
@@ -1265,7 +1265,7 @@ function wire() {
         if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && (ev.key === 'z' || ev.key === 'Z') && isLive() && !isTextField(target)) { ev.preventDefault(); undo(); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
-        // Space stops whatever is moving (a recording, playback, free play's write head); otherwise it plays.
+        // Space stops whatever is moving (a recording, playback, the free take's write head); otherwise it plays.
         if (ev.key === ' ') {
             ev.preventDefault();
             if (rec !== 'off') stopRecording();
