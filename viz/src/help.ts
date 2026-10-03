@@ -119,8 +119,8 @@ modes add, sets the side passage by passage.</p>
 wrong notes, at some cost in latency.</p>
 
 <ul>
-<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The four rules, no frame. The most wrong
-notes, but it already reads intervals well. Real-time.</li>
+<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The four rules, no frame. Close to
+real-time on Meredith (0.54% wrong against 0.42%), further behind on harder pieces. Real-time.</li>
 <li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that sets the
 side as the music plays. The default. Real-time.</li>
 <li><b>&#9314; look-ahead</b> &nbsp;<code>new Speller({ lookAhead: true })</code><br>Real-time plus a
