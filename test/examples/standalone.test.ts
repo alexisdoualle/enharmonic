@@ -1,11 +1,11 @@
 /**
  * Standalone ↔ shipped-model parity guard.
  *
- * `examples/core-speller.ts` is the self-contained reference copy: the entire three-principle speller in one
- * file (zero imports, ~90 effective lines). It is a DERIVED copy: `src/core.ts` is the
+ * `examples/core-speller.ts` is the self-contained reference copy: the entire four-principle speller in one
+ * file (zero imports, ~100 effective lines). It is a DERIVED copy: `src/core.ts` is the
  * source of truth (the bench drives it as Core and shares its primitives with the rest of the speller). This test
  * pins the copy to the original: for every curated fixture the standalone must produce byte-identical
- * spellings, scale and read-back to `CoreSpeller`, so "the complete speller in ~90 lines" stays a true claim as the code
+ * spellings, scale and read-back to `CoreSpeller`, so "the complete speller in ~100 lines" stays a true claim as the code
  * evolves. Edit `src/core.ts` and this drift will fail here until the standalone is re-synced.
  */
 import { assertEq, suite, test } from '../framework.js';

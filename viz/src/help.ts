@@ -90,7 +90,7 @@ it should have moved to F&#x1D12A; with the others.</blockquote>
     {
         id: 'model', nav: 'The model', title: 'How a note is spelled',
         body: `
-<p>No key detection. Spelling comes from three rules. This is <code>CoreSpeller</code>
+<p>No key detection. Spelling comes from four rules. This is <code>CoreSpeller</code>
 (<code>src/core.ts</code>); the other modes build on it.</p>
 
 <ol>
@@ -102,11 +102,14 @@ slot, so spelling a note means choosing its letter.</li>
 <li><b>Recency guard.</b> Interval scoring only compares against the other letters, so it misses A&flat;
 right after A. The guard penalises respelling a letter within a few onsets. It stops flicker, not
 modulation.</li>
+<li><b>Spiral fold.</b> If the scale's average drifts more than 8 fifths from D, every slot moves one comma
+back (E&sharp; becomes F, B&sharp; becomes C). It stops the scale walking a comma sharp.</li>
 </ol>
 
 <p><b>Why the side is separate.</b> D&flat;&ndash;F&ndash;A&flat; and C&sharp;&ndash;E&sharp;&ndash;G&sharp;
-have the same intervals, so interval scoring can't choose between them. That needs an absolute position:
-the frame (see <b>Spiral</b>), which the other modes add.</p>
+have the same intervals, so interval scoring can't choose between them. That needs an absolute position.
+The fold is the coarsest one: it only catches a large drift. The frame (see <b>Spiral</b>), which the other
+modes add, sets the side passage by passage.</p>
 `,
     },
     {
@@ -116,7 +119,7 @@ the frame (see <b>Spiral</b>), which the other modes add.</p>
 wrong notes, at some cost in latency.</p>
 
 <ul>
-<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The three rules, no frame. The most wrong
+<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The four rules, no frame. The most wrong
 notes, but it already reads intervals well. Real-time.</li>
 <li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that sets the
 side as the music plays. The default. Real-time.</li>

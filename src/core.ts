@@ -1,7 +1,7 @@
 /**
- * CoreSpeller: the three-principle foundation.
+ * CoreSpeller: the four-principle foundation.
  *
- * Interval (aug/dim) scoring, the 7-letter limit, and a recency guard, nothing else:
+ * Interval (aug/dim) scoring, the 7-letter limit, a recency guard and a spiral fold, nothing else:
  * the minimal causal baseline the real-time Speller (look-ahead is an option) and the
  * two-pass function `spellTwoPass` build on. Frameless and persistent: one drifting scale whose slots are
  * overwritten, never reverted.
@@ -12,12 +12,18 @@
  * misses that same-letter clash; the guard is the missing self-consistency term. Bounded
  * on purpose (a short window): it blocks flicker, not real modulation.
  *
+ * The spiral fold (principle 4) keeps the scale on the conventional side of the spiral of
+ * fifths. Interval scoring is relative: it cannot tell D♭ from C♯, so a run of sharp choices
+ * can walk the whole scale a comma sharp (C𝄪 D♯ E♯ F𝄪 G♯ A♯ B♯) with nothing to pull it back.
+ * The fold is the absolute brake: when the scale's average line-of-fifths position drifts more
+ * than 8 fifths from D, every slot moves one comma back toward D (E♯ becomes F, B♯ becomes C).
+ *
  * Not part of the product API. It is the weakest speller (highest wrong%), dominated
  * at its own latency by Speller, so it is not re-exported from index.ts and the
  * package exports keep it off the npm surface. It lives in src/ (not an example) so
  * the bench can score it as Core; reach it only by an in-repo path import.
  *
- * The self-contained ~90-line version is examples/core-speller.ts (zero imports),
+ * The self-contained ~100-line version is examples/core-speller.ts (zero imports),
  * kept in lockstep with this class (identical spellings on every fixture) by
  * test/examples/standalone.test.ts.
  */
@@ -49,11 +55,13 @@ export class CoreSpeller {
      * @param doubleAccidentalPenalty over-rotation cap (default 0 = off): subtract this from any
      *  |alter| ≥ 2 candidate before the argmax, so a ♯♯/♭♭ spelling is picked only when it out-scores
      *  every single-accidental rival by more than the cap.
+     * @param foldRadius  R, the spiral fold radius in fifths around D (default 8; 0 ablates principle 4).
      */
     constructor(
         private readonly recencyGuard = 2,
         private readonly guardWindow = 3,
         private readonly doubleAccidentalPenalty = 0,
+        private readonly foldRadius = 8,
     ) {}
 
     reset(scale: readonly PitchClass[]): void {
@@ -100,6 +108,13 @@ export class CoreSpeller {
         this.active.set(midi, best);
         // Principle 3: remember when this letter was set.
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
+        // Principle 4: the scale's line-of-fifths sum, measured from D (2 per slot). Past the radius,
+        // shift every slot one comma (12 fifths) back toward D: same pitches, other letters.
+        const off = this.scale.reduce((a, b) => a + b, 0) - 7 * 2;
+        if (this.foldRadius && Math.abs(off) > 7 * this.foldRadius) {
+            const k = -12 * Math.sign(off);
+            for (const n of [...this.scale]) this.scale[letter(n + k)] = n + k;
+        }
     }
 
     noteOff(midi: number): void {

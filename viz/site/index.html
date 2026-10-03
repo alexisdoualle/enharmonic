@@ -134,11 +134,11 @@
       and a recency guard against flicker. A spiral of fifths then decides which side of the comma a passage
       sits on. The side it lands on is a statistic of the notes it has already committed.</p>
 
-      <p>Those three principles are small enough to read in one file:
+      <p>Those three principles, plus a spiral fold that pulls the scale back one comma when it drifts too
+      far, are small enough to read in one file:
       <a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">the Core
-      speller</a>, about 90 lines with zero imports. On its own it spells coherently but can land on the
-      wrong side of the comma, so its coherent rate stays high while its exact rate drops. The shipped modes
-      add the side correction that closes that gap.</p>
+      speller</a>, about 100 lines with zero imports. The fold only catches a large drift, so Core can
+      still land a passage on the wrong side of the comma. The shipped modes track the side more closely.</p>
 
       <h2>One speller</h2>
       <p>One engine spells each note as it plays, from past context only. An optional
@@ -161,7 +161,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (3 principles)</td><td>97.56%</td><td>99.44%</td><td class="grp">68.04%</td><td>97.69%</td></tr>
+          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (4 principles)</td><td>99.37%</td><td>99.46%</td><td class="grp">91.29%</td><td>97.99%</td></tr>
           <tr><td>Real-time</td><td>99.53%</td><td>99.58%</td><td class="grp">91.43%</td><td>98.36%</td></tr>
           <tr><td>Two-pass</td><td>99.86%</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
         </tbody>
