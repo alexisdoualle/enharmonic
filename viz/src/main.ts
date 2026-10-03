@@ -1273,6 +1273,8 @@ function wire() {
             ev.preventDefault(); if (rec !== 'off') stopRecording(); else startRecording(); return;
         }
         if ((ev.key === 'Backspace' || ev.key === 'Delete') && isLive() && rec === 'off') { ev.preventDefault(); deleteNote(state.step); return; }
+        // Shift+X is the clear button (letters alone are notes): the first press arms it, the second clears.
+        if (ev.shiftKey && (ev.key === 'X' || ev.key === 'x') && isLive() && rec === 'off') { ev.preventDefault(); $('take-clear').click(); return; }
         if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
         else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }

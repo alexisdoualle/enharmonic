@@ -209,7 +209,7 @@ quantised to them; only a pause stops on a beat line.</p>
 <tr><td>click a note or empty roll</td><td>in the recording: move the red line to that bar</td></tr>
 <tr><td><b>Backspace</b> / <b>Delete</b></td><td>remove the note under the playhead</td></tr>
 <tr><td><b>&#8984;Z</b> / Ctrl+Z</td><td>undo the last recording, deletion or clear</td></tr>
-<tr><td><b>clear</b> (two clicks)</td><td>empty the take shown</td></tr>
+<tr><td><b>clear</b> or <b>&#8679;X</b>, twice</td><td>empty the take shown</td></tr>
 </table>
 
 <p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
