@@ -79,9 +79,9 @@
   },
   "chopin_prelude_op28_no15": {
     "core": {
-      "correct": 934,
-      "flipped": 614,
-      "wrong": 18,
+      "correct": 231,
+      "flipped": 1316,
+      "wrong": 19,
       "total": 1566
     },
     "rt": {

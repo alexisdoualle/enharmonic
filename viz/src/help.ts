@@ -98,7 +98,7 @@ composer wrote is flipped, not wrong.</blockquote>`,
     {
         id: 'model', nav: 'The model', title: 'How a note is spelled',
         body: `
-<p>No key detection anywhere. Spelling falls out of three principles. This is <code>CoreSpeller</code>
+<p>No key detection anywhere. Spelling falls out of four principles. This is <code>CoreSpeller</code>
 (<code>src/core.ts</code>); every other mode builds on it.</p>
 
 <ol>
@@ -110,12 +110,16 @@ overwrites its letter's slot. Spelling a note means choosing which letter to cla
 <li><b>The recency guard.</b> Interval scoring only compares a candidate against the <i>other</i>
 letters, so it misses a same-letter clash (A&flat; right after A&natural;). The guard penalises a letter
 respelled at a different accidental within a few onsets. It blocks flicker, not real modulation.</li>
+<li><b>The spiral fold.</b> When the scale's average line-of-fifths position drifts more than 8 fifths
+from D, every slot moves one comma back (E&sharp; becomes F, B&sharp; becomes C). It stops a run of sharp
+choices walking the whole scale a comma sharp.</li>
 </ol>
 
 <p><b>Why the side is separate.</b> Intervals are almost symmetric under a comma shift: D&flat;&ndash;F&ndash;A&flat;
 has the same intervals as C&sharp;&ndash;E&sharp;&ndash;G&sharp;. So interval scoring cannot tell the two
-sides apart. Picking the side needs an absolute position, not a relative one. That is the frame's job
-(see <b>Spiral</b>), and it is what the real-time and two-pass modes add on top of the model here.</p>`,
+sides apart. Picking the side needs an absolute position, not a relative one. The fold is the
+coarsest such position: it only catches a large drift. Tracking the side passage by passage is the
+frame's job (see <b>Spiral</b>), and it is what the real-time and two-pass modes add on top of the model here.</p>`,
     },
     {
         id: 'modes', nav: 'Speller modes', title: 'The four spellers (and the control)',
@@ -124,8 +128,8 @@ sides apart. Picking the side needs an absolute position, not a relative one. Th
 idea and drops the wrong count, at some cost in latency.</p>
 
 <ul>
-<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The frameless baseline: the three
-principles, one drifting scale, no side correction. Highest wrong%, but it already reads intervals well.
+<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The frameless baseline: the four
+principles, one drifting scale folded back past a fixed radius. Highest wrong%, but it already reads intervals well.
 Real-time.</li>
 <li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that fixes
 the side as the music plays. The production default. Real-time.</li>

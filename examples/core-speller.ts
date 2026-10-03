@@ -1,9 +1,9 @@
 /**
- * CoreSpeller: the three-principle enharmonic speller, self-contained.
+ * CoreSpeller: the four-principle enharmonic speller, self-contained.
  *
  * The basic spelling model in one file, zero imports. A truncated version of the
- * shipped real-time Speller: the three principles alone, without the settings that
- * correct the enharmonic side. `src/core.ts` is the source of truth; this file is a
+ * shipped real-time Speller: the four principles alone, without the settings that
+ * fine-tune the enharmonic side. `src/core.ts` is the source of truth; this file is a
  * derived copy, pinned to it by `test/examples/standalone.test.ts` (equal spellings
  * on every fixture). Kept for pedagogy. On its own, this model reads spellings coherently
  * (intervals right, flicker-free), at the cost of sometimes landing on the wrong side of the
@@ -13,7 +13,7 @@
  * because it disagrees with its neighbors, even if that note was in the original score. 
  * It wasn't transposed correctly, it should be "E#".
  *
- * Three principles, and nothing else:
+ * Four principles, and nothing else:
  *   1. INTERVAL SCORING. Among a pitch's enharmonic candidates, pick the one that
  *      forms the most consonant intervals with the running "resolved scale"
  *      (consonances reward, augmented/diminished punish). The scale drifts into key
@@ -26,17 +26,23 @@
  *      candidate whose letter was last committed at a different accidental within K
  *      onsets, so a slot cannot flicker against its recent self. Bounded on purpose: it
  *      blocks flicker, not real modulation.
+ *   4. THE SPIRAL FOLD. Interval scoring is relative: it cannot tell D♭ from C♯, so a
+ *      run of sharp choices can walk the whole scale a comma sharp (C𝄪 D♯ E♯ F𝄪 G♯ A♯ B♯)
+ *      with nothing to pull it back. The fold is the absolute brake: when the scale's
+ *      average line-of-fifths position drifts more than 8 fifths from D, every slot moves
+ *      one comma back toward D (E♯ becomes F, B♯ becomes C). Every major key from F♭ to
+ *      G♯ sits inside the radius.
  *
  * Frameless and persistent: one drifting scale whose slots are overwritten, never
- * reverted. The weakest form of the speller. The shipped Speller adds side
- * correction, an optional look-ahead, and more; spellTwoPass runs the same model
+ * reverted. The weakest form of the speller. The shipped Speller adds finer side
+ * tracking (a diatonic-anchor leash), an optional look-ahead, and more; spellTwoPass runs the same model
  * offline in two passes.
  *
  * The principles all but solve coherence (intervals right and
  * flicker-free, well under 1% incoherent). The residual gap from coherent to exact is
- * the SIDE: with no key-signature prior and no range cap, the scale can drift onto the
- * other enharmonic side of a passage (a coherent flip, e.g. D♭ F A♭ for C♯ E♯ G♯:
- * notation, not error). The full Speller fixes the side.
+ * the SIDE: the fold only catches a large drift, so a passage can still sit on the other
+ * enharmonic side (a coherent flip, e.g. D♭ F A♭ for C♯ E♯ G♯: notation, not error).
+ * The full Speller tracks the side more closely.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -153,6 +159,12 @@ function intervalScore(n: number, scale: readonly number[]): number {
 const GUARD_PENALTY = 2;
 const GUARD_WINDOW = 3;
 
+// ── The spiral fold (principle 4) ────────────────────────────────────────────
+
+/** Fold centre (D) and radius R, in fifths: fold when the scale's average sits more than R from D. */
+const FOLD_CENTRE = 2;
+const FOLD_RADIUS = 8;
+
 // ── The speller ──────────────────────────────────────────────────────────────
 
 export class CoreSpeller {
@@ -198,6 +210,12 @@ export class CoreSpeller {
         this.active.set(midi, best);
         // Principle 3: remember when this letter was set.
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
+        // Principle 4: past the radius, shift every slot one comma (12 fifths) back toward D.
+        const off = this.scale.reduce((a, b) => a + b, 0) - 7 * FOLD_CENTRE;
+        if (Math.abs(off) > 7 * FOLD_RADIUS) {
+            const k = -12 * Math.sign(off);
+            for (const n of [...this.scale]) this.scale[letter(n + k)] = n + k;
+        }
     }
 
     noteOff(midi: number): void {
