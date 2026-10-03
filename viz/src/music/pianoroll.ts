@@ -71,6 +71,7 @@ export function setPlayheadTime(t: number | null): void {
     const x = PAD + t * pxPerMs;
     playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
     keepAtMiddle(x);
+    if (builtForReplay) applyActiveStrokes(builtForReplay, lastStep);   // what is sounding now
 }
 
 /** A moving line (playback, recording, the write head) scrolls the roll smoothly once it passes the middle
@@ -240,7 +241,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
             // playhead scrolls back into view.
             if (Math.abs(host.scrollLeft - expectedScrollLeft) > 2) follow = false;
             renderVisible();
-            applyActiveStrokes(replay, lastStep);
+            if (builtForReplay) applyActiveStrokes(builtForReplay, lastStep);   // the CURRENT replay (bound once)
         });
         scrollBound = true;
     }
@@ -452,18 +453,15 @@ function applyActiveStrokes(replay: Replay, step: number): void {
     for (const oi of prevActive) { const r = rects[oi]; if (r) r.setAttribute('stroke', 'none'); }
     if (!replay.notes.length) { prevActive = []; return; }
     const cur = replay.notes[Math.max(0, Math.min(replay.notes.length - 1, step))]!;
-    const t = cur.onT, curOn = cur.onIndex;
+    // During playback, the notes sounding at the gliding playhead; otherwise at the current onset.
+    const t = playheadAt ?? cur.onT, curOn = cur.onIndex;
     const active: number[] = [];
     for (const oi of rendered) {
         const L = layouts[oi]!;
-        if (L.onT <= t && t < L.offT) {
-            const rect = rects[oi];
-            if (rect) {
-                if (oi === curOn) { rect.setAttribute('stroke', '#ffd230'); rect.setAttribute('stroke-width', '2.5'); }
-                else { rect.setAttribute('stroke', '#8a93a0'); rect.setAttribute('stroke-width', '1'); }
-                active.push(oi);
-            }
-        }
+        const rect = rects[oi];
+        if (!rect) continue;
+        if (oi === curOn) { rect.setAttribute('stroke', '#ffd230'); rect.setAttribute('stroke-width', '2.5'); active.push(oi); }
+        else if (L.onT <= t && t < L.offT) { rect.setAttribute('stroke', '#8a93a0'); rect.setAttribute('stroke-width', '1'); active.push(oi); }
     }
     prevActive = active;
 }
