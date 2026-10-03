@@ -107,6 +107,15 @@ export function setTimeLine(t: number | null, moving: boolean, kind: 'record' | 
     if (!timeLine) return;
     if (t === null || t < 0) { timeLine.setAttribute('visibility', 'hidden'); return; }
     const x = PAD + t * pxPerMs;
+    const host = document.getElementById('pianoroll')!;
+    if (builtForReplay && x + host.clientWidth / 2 > svgWidth) {   // near the roll's end: widen it (bar lines too)
+        const left = host.scrollLeft;
+        build(builtForReplay, builtWithKeyLanes, builtGrid);
+        updatePlayhead(builtForReplay, lastStep);
+        host.scrollLeft = left; expectedScrollLeft = host.scrollLeft;
+        if (moving) keepAtMiddle(x);
+        return;   // build drew the line
+    }
     timeLine.setAttribute('visibility', 'visible');
     timeLine.setAttribute('x1', String(x)); timeLine.setAttribute('x2', String(x));
     timeLine.setAttribute('stroke', kind === 'record' ? '#e06c75' : '#7d8696');
@@ -127,6 +136,7 @@ let maxW = 0;                                // widest note, so long-held notes 
 let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex: only the visible ones exist
 let rendered = new Set<number>();            // onIndices currently materialized in the DOM
 let pxPerMs = PX_PER_SEC / 1000;
+let svgWidth = 0;
 let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
 let scrollBound = false;
@@ -157,7 +167,10 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
     pxPerMs = (PX_PER_SEC / 1000) * sc;
     rowH = ROW_H * sc;
-    const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs);
+    // A time line gets a view's width of room ahead, so it can sit mid-view and never runs off the roll.
+    const lineEnd = timeLineAt !== null && timeLineAt >= 0 ? PAD + timeLineAt * pxPerMs + host.clientWidth : 0;
+    const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs, lineEnd);
+    svgWidth = width;
     const noteH = (hi - lo + 1) * rowH;
     const laneTop = PAD + noteH + LANE_GAP;                              // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.

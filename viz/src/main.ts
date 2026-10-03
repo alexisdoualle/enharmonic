@@ -325,7 +325,8 @@ function enterTake(tk: Take) {
 
 /** One keyboard or MIDI event: into the metronome take while recording, else into the free take. */
 function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number, velocity = 100) {
-    const tk = rec !== 'off' ? recTake : freeTake;
+    // A press goes where notes go now; a release to the take that holds that key (it may have changed since).
+    const tk = type === 'on' ? (rec !== 'off' ? recTake : freeTake) : TAKES.find(x => x.held.has(midi)) ?? freeTake;
     if (type === 'on') {
         // Only sounding: the help page's keyboard map, and the countdown before the recording starts.
         const recorded = !tk.held.has(midi) && !isHelpOpen() && !inCountdown(now);
@@ -337,6 +338,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
             liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.28 * Math.max(1, Math.min(127, velocity)) / 127));
         }
         if (!recorded) return;
+        setPlayheadTime(null);   // a playhead left at the end of a finished playback goes
         if (rec !== 'off') recNotes++;
     } else {
         const v = liveVoices.get(midi);
@@ -352,10 +354,13 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
     clearTimeout(settleTimer);
     if (tk.held.size === 0) {
         saveTake(tk);
-        settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
+        scheduleSettle();
     }
     clearInterval(holdTimer);
-    if (tk.held.size) holdTimer = window.setInterval(() => { if (shown() === tk && !liveFrame) recompute(); }, 100);
+    if (tk.held.size) holdTimer = window.setInterval(() => {
+        if (!tk.held.size) { clearInterval(holdTimer); return; }
+        if (shown() === tk && !liveFrame) recompute();
+    }, 100);
     if (shown() !== tk || liveFrame) return;
     liveFrame = requestAnimationFrame(() => {
         liveFrame = 0;
@@ -363,6 +368,23 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
         state.step = followStep;   // follow the note just played (mid-take when recording over it)
         render();
     });
+}
+
+/** Look-ahead and two-pass re-spell the take once every key has been up a moment. */
+function scheduleSettle() {
+    clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => { takeSettled = true; if (isLive()) recompute(); }, LIVE_SETTLE);
+}
+
+/** Release every key a take still holds, at its clock (a stop, or a switch of take, while keys are down). */
+function closeHeld(tk: Take, at = performance.now()) {
+    if (!tk.held.size) return;
+    advanceClock(tk, at);
+    const t = Math.round(tk.t);
+    for (const midi of tk.held) insertEvent(tk, { t_ms: t, type: 'off', midi });
+    tk.held.clear();
+    saveTake(tk);
+    scheduleSettle();
 }
 
 // The takes survive a reload in this browser (a convenience; they are never uploaded).
@@ -454,6 +476,7 @@ function pushUndo(tk: Take) {
 function restoreSnapshot(snap: { tk: Take; events: RawEvent[]; grid: Grid | null }) {
     const tk = snap.tk;
     tk.events = snap.events; tk.grid = snap.grid; tk.held.clear(); tk.anchored = false; tk.parked = false;
+    clearInterval(holdTimer);
     tk.t = tk.events.at(-1)?.t_ms ?? 0;
     tk.recHead = tk.grid ? (tk.grid.t1 ?? tk.grid.t0) : 0;
     saveTake(tk);
@@ -490,8 +513,10 @@ function pairOffs(evs: readonly RawEvent[]): Map<number, number> {
 
 function startRecording() {
     audioEnable();
-    if (liveFrame) { cancelAnimationFrame(liveFrame); liveFrame = 0; recompute(); }   // the replay must include every note
     const now = performance.now();
+    if (raf || pending) stopPlay();
+    closeHeld(freeTake, now);   // keys held in the free take end there; new notes go to the metronome take
+    if (liveFrame) { cancelAnimationFrame(liveFrame); liveFrame = 0; recompute(); }   // the replay must include every note
     const bpm = Math.max(30, Math.min(260, Number($<HTMLInputElement>('metro-bpm').value) || 90));
     const [num, den] = $<HTMLSelectElement>('metro-meter').value.split('/').map(Number) as [number, number];
     const tk = recTake;
@@ -606,6 +631,7 @@ function stopRecording() {
 function endRecording(at: number) {
     const tk = recTake;
     advanceClock(tk, at);   // the time up to now was real
+    closeHeld(tk, at);      // keys still down end at the stop
     metro.stop();
     stopBacking();
     cancelAnimationFrame(timeLineFrame);
@@ -620,7 +646,6 @@ function endRecording(at: number) {
     const g = tk.grid!, sixteenth = barMs(g) / (g.num * 16 / g.den);
     let last = -Infinity;
     for (const e of tk.events) last = Math.max(last, e.type === 'on' ? e.t_ms : e.t_ms - sixteenth);
-    for (const _ of tk.held) last = Math.max(last, tk.t - sixteenth);   // still held at the stop
     const bars = Math.max(1, Math.ceil((last - g.t0) / barMs(g) + 1e-6));
     g.t1 = g.t0 + bars * barMs(g);
     tk.recHead = g.t1;
@@ -1046,7 +1071,11 @@ function setTempo(rate: number) {
 
 // A backgrounded tab freezes requestAnimationFrame but not performance.now(); resuming would fire one
 // frame with a huge elapsed time and dump the whole backlog of past-due notes at once. So just pause.
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopPlay(); });
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) return;
+    stopPlay();
+    if (rec !== 'off') stopRecording();   // background timers are throttled: the clicks would drift
+});
 
 /** ⌘/Ctrl+C dumps the current onset (⇧ adds the whole run) as agent-pasteable text. A real text
  *  selection still copies natively; the shortcut only claims the keystroke when nothing is selected. */
@@ -1132,8 +1161,9 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
     resetStaffScroll();
     const tk = TAKES.find(x => x.id === id);
+    if (rec !== 'off' && id !== recTake.id) endRecording(performance.now());   // a cancelled pass re-shows its take
+    $<HTMLSelectElement>('fixture').value = id;
     $('take-clear').hidden = $('take-export-xml').hidden = !tk;   // ⤓ events stays hidden (dev only)
-    if (rec !== 'off' && id !== recTake.id) endRecording(performance.now());
     if (tk) {   // a take: land on its latest note
         enterTake(tk); recompute();
         state.step = (state.replay?.snapshots.length ?? 1) - 1;

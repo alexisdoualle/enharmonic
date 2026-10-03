@@ -94,4 +94,12 @@ suite('MusicXML export', () => {
         // The F chord, beat 2 to the bar's end, is a quarter tied over the half bar to a half.
         assertEq(evs.map(e => `${e.start}:${e.dur}:${e.pitches.length}`).join(' '), '0:4:3 4:4:3 8:8:3');
     });
+    test('five notes struck together, released apart, still fill each bar exactly', () => {
+        const five = [72, 74, 76, 77, 79].map((m, k) => n(m, 'CDEFG'[k]!, 0, 0, 4000 - k * 500));
+        const L5 = layoutTake({ ...input, notes: five });
+        L5.staves.forEach((voices, s) => voices.forEach((bars, v) => bars.forEach((evs, b) =>
+            assertEq(evs.reduce((a, e) => a + e.dur, 0), L5.barLen, `staff ${s + 1} voice ${v + 1} bar ${b + 1}`))));
+        const struck = (L5.staves.flat(2).flat() as Ev[]).filter(e => e.pitches.length && !e.tieStop).flatMap(e => e.pitches.map(p => p.midi));
+        assertEq([...struck].sort().join(','), '72,74,76,77,79');
+    });
 });

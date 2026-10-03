@@ -137,7 +137,13 @@ export function layoutTake(input: ExportInput): Layout {
                 else {   // no free voice: cut the voice that frees soonest short at this onset
                     v = voices.reduce((a, b) => a.free <= b.free ? a : b);
                     const last = v.evs[v.evs.length - 1]!;
-                    last.dur = Math.max(1, start - last.start);
+                    if (last.start === start) {   // struck with it: join that chord, ending with the shorter
+                        last.pitches = [...last.pitches, ...c.map(({ midi, step, alter }) => ({ midi, step, alter }))].sort((a, b) => a.midi - b.midi);
+                        last.dur = Math.min(last.dur, e - start);
+                        v.free = start + last.dur;
+                        continue;
+                    }
+                    last.dur = start - last.start;
                 }
             }
             v.evs.push({ start, dur: e - start, pitches: c.map(({ midi, step, alter }) => ({ midi, step, alter })).sort((a, b) => a.midi - b.midi) });

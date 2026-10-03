@@ -405,8 +405,16 @@ export function connectLiveInput(model: LiveSpeller): void {
         down.delete(event.code);
         model.noteOff(midi, event.timeStamp);
     };
+    // A key let go while the page has no focus sends no keyup: release everything held on blur or hide.
+    const releaseAll = () => {
+        const t = performance.now();
+        for (const code of down) model.noteOff(COMPUTER_KEYS[code]!, t);
+        down.clear();
+    };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 }
 
 /** True when this browser exposes Web MIDI at all (so the UI can hide the button otherwise). */
@@ -434,14 +442,20 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
         // pedal to lift. A sustained key struck again is released first, then re-struck, as on a piano.
         let pedal = false;
         const sustained = new Set<number>();
+        const keysDown = new Set<number>();
+        const attached = new WeakSet<WebMidi.MIDIInput>();
         const attach = (input: WebMidi.MIDIInput) => {
+            if (attached.has(input)) return;
+            attached.add(input);
             input.addEventListener('midimessage', event => {
                 const [status, data1, data2] = event.data;
                 const command = status! & 0xf0, t = event.timeStamp;
                 if (command === 0x90 && data2! > 0) {
+                    keysDown.add(data1!);
                     if (sustained.delete(data1!)) model.noteOff(data1!, t);
                     model.noteOn(data1!, true, t, data2!);   // through the synth (most controllers have no sound)
                 } else if (command === 0x80 || (command === 0x90 && data2 === 0)) {
+                    keysDown.delete(data1!);
                     if (pedal) sustained.add(data1!);
                     else model.noteOff(data1!, t);
                 } else if (command === 0xb0 && data1 === 64) {
@@ -455,6 +469,12 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
         model.setMidiStatus(names.length ? `MIDI: ${names.join(', ')}` : 'MIDI ready · computer keyboard ready');
         access.addEventListener('statechange', event => {
             if (event.port.type === 'input' && event.port.state === 'connected') attach(event.port as WebMidi.MIDIInput);
+            if (event.port.type === 'input' && event.port.state === 'disconnected') {
+                // Unplugged mid-note: its note-offs will never come, so release what it held (and the pedal).
+                const t = performance.now();
+                for (const m of new Set([...keysDown, ...sustained])) model.noteOff(m, t);
+                keysDown.clear(); sustained.clear(); pedal = false;
+            }
             const current = [...access.inputs.values()].map(input => input.name).filter(Boolean);
             model.setMidiStatus(current.length ? `MIDI: ${current.join(', ')}` : 'MIDI ready · computer keyboard ready');
         });
