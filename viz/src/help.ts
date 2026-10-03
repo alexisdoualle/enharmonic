@@ -253,90 +253,82 @@ experimental, display-only read of the local and home key under the roll.</p>
     {
         id: 'scoring', nav: 'Scoring panel', title: 'Reading a spelling decision',
         body: `
-<p>This panel opens up the current note's decision, the same numbers the engine used.</p>
-<p><b>Surface rows.</b> The 7-letter scale the engine is holding right now.</p>
+<p>This panel shows the current note's decision, with the engine's own numbers.</p>
+<p><b>Surface rows.</b> The 7-letter scale the engine holds right now.</p>
 <ul>
-<li><b>frame</b>: the bare diatonic collection (the side, before any chromatic colour).</li>
-<li><b>surface</b>: that collection with its live alterations, the scale a candidate is actually scored
-against.</li>
+<li><b>frame</b>: the plain diatonic collection (the side, before chromatic notes).</li>
+<li><b>surface</b>: the frame with its current alterations. Candidates are scored against it.</li>
 </ul>
-<p><b>Candidate table.</b> Every enharmonic spelling of the struck pitch, with its score.</p>
+<p><b>Candidate table.</b> Each spelling of the struck pitch, with its score.</p>
 <ul>
-<li><code>base</code> is the interval consonance against the surface (principle 1).</li>
-<li>the remaining columns are the mechanism deltas: the recency guard, look-ahead, the side leash, the
-vertical guard, and so on, depending on the mode.</li>
-<li>the winner (<b>&#9654;</b>) is the one that maximises <code>base</code> plus the deltas. That is the
-argmax the engine committed, nothing more.</li>
+<li><code>base</code>: interval consonance against the surface (rule 1).</li>
+<li>the other columns: what each mechanism adds or takes away (recency guard, look-ahead, side leash,
+vertical guard, depending on the mode).</li>
+<li><b>&#9654;</b> marks the winner: the highest <code>base</code> plus the rest.</li>
 </ul>
-<p>When a note reads wrong, this table shows why: which term outvoted the coherent spelling.</p>`,
+<p>When a note is wrong, the table shows which term beat the coherent spelling.</p>
+`,
     },
     {
         id: 'spiral', nav: 'Spiral (side)', title: 'The spiral of fifths and the frame',
         body: `
-<p>The spiral is the line of fifths coiled up. Step by fifths (F, C, G, D, ...) and after one full turn
-you land a comma over, on the same piano key spelled the other way (D&flat; and C&sharp;). That turn is
-the <b>side</b>.</p>
-<p>The <b>frame</b> drawn on the spiral is the diatonic collection the engine is holding: which turn of
-the spiral the passage is being written on. It is the app's picture of the side decision.</p>
-<p>Interval scoring cannot set this (it is comma-symmetric), so the frame does it with an absolute
-position on the spiral. In real-time mode the frame is read from the recent raw pitch classes by
-coverage, placed on the nearest turn for continuity, and held so one chromatic note cannot flip it. When
-a passage modulates far enough, the frame folds a comma over, and the notation flips side with it.</p>
+<p>The spiral is the line of fifths coiled up. Go up by fifths (F, C, G, D, ...) and after one full turn
+you land a comma over: the same key spelled the other way (D&flat; becomes C&sharp;). Which turn a passage
+sits on is the <b>side</b>.</p>
+<p>The <b>frame</b> on the spiral is the diatonic collection the engine holds: the side it has chosen. In
+real-time mode the frame is read from the recent pitches, kept on the nearest turn, and held so one
+chromatic note can't flip it. When the music modulates far enough, the frame moves a comma over and the
+spelling flips with it.</p>
 
 <blockquote class="help-quote"><b>Why the side is hard.</b> Coherence stays high in every mode, but the
-side does not always have one right answer. Some of it is convention: a piece is A&flat; major, not
-G&sharp; major. Some is genuinely arbitrary: C&sharp; and D&flat; major are the same key, equally valid
-on paper. And some is a matter of timing, where in a passage the side turns over. A streaming speller
-commits as it goes, so at a modulation it can flip half a passage and leave an incoherent seam; only
-reading the whole piece offline (the two-pass mode) can place the flip where it belongs. Chopin's Prelude
-Op. 28 No. 15 is the stock case: from D&flat; major to its parallel minor he writes C&sharp; minor, not
-D&flat; minor, and only the whole phrase makes that clear.</blockquote>
-<p><b>Two ways to hold the side.</b> Both do the same job, place the collection on the spiral, fold it a
-comma when it drifts too far, and resist a single chromatic flipping it, but they hold it differently. The
-<code>mean</code> button in the spiral panel switches real-time and look-ahead between them:</p>
+side doesn't always have one answer. Some of it is convention: a piece is in A&flat; major, not G&sharp;
+major. Some is a free choice: C&sharp; and D&flat; major are the same key. Some is timing: where in a
+passage the side should turn. A real-time speller commits as it goes, so at a modulation it can flip half
+a passage and leave a seam. Only two-pass, which reads the whole piece, can put the flip in the right
+place. Chopin's Prelude Op. 28 No. 15 shows it: going from D&flat; major to the parallel minor, he writes
+C&sharp; minor, not D&flat; minor.</blockquote>
+
+<p><b>Two ways to hold the side.</b> The <code>mean</code> button in the spiral panel switches real-time
+and look-ahead between them. Both move the collection a comma when it drifts too far, and both resist a
+single chromatic note.</p>
 <ul>
-<li><b>diatonic frame</b> (the shipped default): the frame is an explicit collection, re-read each onset
-from the recent raw pitch classes and held by hysteresis. It holds steady through passing chromatics, so
-it makes fewer incoherent slips; the price is that at a key change it holds the old collection longer and
-flips more of the new section (coherently) onto the other side. Here the frame, its collection, and the
-detected key are one and the same number, so the key lane sits exactly on the frame.</li>
-<li><b>mean</b>: the seven slots simply drift as notes commit, and the side is their running average
-position on the spiral, folded back a comma once that average crosses a deadzone. The average re-orients
-quickly at a key change, so on stitched multi-key material (Bach's WTC book II, dozens of keys back to
-back) it matches the composer's notated side markedly more often, at the cost of a few more incoherent
-slips. A second tell: the detected key (the key lane) is read separately from the drifting surface here,
-so the key lane no longer lines up with the frame the way it does under the diatonic frame. Turn
-<code>mean</code> on over Op. 28 No. 15 to watch the side move more freely where the frame holds it.</li>
-</ul>`,
+<li><b>diatonic frame</b> (default): an explicit collection, re-read at each onset and held with
+hysteresis. It stays steady through passing chromatic notes, so there are fewer wrong notes. At a key
+change it holds the old collection longer, so more of the new section comes out flipped. The key lane sits
+on the frame.</li>
+<li><b>mean</b>: the seven letters drift as notes come in, and the side is their average position, moved
+back a comma past a threshold. It turns faster at a key change, so it matches the composer's side more
+often on music with many keys (Bach's WTC book II), at the cost of a few more wrong notes. The key lane is
+read separately, so it no longer lines up with the frame. Try it on Op. 28 No. 15.</li>
+</ul>
+`,
     },
     {
         id: 'tonnetz', nav: '3D Tonnetz', title: 'The harmonic lattice',
         body: `
-<p>The Tonnetz lays every spelling out in harmonic space: one infinite lattice over the line of fifths,
-projected onto three axes. The whole thing is one identity:</p>
+<p>The Tonnetz places every spelling in harmonic space: one lattice over the line of fifths, on three
+axes.</p>
 <p class="help-eq">n = x + 4y + 7z</p>
-<p><code>n</code> is the line-of-fifths position of the note (C = 0). Each axis is one interval:</p>
+<p><code>n</code> is the note's position on the line of fifths (C = 0).</p>
 <ul>
-<li><b>x</b>: a perfect fifth per step (the horizontal fifth chain).</li>
-<li><b>y</b>: a major third per row (+4 on the line of fifths), so triads read as triangles.</li>
-<li><b>z</b>: one accidental per layer (+7), the same letter one accidental sharper. Directly below any
-node is the same letter one accidental flatter. A letter's spellings stack in a column:
-F&#x1D12B;, F&flat;, F, F&sharp;, F&#x1D12A;.</li>
+<li><b>x</b>: one fifth per step.</li>
+<li><b>y</b>: one major third per row (+4), so triads form triangles.</li>
+<li><b>z</b>: one accidental per layer (+7): the same letter, one sharper. A letter's spellings stack in a
+column: F&#x1D12B;, F&flat;, F, F&sharp;, F&#x1D12A;.</li>
 </ul>
 
-<blockquote class="help-quote"><b>Reading an interval off the lattice.</b> An interval is a difference
-in <code>n</code>, and the ear hears it as the nearest decomposition into the three axes.
-C to E is four steps along the fifths (4,0,0), heard as one major third (0,1,0). C to C&sharp; is (7,0,0),
-heard as one alteration (0,0,1), an augmented unison. B to F is six fifths down (-6,0,0), heard as a fifth
-lowered by an alteration (1,0,-1), a diminished fifth. The quality reads straight off the move: a
-neighbour in the fifths-and-thirds plane (a fifth or a third) is consonant, a farther step (a second or a
-seventh) is neutral, and a move onto the alteration axis is dissonant. That is interval scoring
-(principle 1), summed against every letter of the current frame.</blockquote>
+<blockquote class="help-quote"><b>Intervals.</b> An interval is a difference in <code>n</code>, heard as
+the shortest move on the three axes. C to E is four fifths (4,0,0), heard as one major third (0,1,0). C to
+C&sharp; is (7,0,0), heard as one accidental (0,0,1): an augmented unison. B to F is six fifths down, heard
+as a fifth with one accidental down (1,0,-1): a diminished fifth. A fifth or a third is consonant, a second
+or a seventh is neutral, and a move on the accidental axis is dissonant. Rule 1 adds this up against every
+letter of the frame.</blockquote>
 
-<p>Because <code>n = x + 4y + 7z</code> has many integer solutions, the same note appears at many cells.
-An in-scale note lights up in several places at once. That is inherent to the lattice, not a bug.</p>
-<p>The 2D coiled view shows the sounding pitch classes on the central clock and the spelled targets on
-the outer spiral. The 3D view shows the lattice itself: drag to orbit, scroll to zoom.</p>`,
+<p>Since <code>n = x + 4y + 7z</code> has many solutions, the same note appears in many cells, so a note
+lights up in several places at once. That's expected.</p>
+<p>The 2D view shows the sounding pitch classes on the inner clock and their spellings on the outer
+spiral. The 3D view shows the lattice: drag to orbit, scroll to zoom.</p>
+`,
     },
 ];
 
