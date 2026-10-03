@@ -152,46 +152,43 @@ agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
     {
         id: 'live', nav: 'Play live', title: 'Play notes yourself',
         body: `
-<p>The computer keyboard is a small piano. Press a key to play a note into the real-time speller
-(<code>new Speller()</code>). Try it here: the keys below light up and sound, without recording.</p>
+<p>The computer keyboard is a small piano. Keys play into the real-time speller. Try it here: the keys
+below light up and sound, without recording.</p>
 ${keyboardMap()}
 <ul>
-<li><b>Upper piano</b>: the <b>Q</b> row is the white keys from C4 to G5, the number row above it the black keys.</li>
-<li><b>Lower piano</b>: the <b>Z</b> row is the white keys from C3 to E4, the <b>S D G H J</b> keys the black keys.
-<b>, . /</b> are the same C4, D4, E4 as <b>Q W E</b>.</li>
-<li>Keys go by position, not letter: AZERTY and other layouts use the same keys as drawn.</li>
+<li><b>Upper piano</b>: the <b>Q</b> row is the white keys C4 to G5, the number row the black keys.</li>
+<li><b>Lower piano</b>: the <b>Z</b> row is the white keys C3 to E4, <b>S D G H J</b> the black keys.
+<b>, . /</b> repeat C4, D4, E4.</li>
+<li>Keys go by position: AZERTY and other layouts work the same.</li>
 <li>Hold keys together for a chord. A key with Shift, Alt, Ctrl or &#8984; held plays nothing, so browser
-shortcuts keep working. Space, the arrows, Home and End stay transport keys.</li>
+shortcuts still work. Space, the arrows, Home and End stay transport keys.</li>
 </ul>
 
-<p><b>A MIDI keyboard.</b> The <b>&#127929; MIDI</b> button in the transport bar connects every MIDI input.
-The browser asks for permission on that click, never on page load; once allowed, later visits connect on
-their own. The button turns green while a keyboard is connected, and a device plugged in later is picked up
-on its own. MIDI notes play through the synth, as loud as you play them (turn off &#128266; if your
-instrument has its own sound). The sustain pedal holds notes as on a piano. The button is hidden when the
-browser has no Web MIDI.</p>
+<p><b>MIDI keyboard.</b> <b>&#127929; MIDI</b> connects every MIDI input. The browser asks for permission on
+the first click; after that it connects on its own. The button turns green while a keyboard is connected.
+Notes play on the synth as loud as you play them (turn off &#128266; if your instrument has its own sound).
+The sustain pedal works. The button is hidden if the browser has no Web MIDI.</p>
 
-<p><b>Play.</b> Just play: it shows <b>&#127929; free</b> in the fixture menu, and every panel follows
-it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Playing always goes to the
-free take, from a piece or from the metronome take. Nothing is graded, so notes take their letter's colour. Keys within
-50 ms count as one chord. Look-ahead and two-pass need the notes that come next, so while you play the take is
-spelled in real time, and re-spelled a second after you stop. A grey line on the roll is the write head:
-where the next note will land. When you let go of the keys it runs on to the end of the bar and stops there:
-rests inside a bar keep their length, and after a pause the next note starts on a downbeat. <b>Space</b> while it moves stops it there, so the next note follows right
-away.</p>
+<p><b>Play.</b> Just play: the fixture menu switches to <b>&#127929; free</b>, and every panel follows on the
+same engine as the pieces. Nothing is graded, so notes take their letter's colour. Keys within 50 ms count
+as one chord. While you play, the take is spelled in real time; look-ahead and two-pass re-spell it a
+second after you stop.</p>
 
-<p>The roll shows bar and beat lines at the tempo and time signature in the transport bar. The free take is not
-quantised to them; only a pause stops on a beat line.</p>
+<p>The grey line on the roll is the write head: where the next note lands. When you let go, it runs to the
+end of the bar and stops. Rests inside a bar keep their length, and a new phrase starts on a downbeat.
+<b>Space</b> stops it early.</p>
 
-<p>To keep what you play on a metronome grid, see <b>Record &amp; export</b>.</p>`,
+<p>The roll shows bar and beat lines from the tempo and time signature in the transport bar. The free take
+is not quantised to them. To play on a metronome, see <b>Record &amp; export</b>.</p>
+`,
     },
     {
         id: 'record', nav: 'Record & export', title: 'Record, fix and export',
         body: `
-<p>There are two takes, side by side at the top of the fixture menu:</p>
+<p>Two takes sit at the top of the fixture menu:</p>
 <ul>
-<li><b>&#127929; free</b>: whatever you play, in free time. No click; the write head stops at the end of the bar.</li>
-<li><b>&#127929; metronome</b>: made with <b>&#9679; record</b>, on the metronome's grid.</li>
+<li><b>&#127929; free</b>: whatever you play, in free time.</li>
+<li><b>&#127929; metronome</b>: recorded with <b>&#9679; record</b>, on a metronome grid.</li>
 </ul>
 
 <table class="help-keys">
@@ -203,60 +200,55 @@ quantised to them; only a pause stops on a beat line.</p>
 <tr><td><b>clear</b> or <b>&#8679;X</b>, twice</td><td>empty the take shown</td></tr>
 </table>
 
-<p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts four clicks at the tempo and time signature
-beside it, then records against the metronome into <b>&#127929; metronome</b>; <b>&#9632; stop</b> or
-<b>Space</b> ends it. The red line on the roll follows the time. From anywhere but the metronome take this starts
-it again from bar 1 (&#8984;Z brings the old one back).</p>
+<p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts in four clicks at the tempo and time
+signature beside it, then records into <b>&#127929; metronome</b>. <b>&#9632; stop</b> or <b>Space</b> ends
+it. The red line follows the time. From anywhere else, it starts the metronome take over from bar 1
+(&#8984;Z brings the old one back).</p>
 
-<p><b>Add to the metronome take.</b> In it, click a note (or empty space on the roll) to put the red
-line at the start of that bar, then record: you hear the take from the bar before, and what you play is
-added on top. After a recording the line waits at its end, so recording again carries on. The take keeps
-its tempo and time signature.</p>
-
-<p><b>Fix and undo.</b> <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.
-<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks, or <b>&#8679;X</b>
-twice) empties the take in view. Both takes survive a reload in this browser.</p>
+<p><b>Add on top.</b> In the metronome take, click a note or the empty roll to put the red line at the start
+of that bar, then record. You hear the take from the bar before, and what you play is added. After a
+recording the line waits at the end, so recording again carries on. The take keeps its tempo and time
+signature.</p>
 
 <p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
-speller's spellings, a grand staff split at middle C, the key signature from the real-time speller's frame,
-and the rhythm quantised to 16ths with a pull toward the beat. The metronome take uses its grid; the free take
-gets 4/4 and an estimated tempo. The export does not carry a checked spelling: grading the speller against
-it only means something once a person has corrected it.</p>`,
+speller's spellings on a grand staff, the key signature from the real-time frame, and the rhythm rounded to
+16ths. The metronome take uses its grid; the free take gets 4/4 and an estimated tempo. Nobody has checked
+the spelling: it is the speller's own.</p>
+
+<p>Both takes are kept across reloads, in this browser.</p>
+`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
         body: `
-<p>The <b>&#8613; import</b> button, next to the fixture menu, loads a score of your own. You can also drop
-a file anywhere on the page. The format is <b>MusicXML</b>: <code>.musicxml</code> or <code>.xml</code>,
-and compressed <code>.mxl</code>. Every notation app exports it (MuseScore, Sibelius, Finale, Dorico).</p>
+<p><b>&#8613; import</b> (next to the fixture menu), or a file dropped on the page, loads your own score.
+The format is MusicXML: <code>.musicxml</code>, <code>.xml</code> or compressed <code>.mxl</code>. Every
+notation app exports it.</p>
 
-<p>MusicXML keeps the composer's own spelling, so an imported score is graded exactly like the built-in
-fixtures: the speller sees only the pitches, and its output is scored against the notated letters, three
-tiers and all. A plain MIDI file has no spelling to grade against, which is why the import is MusicXML,
-not MIDI.</p>
+<p>MusicXML keeps the composer's spelling, so an import is graded like the built-in pieces. A MIDI file has
+no spelling to grade against, so it isn't accepted.</p>
 
-<p>An import lives in this browser session only. It is never uploaded and never added to the corpus, and
-it shows in the fixture menu as <b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
+<p>An import stays in this browser session. It is never uploaded, and it shows in the fixture menu as
+<b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
 
-<p><b>What this first version reads:</b> multiple parts, chords, ties, voices, and transposing instruments
-(a clarinet or horn part is converted to concert pitch so it lines up with the rest). Grace notes are
-skipped and repeats are not expanded (the written order plays once), so the note count can differ from the
-printed score. A short message after import names anything that was skipped or converted.</p>`,
+<p><b>Read:</b> parts, chords, ties, voices, and transposing instruments (converted to concert pitch).
+<b>Skipped:</b> grace notes. Repeats play once, as written. So the note count can differ from the printed
+score. A message after import lists what was skipped or converted.</p>
+`,
     },
     {
         id: 'notation', nav: 'Staff & roll', title: 'The staff and the piano roll',
         body: `
-<p>Both views show the same committed spellings, one as notation and one over time.</p>
+<p>Both show the same spellings: one as notation, one over time.</p>
 <ul>
-<li><b>Staff</b>: the passage engraved from the spellings the engine committed. This is what the choice
-of letter and accidental actually looks like on paper.</li>
-<li><b>Piano roll</b>: every note as a bar, pitch up the y-axis, time across. Each bar is coloured by its
-tier (<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
+<li><b>Staff</b>: the passage on a grand staff, as the engine spelled it.</li>
+<li><b>Piano roll</b>: each note as a bar, pitch going up and time going across, coloured by tier
+(<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
 <span class="k wrong">wrong</span>). The playhead marks the current onset.</li>
 </ul>
-<p>Wrong notes are easiest to spot here: a lone off-colour bar in a run is a note that failed to move
-with its neighbours. The <code>&#127919;</code> key-lanes toggle adds an experimental, display-only read
-of the local and stable collection under the roll.</p>`,
+<p>A wrong note stands out on the roll: one off-colour bar in a run. <code>&#127919;</code> adds an
+experimental, display-only read of the local and home key under the roll.</p>
+`,
     },
     {
         id: 'scoring', nav: 'Scoring panel', title: 'Reading a spelling decision',
