@@ -70,6 +70,20 @@ export function setPlayheadTime(t: number | null): void {
     if (t === null || !playhead) return;
     const x = PAD + t * pxPerMs;
     playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
+    keepAtMiddle(x);
+}
+
+/** A moving line (playback, recording, the write head) scrolls the roll smoothly once it passes the middle
+ *  of the view, so it stays there. Off while the user has scrolled away; back once the line is in view. */
+function keepAtMiddle(x: number): void {
+    const host = document.getElementById('pianoroll')!;
+    const left = host.scrollLeft, w = host.clientWidth;
+    if (!follow && x >= left && x <= left + w) follow = true;
+    if (!follow) return;
+    if (x < left) host.scrollLeft = Math.max(0, x - 60);   // behind the view (playback started there): bring it in
+    else if (x > left + w / 2) host.scrollLeft = x - w / 2;
+    else return;
+    expectedScrollLeft = host.scrollLeft;   // what WE set, so the scroll listener knows it wasn't the user
 }
 
 /** Hide the blue playhead (while recording, the red time line is the head). */
@@ -93,11 +107,7 @@ export function setTimeLine(t: number | null, moving: boolean, kind: 'record' | 
     timeLine.setAttribute('stroke', kind === 'record' ? '#e06c75' : '#7d8696');
     timeLine.setAttribute('stroke-width', kind === 'record' ? '2' : '1.5');
     timeLine.setAttribute('stroke-dasharray', moving || kind === 'write' ? '' : '4 3');
-    const host = document.getElementById('pianoroll')!;
-    if (moving && x > host.scrollLeft + host.clientWidth - 60) {   // keep the moving line in view
-        host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
-        expectedScrollLeft = host.scrollLeft;
-    }
+    if (moving) keepAtMiddle(x);
 }
 
 // The replay we last built the SVG for: rebuild keys off OBJECT IDENTITY. main.ts makes a fresh
@@ -427,7 +437,8 @@ function updatePlayhead(replay: Replay, step: number): void {
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, right = left + host.clientWidth;
     if (!follow && x >= left + 60 && x <= right - 60) follow = true;
-    if (follow && (x < left + 60 || x > right - 60)) {
+    // During playback the gliding playhead scrolls the roll itself (keepAtMiddle); stepping still jumps.
+    if (follow && playheadAt === null && (x < left + 60 || x > right - 60)) {
         host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
         expectedScrollLeft = host.scrollLeft;   // record what WE set, so the scroll listener knows it wasn't the user
     }
