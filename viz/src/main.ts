@@ -934,7 +934,13 @@ let raf = 0, pending = false, t0Perf = 0, t0Ctx = 0, basePlay = 0, audioIdx = 0;
 // `silence` cuts the notes already committed to the audio clock (the LOOKAHEAD buffer keeps ringing
 // otherwise, so a pause would let sound run on past the stopped playhead). The natural end of the
 // piece passes false so the final chord rings out instead of being clipped.
-function stopPlay(silence = true) { pending = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } setPlayheadTime(null); if (silence && soundOn) allNotesOff(); updatePlayBtn(); }
+function stopPlay(silence = true, keepPlayhead = false) {
+    pending = false;
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    if (!keepPlayhead) setPlayheadTime(null);   // a natural finish leaves it at the end of the last note
+    if (silence && soundOn) allNotesOff();
+    updatePlayBtn();
+}
 function updatePlayBtn() { $('play').textContent = (raf || pending) ? '⏸' : '▶'; }
 
 function play() {
@@ -994,13 +1000,16 @@ function frame() {
     let i = state.step;
     while (i < notes.length - 1 && tl[i + 1]! <= nowVisual) i++;
     if (i !== state.step) { state.step = i; render(); }
-    // The roll's playhead glides with time between onsets (the timeline shortens long gaps, so map back).
+    // The roll's playhead glides with time between onsets (the timeline shortens long gaps, so map back),
+    // and through the last note to its end.
     const a = notes[i]!, b = notes[i + 1];
-    const span = b ? tl[i + 1]! - tl[i]! : 0;
-    const f = span > 0 ? Math.max(0, Math.min(1, (nowVisual - tl[i]!) / span)) : 0;
-    setPlayheadTime(a.onT + f * ((b?.onT ?? a.onT) - a.onT));
-    // Stop once the playhead reached the end AND all audio has been handed off to the clock.
-    if (state.step >= notes.length - 1 && (!soundOn || audioIdx >= notes.length)) { stopPlay(false); render(); return; }
+    const span = b ? tl[i + 1]! - tl[i]! : noteDurMs[i]!;
+    const to = b ? b.onT : a.offT;
+    const f = span > 0 ? Math.max(0, Math.min(1, (nowVisual - tl[i]!) / span)) : 1;
+    setPlayheadTime(a.onT + f * (to - a.onT));
+    // Stop once the playhead has reached the end of the last note AND all audio has been handed off; the
+    // playhead stays there.
+    if (state.step >= notes.length - 1 && f >= 1 && (!soundOn || audioIdx >= notes.length)) { stopPlay(false, true); render(); return; }
     raf = requestAnimationFrame(frame);
 }
 
