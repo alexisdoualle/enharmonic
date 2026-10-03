@@ -318,7 +318,7 @@ function enterTake(tk: Take) {
     state.fixtureId = tk.id;
     state.sideOverrides = [];
     rawEvents = tk.events; rawExpected = [];
-    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = false;
+    $('take-clear').hidden = $('take-export-xml').hidden = false;
     syncRecUi();
     if (tk === freeTake) runWriteHead();
 }
@@ -1132,7 +1132,7 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
     resetStaffScroll();
     const tk = TAKES.find(x => x.id === id);
-    $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = !tk;
+    $('take-clear').hidden = $('take-export-xml').hidden = !tk;   // ⤓ events stays hidden (dev only)
     if (rec !== 'off' && id !== recTake.id) endRecording(performance.now());
     if (tk) {   // a take: land on its latest note
         enterTake(tk); recompute();

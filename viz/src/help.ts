@@ -223,15 +223,14 @@ added on top. After a recording the line waits at its end, so recording again ca
 its tempo and time signature.</p>
 
 <p><b>Fix and undo.</b> <b>Backspace</b> or <b>Delete</b> removes the note under the playhead.
-<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks) empties the
-take in view. Both takes survive a reload in this browser.</p>
+<b>&#8984;Z</b> (Ctrl+Z) undoes the last recording, deletion or clear. <b>clear</b> (two clicks, or <b>&#8679;X</b>
+twice) empties the take in view. Both takes survive a reload in this browser.</p>
 
 <p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
 speller's spellings, a grand staff split at middle C, the key signature from the real-time speller's frame,
 and the rhythm quantised to 16ths with a pull toward the beat. The metronome take uses its grid; the free take
-gets 4/4 and an estimated tempo. <b>&#10515; events</b> writes a fixture <code>events.json</code>. Neither
-carries a checked spelling: grading the speller against an export only means something once a person has
-corrected it.</p>`,
+gets 4/4 and an estimated tempo. The export does not carry a checked spelling: grading the speller against
+it only means something once a person has corrected it.</p>`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
