@@ -145,7 +145,7 @@ const MODE_NAME: Record<Mode, string> = {
     rt: '② real-time',
     la: '③ + look-ahead',
     tp: '④ two-pass (offline)',
-    control: '⊘ control: fixed-LoF window (music21)',
+    control: '⊘ control (fixed LoF)',
 };
 
 async function listFixtures(): Promise<string[]> {
@@ -775,6 +775,10 @@ function setSpiral(range: number, center: number, even: boolean) {
 }
 
 function renderStatus() {
+    renderStatusText();
+    $('status').title = $('status').textContent ?? '';   // the toolbar truncates it; the tooltip has it all
+}
+function renderStatusText() {
     const r = state.replay;
     if (!r) { $('status').textContent = ''; return; }
     const t = r.tally;

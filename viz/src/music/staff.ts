@@ -19,7 +19,7 @@ const MEASURE_W = 260;
 const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
 const STAFF_H = 220;       // initial canvas height (generous); overridden to the engraved content height
 const ZOOM_MIN = 0.4;
-const STAFF_SCALE = 0.8;   // engrave a little small, so ledger-line passages fit the band without scrolling      // floor for the width-fit zoom: below this a very dense window scrolls sideways
+const STAFF_SCALE = 0.68;   // engrave a little small, so ledger-line passages fit the band without scrolling      // floor for the width-fit zoom: below this a very dense window scrolls sideways
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
