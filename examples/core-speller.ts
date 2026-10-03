@@ -1,6 +1,14 @@
 /**
  * CoreSpeller: the four-principle enharmonic speller, self-contained.
  *
+ * Meredith clean (195,972 notes), each principle added in turn:
+ *
+ *                              exact   coherent   wrong
+ *   principles 1 + 2          92.95%    99.12%    0.88%
+ *   + 3 (recency guard)       97.56%    99.44%    0.56%
+ *   + 4 (spiral fold)         99.37%    99.46%    0.54%
+ *   real-time Speller         99.53%    99.58%    0.42%
+ *
  * The basic spelling model in one file, zero imports. A truncated version of the
  * shipped real-time Speller: the four principles alone, without the settings that
  * fine-tune the enharmonic side. `src/core.ts` is the source of truth; this file is a
