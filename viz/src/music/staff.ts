@@ -290,7 +290,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
             new StaveConnector(staves[0], staves[1]).setType('singleLeft').setContext(ctx).draw();
         }
         new StaveConnector(staves[0], staves[1]).setType('singleRight').setContext(ctx).draw();
-        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, STAVE_Y - 4); ctx.restore();
+        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, staves[0].getYForLine(0) - 5); ctx.restore();   // just above the top line
         try {
             b.fmt.format(b.voices, b.noteArea);
             b.voices[0].draw(ctx, staves[0]);
