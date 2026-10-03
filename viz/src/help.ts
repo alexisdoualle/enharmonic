@@ -57,106 +57,97 @@ const PAGES: Page[] = [
     {
         id: 'overview', nav: 'Overview', title: 'What this is',
         body: `
-<p>A debugger for the <b>enharmonic</b> speller. It runs the real shipped library
+<p>A debugger for the <b>enharmonic</b> speller. It runs the shipped library
 (<a href="https://github.com/alexisdoualle/enharmonic/tree/main/src" target="_blank" rel="noopener"><code>src/</code></a>)
-over a piece note by note and shows every decision it makes. Nothing here re-implements the speller: the
-app only reads what the engine committed.</p>
+over a piece, note by note, and shows each decision. It does not re-implement the speller; it only reads
+what the engine commits.</p>
 
-<p><b>The problem.</b> MIDI gives pitch numbers. Note 61 is one key on the piano, but on paper it is
-C&sharp; or D&flat;, or even B&#x1D12A;. Written music needs a letter (A to G) and an accidental.
-Choosing them from a bare pitch number is enharmonic spelling. There is no audio difference; the
-spellings mean different things to a reader, and only one fits the surrounding music.</p>
+<p><b>The problem.</b> MIDI gives pitch numbers. Note 61 is one piano key, but on paper it can be
+C&sharp;, D&flat; or B&#x1D12A;. Choosing the letter and accidental is enharmonic spelling. The choices
+sound the same, but only one fits the music around it.</p>
 
-<p><b>Two things have to be right.</b></p>
+<p><b>Two things to get right.</b></p>
 <ul>
-<li><b>Coherence</b>: the intervals inside a passage. E&flat;&ndash;G&ndash;B&flat; is a coherent triad;
+<li><b>Coherence</b>: the intervals inside a passage. E&flat;&ndash;G&ndash;B&flat; is a triad;
 E&flat;&ndash;G&ndash;A&sharp; is not.</li>
-<li><b>The side</b>: which side of the spiral of fifths the passage is written on (the C&sharp; side or
-the D&flat; side). A whole passage moved to the other side is still readable music, just notated
-differently.</li>
+<li><b>The side</b>: which side of the spiral of fifths the passage is written on (C&sharp; or D&flat;).
+A whole passage on the other side still reads fine, it is just notated differently.</li>
 </ul>
 
-<p><b>Three tiers.</b> Every note is scored against the composer's spelling:</p>
+<p><b>Three tiers.</b> Each note is scored against the composer's spelling:</p>
 <ul>
-<li><span class="k correct">correct</span> matches the score.</li>
-<li><span class="k flipped">flipped</span> is the right pitch with the whole passage coherently notated
-on the other side. Not an error, just the other notation.</li>
-<li><span class="k wrong">wrong</span> breaks the local consensus: a note that failed to move with its
-neighbours.</li>
+<li><span class="k correct">correct</span>: matches the score.</li>
+<li><span class="k flipped">flipped</span>: right pitch, with the whole passage coherently on the other
+side. Not an error.</li>
+<li><span class="k wrong">wrong</span>: a note that did not move with its neighbours.</li>
 </ul>
-<blockquote class="help-quote"><b>Flipped vs wrong, concretely.</b> Say the composer wrote the triad
-E&flat;&ndash;G&ndash;B&flat;. The same three keys on the other side of the spiral are
-D&sharp;&ndash;F&#x1D12A;&ndash;A&sharp;: a coherent flip, right intervals, just notated sharp instead of
-flat. A passage spelled that way scores <span class="k flipped">flipped</span>, not wrong. Now suppose
-the speller flips the outer notes but leaves the middle one behind and writes
-D&sharp;&ndash;G&ndash;A&sharp;. The G no longer fits: a natural stranded between two sharps, an
-incoherent chord. The rest of the passage is still a clean flip, but that G is
-<span class="k wrong">wrong</span> because it did not move to the side its neighbours did (it should have
-been F&#x1D12A;). Wrong is a note out of step with its own passage. Merely differing from what the
-composer wrote is flipped, not wrong.</blockquote>`,
+<blockquote class="help-quote"><b>Example.</b> The composer wrote E&flat;&ndash;G&ndash;B&flat;. On the
+other side it is D&sharp;&ndash;F&#x1D12A;&ndash;A&sharp;: <span class="k flipped">flipped</span>, not
+wrong. If the speller writes D&sharp;&ndash;G&ndash;A&sharp;, the G is <span class="k wrong">wrong</span>:
+it should have moved to F&#x1D12A; with the others.</blockquote>
+`,
     },
     {
         id: 'model', nav: 'The model', title: 'How a note is spelled',
         body: `
-<p>No key detection anywhere. Spelling falls out of three principles. This is <code>CoreSpeller</code>
-(<code>src/core.ts</code>); every other mode builds on it.</p>
+<p>No key detection. Spelling comes from three rules. This is <code>CoreSpeller</code>
+(<code>src/core.ts</code>); the other modes build on it.</p>
 
 <ol>
-<li><b>Interval scoring.</b> Among a pitch's enharmonic candidates, pick the one that forms the most
-consonant intervals with the running scale. Fifths and thirds reward, augmented and diminished
-intervals punish. The scale drifts into key on its own, with no key ever named.</li>
-<li><b>The 7-letter limit.</b> The running scale holds one spelling per letter A to G. Every note
-overwrites its letter's slot. Spelling a note means choosing which letter to claim.</li>
-<li><b>The recency guard.</b> Interval scoring only compares a candidate against the <i>other</i>
-letters, so it misses a same-letter clash (A&flat; right after A&natural;). The guard penalises a letter
-respelled at a different accidental within a few onsets. It blocks flicker, not real modulation.</li>
+<li><b>Interval scoring.</b> Of a pitch's possible spellings, pick the one with the most consonant
+intervals against the current scale. Fifths and thirds score up; augmented and diminished intervals score
+down. The scale settles into a key without one ever being named.</li>
+<li><b>Seven letters.</b> The scale holds one spelling per letter, A to G. Each note replaces its letter's
+slot, so spelling a note means choosing its letter.</li>
+<li><b>Recency guard.</b> Interval scoring only compares against the other letters, so it misses A&flat;
+right after A. The guard penalises respelling a letter within a few onsets. It stops flicker, not
+modulation.</li>
 </ol>
 
-<p><b>Why the side is separate.</b> Intervals are almost symmetric under a comma shift: D&flat;&ndash;F&ndash;A&flat;
-has the same intervals as C&sharp;&ndash;E&sharp;&ndash;G&sharp;. So interval scoring cannot tell the two
-sides apart. Picking the side needs an absolute position, not a relative one. That is the frame's job
-(see <b>Spiral</b>), and it is what the real-time and two-pass modes add on top of the model here.</p>`,
+<p><b>Why the side is separate.</b> D&flat;&ndash;F&ndash;A&flat; and C&sharp;&ndash;E&sharp;&ndash;G&sharp;
+have the same intervals, so interval scoring can't choose between them. That needs an absolute position:
+the frame (see <b>Spiral</b>), which the other modes add.</p>
+`,
     },
     {
         id: 'modes', nav: 'Speller modes', title: 'The four spellers (and the control)',
         body: `
-<p>The <b>speller</b> selector switches which library entry point drives the run. Each rung adds one
-idea and drops the wrong count, at some cost in latency.</p>
+<p>The <b>speller</b> menu picks which library entry point runs. Each mode adds one idea and makes fewer
+wrong notes, at some cost in latency.</p>
 
 <ul>
-<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The frameless baseline: the three
-principles, one drifting scale, no side correction. Highest wrong%, but it already reads intervals well.
-Real-time.</li>
-<li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that fixes
-the side as the music plays. The production default. Real-time.</li>
+<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The three rules, no frame. The most wrong
+notes, but it already reads intervals well. Real-time.</li>
+<li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that sets the
+side as the music plays. The default. Real-time.</li>
 <li><b>&#9314; look-ahead</b> &nbsp;<code>new Speller({ lookAhead: true })</code><br>Real-time plus a
-small forward buffer, so a note can wait for its resolution before committing (an F&sharp;-bound note
-spells E&sharp;, not F). Near-real-time. It is the <b>look-ahead</b> checkbox, on top of real-time.</li>
+short buffer, so a note can wait to see where it goes (a note rising to F&sharp; is E&sharp;, not F). Near
+real-time. Turn it on with the <b>look-ahead</b> checkbox.</li>
 <li><b>&#9315; two-pass</b> &nbsp;<code>spellTwoPass(notes)</code><br>Offline. A forward and a backward
-pass reconcile the side over the whole piece. The accuracy ceiling. A plain function, not a class.</li>
-<li><b>&#8856; control</b><br>A fixed line-of-fifths window baseline (music21 style), for comparison
-only. Not part of the shipped speller.</li>
+pass agree on the side over the whole piece. The most accurate.</li>
+<li><b>&#8856; control</b><br>A fixed line-of-fifths window (as in music21), for comparison. Not part of
+the library.</li>
 </ul>
-<p>Switch modes on the same piece and step through to see where they diverge: it is almost always the
-side, at a modulation, not the intervals.</p>`,
+<p>Switch modes on one piece and step through: they mostly differ on the side, at modulations.</p>
+`,
     },
     {
         id: 'transport', nav: 'Transport & keys', title: 'Playback and shortcuts',
         body: `
-<p>The transport bar drives the playhead. It steps by <b>onset</b> (all notes struck together are one
-onset).</p>
+<p>The transport bar moves the playhead by onset (notes struck together are one onset).</p>
 <ul>
-<li><b>Space</b> play / pause (it stops a recording, or the free take's write head, first). <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
-or end. Drag the scrub bar to scrub.</li>
-<li><b>Enter</b> records, <b>Backspace</b> / <b>Delete</b> removes a note of a live take, <b>&#8984;Z</b>
-undoes (see <b>Record &amp; export</b>).</li>
-<li><b>tempo</b> sets playback speed (centre is 1&times;). <b>sync</b> delays the playhead to match audio
+<li><b>Space</b>: play / pause. It first stops a recording, or the free take's write head.</li>
+<li><b>&larr; &rarr;</b>: one onset. <b>Home / End</b>: start / end. Drag the scrub bar to scrub.</li>
+<li><b>Enter</b>: record. <b>Backspace / Delete</b>: remove a note. <b>&#8984;Z</b>: undo. See
+<b>Record &amp; export</b>.</li>
+<li><b>tempo</b>: playback speed (centre is 1&times;). <b>sync</b>: delays the playhead to match audio
 latency; raise it for Bluetooth headphones.</li>
-<li><b>&#128266;</b> plays each onset through a small synth. <b>&#127929; MIDI</b> connects a MIDI keyboard
+<li><b>&#128266;</b>: plays each onset on a small synth. <b>&#127929; MIDI</b>: connects a MIDI keyboard
 (see <b>Play live</b>).</li>
-<li><b>&#8984;/Ctrl+C</b> copies the current onset (settings, state, and the full scoring) as text to
-paste to an agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
-</ul>`,
+<li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
+agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
+</ul>
+`,
     },
     {
         id: 'live', nav: 'Play live', title: 'Play notes yourself',
