@@ -3,8 +3,9 @@
  *
  * CoreSpeller (core-speller.ts) plus three mechanisms; same style, zero imports.
  *
- * Core's three principles (interval scoring + 7-letter limit + recency guard) solve
- * COHERENCE but drift on the SIDE. The three additions fix both:
+ * Core's first three principles (interval scoring + 7-letter limit + recency guard) solve
+ * COHERENCE; its spiral fold only catches a large drift on the SIDE. The frame below
+ * replaces the fold, and the three additions fix both:
  *
  *   1. DIATONIC FRAME (side). The 7 slots ARE a diatonic collection, not the drifting
  *      surface: every onset it is re-chosen by COVERAGE over the recent RAW pitch classes

@@ -84,7 +84,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 
 | Mode | clean exact | clean coherent | noisy exact | noisy coherent |
 |---|--:|--:|--:|--:|
-| [Core](examples/core-speller.ts) (three principles) | 97.56% | 99.44% | 96.25% | 99.44% |
+| [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.29% | 99.47% |
 | Real-time | 99.53% | 99.58% | 99.55% | 99.58% |
 | + look-ahead | 99.67% | 99.72% | 99.61% | 99.72% |
 | + two-pass | 99.86% | 99.86% | 99.79% | 99.80% |
@@ -92,10 +92,10 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
 
-## The three principles
+## The four principles
 
 The smallest form of the model is [`examples/core-speller.ts`](examples/core-speller.ts): the speller in
-~90 lines, zero imports, built from three principles and nothing else.
+~100 lines, zero imports, built from four principles and nothing else.
 
 1. **Interval scoring.** Among a pitch's enharmonic candidates, pick the one that forms the most
    consonant intervals with the running scale. The scale drifts into key with no key detection.
@@ -103,12 +103,16 @@ The smallest form of the model is [`examples/core-speller.ts`](examples/core-spe
    choosing which letter it claims.
 3. **The recency guard.** Dock a candidate whose letter was last committed at a different accidental a
    few onsets ago, so a slot cannot flicker against its recent self.
+4. **The spiral fold.** Interval scoring is relative, so it cannot tell D♭ from C♯: a run of sharp choices
+   can walk the whole scale a comma sharp (C𝄪 D♯ E♯ F𝄪 G♯ A♯ B♯). When the scale's average
+   line-of-fifths position drifts more than 8 fifths from D, every slot moves one comma back (E♯ becomes
+   F, B♯ becomes C).
 
-These alone all but solve *coherence* (intervals right, flicker-free): **99.44% coherent** on Meredith,
-**97.69%** on the harder, less-overfit curated corpus. The lower **exact** rate (**97.56%** on Meredith,
-**68.04%** on the curated corpus) is the gap the three principles leave open, and it is almost entirely
-the *side*, not incoherence: with no key prior a passage can settle on the other side of the spiral. The
-shipped `Speller` adds the side correction that closes it.
+The first three all but solve *coherence* (intervals right, flicker-free). The fold keeps the scale on the
+conventional side of the spiral: **99.46% coherent** and **99.37% exact** on Meredith, **97.99%** coherent
+and **91.29%** exact on the harder, less-overfit curated corpus. The remaining gap between coherent and
+exact is the *side* of single passages, which the fold only catches on a large drift. The shipped
+`Speller` tracks the side more closely.
 
 ## Reproducing the Meredith benchmark
 
