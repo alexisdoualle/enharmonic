@@ -18,7 +18,8 @@ const WINDOW = 4;          // measures shown
 const MEASURE_W = 260;
 const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
 const STAFF_H = 220;       // initial canvas height (generous); overridden to the engraved content height
-const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very dense window scrolls sideways
+const ZOOM_MIN = 0.4;
+const STAFF_SCALE = 0.8;   // engrave a little small, so ledger-line passages fit the band without scrolling      // floor for the width-fit zoom: below this a very dense window scrolls sideways
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -142,7 +143,7 @@ export function renderLiveStaff(replay: Replay, step: number): void {
         const totalW = lead + noteArea + rightPad + 20;
         const avail = host.clientWidth || 0;
         const narrow = avail > 0 && avail < 640;
-        const zoom = Math.max(narrow ? 0.1 : ZOOM_MIN, Math.min(1, avail > 0 ? (avail - 2) / totalW : 1)) * (narrow ? 0.85 : 1);
+        const zoom = Math.max(narrow ? 0.1 : ZOOM_MIN, Math.min(1, avail > 0 ? (avail - 2) / totalW : 1)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
         const renderer = new Renderer(host as HTMLDivElement, Renderer.Backends.SVG);
         const ctx = renderer.getContext();
         renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
@@ -256,7 +257,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     const narrow = avail > 0 && avail < 640;
     const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
     const floor = narrow ? 0.1 : ZOOM_MIN;
-    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1);
+    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
@@ -290,6 +291,18 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
 /** Size the SVG to the engraved content, but keep at least half a band of room on each side of the
  *  middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
  *  band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top. */
+// A vertical scroll by the user is kept across redraws (the staff redraws as the playhead moves).
+let userScrollTop: number | null = null, expectedScrollTop = -1, scrollWatched = false;
+function watchScroll(host: HTMLElement): void {
+    if (scrollWatched) return;
+    scrollWatched = true;
+    host.addEventListener('scroll', () => {
+        if (Math.abs(host.scrollTop - expectedScrollTop) > 2) { userScrollTop = host.scrollTop; expectedScrollTop = host.scrollTop; }
+    });
+}
+/** Forget the user's staff scroll (a new piece or take is centred again). */
+export function resetStaffScroll(): void { userScrollTop = null; }
+
 function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zoom: number, totalW: number, narrow: boolean): void {
     const svg = host.querySelector('svg');
     if (svg instanceof SVGSVGElement && firstStave) {
@@ -297,13 +310,10 @@ function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zo
             const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
             const bandH = host.clientHeight || 100;
             const pad = 6;
-            // Vertical anchor to centre in the band. Wide screens centre on middle C (C4) so treble and
-            // bass windows are framed consistently and low pieces don't sit too low (C4 is a ledger below
-            // the treble staff, line 5, and a ledger above the bass staff, line -1). A phone's short band
-            // makes that register offset read as dead whitespace, so there centre on the actual content.
-            const centerY = narrow
-                ? bb.y + bb.height / 2
-                : firstStave.getYForLine(clef === 'bass' ? -1 : 5) * zoom;
+            // Centre the band on what is drawn (staff plus ledger-line notes), so a high or low passage is
+            // framed instead of sitting at the edge.
+            const centerY = bb.y + bb.height / 2;
+            void clef; void narrow;
             const top = Math.min(bb.y - pad, centerY - bandH / 2);
             const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
             const w = Math.ceil(totalW * zoom);
@@ -313,7 +323,10 @@ function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zo
             svg.setAttribute('height', String(h));
             svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
             svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
-            host.scrollTop = Math.max(0, centerY - top - bandH / 2);
+            // The user's own scroll wins until the piece changes (resetStaffScroll); otherwise centre.
+            host.scrollTop = userScrollTop ?? Math.max(0, centerY - top - bandH / 2);
+            expectedScrollTop = host.scrollTop;
+            watchScroll(host);
         } catch { /* getBBox unavailable (detached node): leave the fixed-size engraving */ }
     } else host.scrollTop = 0;
 }

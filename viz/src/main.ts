@@ -8,7 +8,7 @@ import {
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
-import { renderStaff, renderLiveStaff } from './music/staff.js';
+import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
@@ -312,6 +312,7 @@ function resetTake(tk: Take) {
 /** Show a take (creating its menu entry). */
 function enterTake(tk: Take) {
     stopPlay();
+    if (shown() !== tk) resetStaffScroll();
     addTakeOption(tk);
     $<HTMLSelectElement>('fixture').value = tk.id;
     state.fixtureId = tk.id;
@@ -1125,6 +1126,7 @@ async function importMusicXmlFile(file: File) {
 
 async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     stopPlay();   // a new piece: stop playback so the old audio/playhead never runs on into it
+    resetStaffScroll();
     const tk = TAKES.find(x => x.id === id);
     $('take-clear').hidden = $('take-export').hidden = $('take-export-xml').hidden = !tk;
     if (rec !== 'off' && id !== recTake.id) endRecording(performance.now());
