@@ -120,14 +120,24 @@ function wireMidiButton() {
     const btn = $<HTMLButtonElement>('midi-enable');
     if (!midiAvailable()) { btn.hidden = true; return; }
     btn.addEventListener('click', () => {
-        btn.disabled = true;
+        if (btn.classList.contains('connected')) { flash(btn.title); return; }
         btn.textContent = 'connecting…';
         void connectMidi(liveTonnetz.model);
     });
+    // Green while a MIDI keyboard is connected; its name is the tooltip.
     liveTonnetz.model.subscribe(s => {
-        if (/^MIDI:/.test(s.midiStatus) || /MIDI ready/.test(s.midiStatus)) { btn.textContent = '🎹 MIDI ✓'; btn.disabled = true; }
-        else if (/denied|unavailable/.test(s.midiStatus)) { btn.textContent = '🎹 MIDI'; btn.disabled = false; }
+        const names = /^MIDI: (.*)/.exec(s.midiStatus)?.[1];
+        btn.classList.toggle('connected', !!names);
+        btn.textContent = '🎹 MIDI';
+        btn.title = names ? `MIDI keyboard: ${names}`
+            : /MIDI ready/.test(s.midiStatus) ? 'MIDI allowed, no keyboard detected (plug one in)'
+            : /denied/.test(s.midiStatus) ? 'MIDI permission denied: click to ask again'
+            : 'connect a MIDI keyboard (asks for permission on click)';
     });
+    // Once the browser has granted MIDI, connect on load without asking again.
+    void navigator.permissions?.query({ name: 'midi' as PermissionName })
+        .then(p => { if (p.state === 'granted') void connectMidi(liveTonnetz.model); })
+        .catch(() => { /* no permissions API for midi: the button still works */ });
 }
 
 const MODE_NAME: Record<Mode, string> = {
@@ -313,7 +323,7 @@ function enterTake(tk: Take) {
 }
 
 /** One keyboard or MIDI event: into the recording while recording, else into free play. */
-function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number) {
+function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number, velocity = 100) {
     const tk = rec !== 'off' ? recTake : freeTake;
     if (type === 'on') {
         // Only sounding: the help page's keyboard map, and the countdown before the recording starts.
@@ -323,7 +333,7 @@ function liveInput(type: 'on' | 'off', midi: number, sound: boolean, now: number
         else if (recorded && (raf || pending)) stopPlay();
         if (!liveVoices.has(midi) && sound && soundOn) {   // a key sounds while held, recorded or not
             audioEnable();
-            liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.22));
+            liveVoices.set(midi, playMidi(midi, LIVE_HOLD_SEC, 0.28 * Math.max(1, Math.min(127, velocity)) / 127));
         }
         if (!recorded) return;
         if (rec !== 'off') recNotes++;

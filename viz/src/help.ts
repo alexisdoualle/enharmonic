@@ -174,10 +174,11 @@ shortcuts keep working. Space, the arrows, Home and End stay transport keys.</li
 </ul>
 
 <p><b>A MIDI keyboard.</b> The <b>&#127929; MIDI</b> button in the transport bar connects every MIDI input.
-The browser asks for permission on that click, never on page load. Once connected the button reads
-<b>&#127929; MIDI &check;</b>, and a device plugged in later is picked up on its own. Notes from a MIDI
-keyboard are not played through the synth: your instrument makes the sound. The sustain pedal holds
-notes as on a piano. The button is hidden when the browser has no Web MIDI.</p>
+The browser asks for permission on that click, never on page load; once allowed, later visits connect on
+their own. The button turns green while a keyboard is connected, and a device plugged in later is picked up
+on its own. MIDI notes play through the synth, as loud as you play them (turn off &#128266; if your
+instrument has its own sound). The sustain pedal holds notes as on a piano. The button is hidden when the
+browser has no Web MIDI.</p>
 
 <p><b>Play.</b> Just play: it shows <b>&#127929; free play</b> in the fixture menu, and every panel follows
 it (staff, roll, spiral, scoring, Tonnetz) on the same engine the pieces run on. Playing always goes to free

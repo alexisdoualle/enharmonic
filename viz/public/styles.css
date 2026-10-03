@@ -143,6 +143,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 /* Top-toolbar MIDI button: override the fixed 34x30 square that #transport button imposes. */
 #transport button.midi-btn { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 #transport button.midi-btn:disabled { opacity: .7; cursor: default; border-color: var(--line); }
+#transport button#midi-enable.connected { color: #56d364; border-color: #2f7a3d; background: color-mix(in srgb, #3fb950 12%, var(--panel)); }
 /* Corner overlay that swaps the right panel between the 3D lattice and the coiled 2D view. */
 #live-tonnetz, #tonnetz { position: relative; }
 .view-switch { position: absolute; top: 8px; right: 10px; z-index: 5; background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer; backdrop-filter: blur(2px); }

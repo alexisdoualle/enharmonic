@@ -16,8 +16,8 @@ export interface LiveState {
 }
 
 type Listener = (state: LiveState) => void;
-/** Where recorded input goes: `t` is the event's timeStamp; `sound` is false for MIDI (the instrument sounds). */
-export type LiveSink = (type: 'on' | 'off', midi: number, sound: boolean, t: number) => void;
+/** Where recorded input goes: `t` is the event's timeStamp; `velocity` (1..127) sets the synth's loudness. */
+export type LiveSink = (type: 'on' | 'off', midi: number, sound: boolean, t: number, velocity?: number) => void;
 
 const pcOf = (midi: number) => ((midi % 12) + 12) % 12;
 const spellingKey = (p: { step: string; alter: number }) => `${p.step}:${p.alter}`;
@@ -333,8 +333,8 @@ export class LiveSpeller {
     }
 
     /** `t` is the input event's timeStamp (performance.now() clock), so a chord keeps its real spread. */
-    noteOn(midi: number, sound = true, t = performance.now()): void {
-        if (this.sink) { this.sink('on', midi, sound, t); return; }
+    noteOn(midi: number, sound = true, t = performance.now(), velocity = 100): void {
+        if (this.sink) { this.sink('on', midi, sound, t, velocity); return; }
         if (this.held.has(midi)) return;
         this.speller.noteOn(midi, { t: performance.now() });
         const spelling = this.speller.getSpelling(midi);
@@ -440,7 +440,7 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
                 const command = status! & 0xf0, t = event.timeStamp;
                 if (command === 0x90 && data2! > 0) {
                     if (sustained.delete(data1!)) model.noteOff(data1!, t);
-                    model.noteOn(data1!, false, t);
+                    model.noteOn(data1!, true, t, data2!);   // through the synth (most controllers have no sound)
                 } else if (command === 0x80 || (command === 0x90 && data2 === 0)) {
                     if (pedal) sustained.add(data1!);
                     else model.noteOff(data1!, t);
