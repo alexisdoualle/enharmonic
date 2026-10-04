@@ -3486,8 +3486,8 @@
   "beat": 2.75
  },
  {
-  "step": "B",
-  "alter": -1,
+  "step": "A",
+  "alter": 1,
   "measure": 23,
   "beat": 1.0
  },
