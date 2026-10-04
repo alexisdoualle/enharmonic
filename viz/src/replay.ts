@@ -120,7 +120,9 @@ export interface Replay {
 
 /** What-if overrides for the streaming engine's spiral frame (rt/la only; the batch two-pass ignores
  *  them). Defaults reproduce the shipped preset (range 6, centre +1). */
-export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; repair?: boolean; meanFrame?: boolean; }
+export interface SpiralOpts { spiralRange?: number; spiralCenter?: number; spiralEven?: boolean; frameCarryComma?: number; spiralOff?: boolean; leash?: boolean; repair?: boolean; meanFrame?: boolean;
+    /** Onset grouping window for performed input (a live take); fixtures leave it unset (exact `t`). */
+    onsetTolerance?: number; }
 
 /** Add `auto` releases where a stitched fixture's measure number restarts. These are a viz-session
  * convenience, not hidden production policy: library callers supply their own releases. */
@@ -227,7 +229,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         // old substrate's per-onset comma hook, so the markers currently don't change any spelling. The
         // toolbar buttons are hidden (viz/public/index.html) until the SpellingEngine grows a side hook.
         void twoPassSideMemory; void sideOverrides;
-        tpTrace = spellTwoPassTraced(notes);
+        tpTrace = spellTwoPassTraced(notes, spiral.onsetTolerance ? { onsetTolerance: spiral.onsetTolerance } : {});
         tpOut = tpTrace.spellings as (Pitch | null)[];
     }
 
@@ -252,6 +254,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             // A/B toggle: run the older 'mean' drift-and-fold side substrate instead of the shipped diatonic
             // frame (over the same clamp fold + leash the preset already carries). Off = the shipped default.
             ...(spiral.meanFrame ? { frameMode: 'mean' as const } : {}),
+            ...(spiral.onsetTolerance ? { onsetTolerance: spiral.onsetTolerance } : {}),
         })
         : null;
     const dirs = onsetDirs(events);
@@ -376,6 +379,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         snapshots.map(s => expected[s.onIndex] ?? null),
         snapshots.map(s => s.t), // onset time groups co-struck notes: same key the bench uses
     );
+    // A note with no ground truth (a live take) is not graded: the classifier would call it correct.
+    snapshots.forEach((s, k) => { if (!s.expected) tiers[k] = 'unread'; });
     snapshots.forEach((s, k) => { s.tier = tiers[k]!; s.durMs = notes[k]!.offT - notes[k]!.onT; });
     notes.forEach((n, k) => { n.tier = tiers[k]!; });
 

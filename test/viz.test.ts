@@ -14,7 +14,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { assertEq, suite, test } from './framework.js';
+import { assert, assertEq, suite, test } from './framework.js';
 import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
 import { buildReplay, withSectionAutoResets, type RawEvent } from '../viz/src/replay.js';
@@ -81,4 +81,31 @@ suite('viz side markers', () => {
             { from: 3304, comma: 1 }, { from: 4123, comma: 1 }, { from: 13855, comma: -1 },
         ]);
     });
+});
+
+suite('viz live take', () => {
+    // A live take: chords played with a few ms between keys, and no composer spelling. With the take's
+    // onset tolerance the real-time replay spells exactly as the exact-t fixture does, and nothing is graded.
+    const spread = (events: RawEvent[]): RawEvent[] => {
+        let t0 = NaN, k = 0;
+        const at = new Map<number, number>();
+        return events.filter(e => e.type !== 'respell').map(e => {
+            if (e.type !== 'on') return e;
+            if (e.t_ms !== t0) { t0 = e.t_ms; k = 0; at.clear(); }
+            if (!at.has(e.midi!)) at.set(e.midi!, e.t_ms + 7 * k++);
+            return { ...e, t_ms: at.get(e.midi!)! };
+        });
+    };
+    for (const id of ['mozart_k545', 'chopin_prelude_op28_no4']) {
+        test(`${id}: a spread, ungraded take spells as the fixture and grades nothing`, () => {
+            const raw = loadRaw(id);
+            const exact = buildReplay('rt', raw, loadExpected(id));
+            const take = buildReplay('rt', spread(raw), [], { onsetTolerance: 50 });
+            assertEq(take.tally.total, 0);
+            assert(take.snapshots.every(s => s.tier === 'unread'), 'an ungraded note is unread');
+            const diff = exact.snapshots.findIndex((s, i) => s.committed?.step !== take.snapshots[i]!.committed?.step
+                || s.committed?.alter !== take.snapshots[i]!.committed?.alter);
+            assert(diff < 0, `onset ${diff} spelled differently`);
+        });
+    }
 });

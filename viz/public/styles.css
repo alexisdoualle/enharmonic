@@ -14,16 +14,22 @@ html { height: 100%; zoom: var(--ui-scale); }
    divided by the zoom so the scaled body still fills exactly 100vh (0.8 * 100vh/0.8 = 100vh). */
 body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; height: calc(100vh / var(--ui-scale)); display: flex; flex-direction: column; overflow: hidden; }
 
+/* One steady row: fixed-width menus, the status line takes what is left and truncates (full text in its
+   tooltip). It wraps only on narrow screens. */
 #toolbar {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 12px; flex-wrap: nowrap;
+  padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
 }
+#toolbar > * { flex: none; white-space: nowrap; }
 #toolbar strong { font-size: 16px; letter-spacing: .3px; }
 #toolbar .sub { color: var(--dim); font-size: 12px; }
 #toolbar label { color: var(--dim); font-size: 12px; }
-#toolbar select { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
-.spacer { flex: 1; }
-#status { font-size: 12px; color: var(--dim); }
+#toolbar select { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 12px; text-overflow: ellipsis; }
+#fixture { width: 190px; }
+#mode { width: 150px; }
+.spacer { flex: 0 0 0; }
+#toolbar #status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: 12px; color: var(--dim); }
+@media (max-width: 1000px) { #toolbar { flex-wrap: wrap; row-gap: 6px; } }
 #status .correct { color: var(--accent); }   /* combined exact+flipped */
 #status .exact { color: var(--correct); }
 #status .flipped { color: var(--flipped); }
@@ -58,7 +64,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
    roll fills the rest, scrolling vertically for tall pieces. */
 #music { display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 0; flex: 58 1 0; min-height: 0; }
 #staff, #pianoroll { padding: 0; overflow-x: auto; }
-#staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 104px; overflow-y: auto; }
+#staff { background: #f4f4f6; border-radius: 8px; flex: 0 0 auto; height: 140px; overflow-y: auto; }   /* fits a grand staff */
 #pianoroll { background: var(--panel); flex: 1 1 0; min-height: 0; overflow-y: auto; }
 /* Centre the engraving horizontally when it is narrower than the band (e.g. zoomed out on a phone). */
 #staff svg { display: block; margin: 0 auto; }
@@ -83,8 +89,9 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
   html { zoom: normal; }   /* the phone layout is touch-sized already; render it 1:1, not scaled down */
   body { height: auto; overflow-y: auto; }
   #toolbar, #transport { flex-wrap: wrap; row-gap: 8px; }
+  #toolbar #status { flex-basis: 100%; white-space: normal; text-align: left; }
   #music { flex: none; }
-  #staff { height: 120px; }
+  #staff { height: 160px; }
   #pianoroll { flex: none; height: 260px; }
   #panels { display: block; flex: none; overflow: visible; padding-top: 6px; }
   #panels > .panel { min-height: 66vh; }
@@ -143,6 +150,7 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 /* Top-toolbar MIDI button: override the fixed 34x30 square that #transport button imposes. */
 #transport button.midi-btn { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
 #transport button.midi-btn:disabled { opacity: .7; cursor: default; border-color: var(--line); }
+#transport button#midi-enable.connected { color: #56d364; border-color: #2f7a3d; background: color-mix(in srgb, #3fb950 12%, var(--panel)); }
 /* Corner overlay that swaps the right panel between the 3D lattice and the coiled 2D view. */
 #live-tonnetz, #tonnetz { position: relative; }
 .view-switch { position: absolute; top: 8px; right: 10px; z-index: 5; background: color-mix(in srgb, var(--panel) 82%, transparent); color: var(--dim); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; font-size: 11px; cursor: pointer; backdrop-filter: blur(2px); }
@@ -336,3 +344,25 @@ footer code, footer b { color: var(--ink); }
 .kb-key.kb-down { outline: 2px solid var(--accent); outline-offset: -1px; }
 .kb-white.kb-down { background: #c9d6ee; }
 .kb-black.kb-down { background: #26324a; }
+
+/* Metronome (live takes) */
+#metro-bpm { width: 46px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; padding: 2px 4px; font-size: 12px; }
+#metro-meter { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+#metro-bpm:disabled, #metro-meter:disabled { opacity: .6; }
+.metro-beat { min-width: 64px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.metro-beat.pulse { animation: metro-pulse .18s ease-out; }
+.metro-beat.downbeat { color: var(--accent); }
+#transport button#metro-toggle.recording { border-color: #e06c75; color: #e06c75; }
+@keyframes metro-pulse { from { opacity: .35; } to { opacity: 1; } }
+
+/* In the bars, the hidden attribute wins over the button display rules. */
+#toolbar [hidden], #transport [hidden] { display: none !important; }
+/* Clear the live take: a muted red, brighter on hover. */
+#transport button#take-clear { color: #d98a8f; border-color: #6e3a3f; background: color-mix(in srgb, #e06c75 10%, var(--panel)); }
+#transport button#take-clear:hover { color: #f0a0a5; border-color: #b0545b; }
+#transport button#take-clear.armed { color: #fff; border-color: #c25a62; background: #8f3b42; }
+
+/* Help: shortcut table */
+.help-content .help-keys { border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
+.help-content .help-keys td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.help-content .help-keys td:first-child { white-space: nowrap; color: var(--ink); }

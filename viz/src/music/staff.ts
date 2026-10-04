@@ -1,5 +1,5 @@
 /**
- * VexFlow staff: a window of ~4 measures centered on the current note, engraving the fixture's
+ * VexFlow staff: a page of 4 measures holding the current note (pages overlap by one), engraving the fixture's
  * GROUND-TRUTH spellings with the piece's real key signature. Accidentals are context-aware:
  * in-key notes draw no accidental (VexFlow's `Accidental.applyAccidentals`), and mid-piece key
  * changes render with cancellation + new signature. Notehead COLORS still indicate whether the
@@ -10,15 +10,19 @@
  * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
  */
-import { Renderer, Stave, StaveNote, Accidental, Dot, Formatter, Voice } from 'vexflow';
+import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // measures shown
 const MEASURE_W = 260;
 const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
-const STAFF_H = 220;       // initial canvas height (generous); overridden to the engraved content height
+const STAFF_H = 300;       // initial canvas height (generous); overridden to the engraved content height
 const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very dense window scrolls sideways
+const GAP = 70;             // the bass stave's top, below the treble stave's (a grand staff, split at middle C)
+const REST_KEY: Record<string, string> = { treble: 'b/4', bass: 'd/3' };
+const inStaff = (clef: string) => (n: ReplayNote) => (n.midi >= 60) === (clef === 'treble');
+const STAFF_SCALE = 0.8;  // engrave small, so a grand staff (and most ledger lines) fits the band without scrolling
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -77,8 +81,9 @@ export function renderStaff(replay: Replay, step: number): void {
     // numbers never decrease; a decrease marks the next piece's start.
     const [pcLo, pcHi] = pieceRange(replay.notes, cur.onIndex);
     const pcNotes = replay.notes.slice(pcLo, pcHi);
-    const curMeasure = cur.expected?.measure ?? firstMeasure(pcNotes) ?? 1;
-    const start = Math.max(1, curMeasure - 1);
+    const first = firstMeasure(pcNotes) ?? 1;
+    const curMeasure = cur.expected?.measure ?? first;
+    const start = pageStart(curMeasure - first, WINDOW) + first;
     const sounding = soundingSet(replay, s);
     const soundSig = [...sounding].sort((a, b) => a - b).join(',');
 
@@ -91,6 +96,92 @@ export function renderStaff(replay: Replay, step: number): void {
 
     try { build(host, start, sounding, pcNotes, avail, replay.respells); }
     catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
+}
+
+/** PAGES: the staff holds still while the music crosses it, then turns to the next page. Pages of `size`
+ *  overlap by one (bars 1-4, 4-7, 7-10), so after a turn the bar just played is still in view. Returns the
+ *  first slot of the page holding slot `i` (0-based); the shared slot belongs to the earlier page. */
+function pageStart(i: number, size: number): number {
+    const step = size - 1;
+    return Math.max(0, Math.ceil(i / step) - 1) * step;
+}
+
+const LIVE_ONSETS = 16;   // chords on a page of the live staff
+const LIVE_GROUP_MS = 50; // notes this close to a chord's first note stack with it (the take's onset tolerance)
+
+/** A live take has no meter and no composer spelling: engrave the speller's own spellings in onset order,
+ *  chords stacked, as plain quarter notes on a grand staff (split at middle C) with no barlines. Accidentals carry across the
+ *  whole stave, as they would within one long bar. */
+export function renderLiveStaff(replay: Replay, step: number): void {
+    const host = document.getElementById('staff')!;
+    builtForReplay = null;   // a fixture shown next rebuilds from scratch
+    if (!replay.notes.length) { host.innerHTML = emptyMsg('play a note'); return; }
+    const s = Math.max(0, Math.min(replay.notes.length - 1, step));
+    const sounding = soundingSet(replay, s);
+
+    // Chord groups, the same grouping the engine used; the page holding the current note's chord.
+    const groups: ReplayNote[][] = [];
+    let curIdx = 0;
+    replay.notes.forEach((n, i) => {
+        const g = groups[groups.length - 1];
+        if (g && n.onT - g[0]!.onT <= LIVE_GROUP_MS && !g.some(m => m.midi === n.midi)) g.push(n);
+        else groups.push([n]);
+        if (i === s) curIdx = groups.length - 1;
+    });
+    const p0 = pageStart(curIdx, LIVE_ONSETS);
+    const shown = groups.slice(p0, p0 + LIVE_ONSETS);
+    const curGroup = groups[curIdx]!;
+
+    host.innerHTML = '';
+    try {
+        // Each chord is split at middle C between the two staves; an empty side gets a quarter rest.
+        const voiceFor = (clef: string): Voice => {
+            const tickables = shown.map(g => {
+                const sorted = g.filter(inStaff(clef)).sort((a, b) => a.midi - b.midi);
+                if (!sorted.length) return new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: 'qr' });
+                const keys = sorted.map(n => {
+                    const sp = spellOf(n);
+                    return `${sp.step.toLowerCase()}${ACC[sp.alter] ?? ''}/${sp.octave}`;
+                });
+                const sn = new StaveNote({ clef, keys, duration: 'q' });
+                sorted.forEach((n, i) => {
+                    const color = g === curGroup || sounding.has(n.onIndex) ? '#1f6feb' : '#222';
+                    sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });
+                });
+                return sn;
+            });
+            // Empty slots keep a page's spacing fixed while it fills, so notes never shift as you play.
+            const slots = [...tickables, ...Array.from({ length: LIVE_ONSETS - tickables.length }, () => new GhostNote({ duration: 'q' }))];
+            const voice = new Voice({ num_beats: slots.length, beat_value: 4 }).setMode(Voice.Mode.SOFT);
+            voice.addTickables(slots);
+            Accidental.applyAccidentals([voice], 'C');
+            return voice;
+        };
+        const voices = [voiceFor('treble'), voiceFor('bass')];
+        const fmt = new Formatter().joinVoices([voices[0]!]).joinVoices([voices[1]!]);
+        const lead = 46, rightPad = 18;
+        const noteArea = Math.max(MEASURE_W, Math.ceil(fmt.preCalculateMinTotalWidth(voices)) + 12 * LIVE_ONSETS);
+        const totalW = lead + noteArea + rightPad + 20;
+        const avail = host.clientWidth || 0;
+        const narrow = avail > 0 && avail < 640;
+        const zoom = Math.max(narrow ? 0.1 : ZOOM_MIN, Math.min(1, avail > 0 ? (avail - 2) / totalW : 1)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
+        const renderer = new Renderer(host as HTMLDivElement, Renderer.Backends.SVG);
+        const ctx = renderer.getContext();
+        renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
+        if (zoom !== 1) ctx.scale(zoom, zoom);
+        const staves = [new Stave(10, STAVE_Y, lead + noteArea + rightPad), new Stave(10, STAVE_Y + GAP, lead + noteArea + rightPad)];
+        staves.forEach((stave, si) => {
+            stave.addClef(si === 0 ? 'treble' : 'bass');
+            stave.setEndBarType(BarlineType.NONE);
+            stave.setContext(ctx).draw();
+        });
+        new StaveConnector(staves[0]!, staves[1]!).setType('brace').setContext(ctx).draw();
+        new StaveConnector(staves[0]!, staves[1]!).setType('singleLeft').setContext(ctx).draw();
+        fmt.format(voices, noteArea);
+        voices[0]!.draw(ctx, staves[0]!);
+        voices[1]!.draw(ctx, staves[1]!);
+        fitToBand(host, staves[0]!, 'treble', zoom, totalW, narrow);
+    } catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
 }
 
 function emptyMsg(text: string): string {
@@ -132,11 +223,6 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     for (let m = start; m < start + WINDOW; m++) if (notes.some(n => n.expected?.measure === m)) measures.push(m);
     if (!measures.length) { host.innerHTML = emptyMsg('no notated measures here'); return; }
 
-    // clef from the window's average pitch
-    const win = notes.filter(n => n.expected?.measure != null && measures.includes(n.expected.measure));
-    const avg = win.reduce((a, n) => a + n.midi, 0) / (win.length || 1);
-    const clef = avg >= 60 ? 'treble' : 'bass';
-
     // tempo + meter so note values reflect real durations and measures aren't 4/4-padded
     const msPerBeat = estimateMsPerBeat(notes);
     const numerator = estimateNumerator(notes);
@@ -156,10 +242,18 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     const firstLead = 46 + (ksCount > 0 ? ksCount * 11 + 8 : 0);
     const OTHER_LEAD = 14, RIGHT_PAD = 18;
 
-    // Pass 1: build each measure's voice and measure how wide it actually needs to be. Dense bars
-    // (e.g. 16 sixteenths) need far more than a fixed width; squeezing them makes VexFlow overflow
-    // notes past the stave into the next measure ("superposed" collisions). So width follows content.
-    type Built = { m: number; voice: Voice | null; fmt: Formatter | null; staveW: number; noteArea: number; keySpec: string; prevKey: string };
+    // Pass 1: build each measure's two voices (treble and bass, each with rests filling its gaps so the
+    // two hands line up) and measure how wide the bar needs to be. Dense bars need far more than a fixed
+    // width; squeezing them makes VexFlow overflow notes into the next measure. So width follows content.
+    type Built = { m: number; voices: [Voice, Voice]; fmt: Formatter; staveW: number; noteArea: number; keySpec: string; prevKey: string };
+    const voiceFor = (clef: string, m: number, keySpec: string): Voice => {
+        let sn = buildMeasureNotes(notes.filter(inStaff(clef)), m, clef, sounding, msPerBeat, numerator);
+        if (!sn.length) sn = [new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: 'wr', align_center: true })];
+        const voice = new Voice({ num_beats: numerator, beat_value: 4 }).setMode(Voice.Mode.SOFT);
+        voice.addTickables(sn);
+        Accidental.applyAccidentals([voice], keySpec);   // in-key notes draw no accidental
+        return voice;
+    };
     const built: Built[] = measures.map((m, mi) => {
         const keySpec = measureKeys[mi]!;
         const prevKey = mi > 0 ? measureKeys[mi - 1]! : keySpec;
@@ -169,83 +263,100 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
                Math.max(SHARP_KEYS.indexOf(keySpec), FLAT_KEYS.indexOf(keySpec), 0)) * 11 + 16
             : 0;
         const lead = (mi === 0 ? firstLead : OTHER_LEAD) + keyChangeW;
-        const sn = buildMeasureNotes(notes, m, clef, sounding, msPerBeat, numerator);
-        if (!sn.length) return { m, voice: null, fmt: null, staveW: MEASURE_W + keyChangeW, noteArea: MEASURE_W - lead - RIGHT_PAD, keySpec, prevKey };
-        const voice = new Voice({ num_beats: numerator, beat_value: 4 }).setMode(Voice.Mode.SOFT);
-        voice.addTickables(sn);
-        // Let VexFlow place accidentals against the key sig (in-key notes draw nothing).
-        Accidental.applyAccidentals([voice], keySpec);
-        const fmt = new Formatter().joinVoices([voice]);
-        const minW = fmt.preCalculateMinTotalWidth([voice]);
+        const voices: [Voice, Voice] = [voiceFor('treble', m, keySpec), voiceFor('bass', m, keySpec)];
+        const fmt = new Formatter().joinVoices([voices[0]]).joinVoices([voices[1]]);
+        const minW = fmt.preCalculateMinTotalWidth(voices);
         const noteArea = Math.max(MEASURE_W - lead - RIGHT_PAD, Math.ceil(minW));
-        return { m, voice, fmt, staveW: lead + noteArea + RIGHT_PAD, noteArea, keySpec, prevKey };
+        return { m, voices, fmt, staveW: lead + noteArea + RIGHT_PAD, noteArea, keySpec, prevKey };
     });
 
     const totalW = built.reduce((a, b) => a + b.staveW, 0) + 20;
     // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
     // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates;
     // ctx.scale maps them into the smaller SVG, so all the width/collision maths above is unaffected.
-    // Fit to the panel width only (shrink-only). The staff renders at a readable size and the compact
-    // band scrolls vertically to it (the SVG is cropped to content below), so nothing is clipped. On a
-    // narrow (phone) panel drop the floor so the window fits the width instead of side-scrolling, and
-    // shrink a touch further so the whole window reads comfortably on a small screen.
+    // On a narrow (phone) panel drop the floor so the window fits the width instead of side-scrolling.
     const narrow = avail > 0 && avail < 640;
     const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
     const floor = narrow ? 0.1 : ZOOM_MIN;
-    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1);
+    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
-    // Pass 2: draw each stave at its computed width, then format+draw its voice into the note area
-    // so notes stay within their own measure instead of drifting into the next one.
+    // Pass 2: draw each bar's two staves at its computed width, then format the two voices together
+    // (so the hands align) into the note area.
     let x = 10;
     let firstStave: Stave | null = null;
     for (let mi = 0; mi < built.length; mi++) {
         const b = built[mi]!;
-        const stave = new Stave(x, STAVE_Y, b.staveW);
+        const staves = [new Stave(x, STAVE_Y, b.staveW), new Stave(x, STAVE_Y + GAP, b.staveW)] as const;
+        staves.forEach((stave, si) => {
+            if (mi === 0) {
+                stave.addClef(si === 0 ? 'treble' : 'bass');
+                if (b.keySpec !== 'C') stave.addKeySignature(b.keySpec);
+            } else if (b.keySpec !== b.prevKey) {
+                stave.addKeySignature(b.keySpec, b.prevKey);   // key change within the window
+            }
+            stave.setContext(ctx).draw();
+        });
         if (mi === 0) {
-            firstStave = stave;
-            stave.addClef(clef);
-            if (b.keySpec !== 'C') stave.addKeySignature(b.keySpec);
-        } else if (b.keySpec !== b.prevKey) {
-            // Key change within the window: draw cancellation + new sig
-            stave.addKeySignature(b.keySpec, b.prevKey);
+            firstStave = staves[0];
+            new StaveConnector(staves[0], staves[1]).setType('brace').setContext(ctx).draw();
+            new StaveConnector(staves[0], staves[1]).setType('singleLeft').setContext(ctx).draw();
         }
-        stave.setContext(ctx).draw();
-        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, STAVE_Y - 4); ctx.restore();
-        if (b.voice && b.fmt) {
-            try { b.fmt.format([b.voice], b.noteArea); b.voice.draw(ctx, stave); }
-            catch { /* leave this one measure blank rather than blanking the whole staff */ }
-        }
+        new StaveConnector(staves[0], staves[1]).setType('singleRight').setContext(ctx).draw();
+        ctx.save(); ctx.setFillStyle('#999'); ctx.setFont('Arial', 9); ctx.fillText(String(b.m), x + 2, staves[0].getYForLine(0) - 5); ctx.restore();   // just above the top line
+        try {
+            b.fmt.format(b.voices, b.noteArea);
+            b.voices[0].draw(ctx, staves[0]);
+            b.voices[1].draw(ctx, staves[1]);
+        } catch { /* leave this one measure blank rather than blanking the whole staff */ }
         x += b.staveW;
     }
 
-    // Size the SVG to the engraved content, but keep at least half a band of room on each side of the
-    // middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
-    // band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top.
+    fitToBand(host, firstStave, 'treble', zoom, totalW, narrow);
+}
+
+/** Size the SVG to the engraved content, but keep at least half a band of room on each side of the
+ *  middle staff line so the stave can sit centred in the band. Then scroll to put the stave at the
+ *  band's centre: deep ledgers above or below are reachable by scrolling, with no dead space on top. */
+// A vertical scroll by the user is kept across redraws (the staff redraws as the playhead moves).
+let userScrollTop: number | null = null, expectedScrollTop = -1, scrollWatched = false;
+function watchScroll(host: HTMLElement): void {
+    if (scrollWatched) return;
+    scrollWatched = true;
+    host.addEventListener('scroll', () => {
+        if (Math.abs(host.scrollTop - expectedScrollTop) > 2) { userScrollTop = host.scrollTop; expectedScrollTop = host.scrollTop; }
+    });
+}
+/** Forget the user's staff scroll (a new piece or take is centred again). */
+export function resetStaffScroll(): void { userScrollTop = null; }
+
+function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zoom: number, totalW: number, narrow: boolean): void {
+    void clef; void narrow;
     const svg = host.querySelector('svg');
     if (svg instanceof SVGSVGElement && firstStave) {
         try {
-            const bb = svg.getBBox();          // union of everything drawn, in px (zoom already baked in)
-            const bandH = host.clientHeight || 100;
-            const pad = 6;
-            // Vertical anchor to centre in the band. Wide screens centre on middle C (C4) so treble and
-            // bass windows are framed consistently and low pieces don't sit too low (C4 is a ledger below
-            // the treble staff, line 5, and a ledger above the bass staff, line -1). A phone's short band
-            // makes that register offset read as dead whitespace, so there centre on the actual content.
-            const centerY = narrow
-                ? bb.y + bb.height / 2
-                : firstStave.getYForLine(clef === 'bass' ? -1 : 5) * zoom;
-            const top = Math.min(bb.y - pad, centerY - bandH / 2);
-            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandH / 2);
-            const w = Math.ceil(totalW * zoom);
-            const h = Math.ceil(bottom - top);
-            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${w} ${h}`);
-            svg.setAttribute('width', String(w));
-            svg.setAttribute('height', String(h));
-            svg.style.width = `${w}px`;      // VexFlow sets an inline style height that wins over the
-            svg.style.height = `${h}px`;     // attribute, so override it here too or the crop is ignored
-            host.scrollTop = Math.max(0, centerY - top - bandH / 2);
+            // VexFlow zooms by the viewBox: the drawing is in its own units, the SVG element in screen px.
+            // So crop the viewBox in drawing units (the whole width, the drawn height, at least a band's
+            // worth around the middle) and size the element in px.
+            const bb = svg.getBBox();          // what is drawn, in drawing units
+            const bandU = (host.clientHeight || 100) / zoom;
+            const pad = 6 / zoom;
+            // Centre the band on what is drawn (staff plus ledger-line notes), so a high or low passage is
+            // framed instead of sitting at the edge.
+            const centerY = bb.y + bb.height / 2;
+            const top = Math.min(bb.y - pad, centerY - bandU / 2);
+            const bottom = Math.max(bb.y + bb.height + pad, centerY + bandU / 2);
+            const wPx = Math.ceil(totalW * zoom), hPx = Math.ceil((bottom - top) * zoom);
+            svg.setAttribute('viewBox', `0 ${top.toFixed(1)} ${totalW} ${(bottom - top).toFixed(1)}`);
+            svg.setAttribute('width', String(wPx));
+            svg.setAttribute('height', String(hPx));
+            svg.style.width = `${wPx}px`;      // VexFlow sets an inline style height that wins over the
+            svg.style.height = `${hPx}px`;     // attribute, so override it here too or the crop is ignored
+            // The user's own scroll wins until the piece changes (resetStaffScroll); otherwise centre.
+            host.scrollTop = userScrollTop ?? Math.max(0, (centerY - top - bandU / 2) * zoom);
+            expectedScrollTop = host.scrollTop;
+            watchScroll(host);
         } catch { /* getBBox unavailable (detached node): leave the fixed-size engraving */ }
     } else host.scrollTop = 0;
 }
@@ -308,13 +419,24 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
     }
 
     const out: StaveNote[] = [];
+    let cursor = Math.min(1, groups[0]![0]!.expected!.beat ?? 1);   // where the staff has got to, in beats
+    const rest = (len: number) => {   // a rest filling a gap, so this staff stays in line with the other
+        const r = quantizeDur(len);
+        const sn = new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: r.code + 'r' });
+        if (r.dots) Dot.buildAndAttach([sn], { all: true });
+        out.push(sn);
+        cursor += r.q;
+    };
     for (let gi = 0; gi < groups.length; gi++) {
         const g = groups[gi]!.slice().sort((a, b) => a.midi - b.midi);
         const beat = g[0]!.expected!.beat ?? 0;
+        if (beat - cursor >= 0.2) rest(beat - cursor);
+        cursor = beat;
         const nextOnset = gi + 1 < groups.length ? (groups[gi + 1]![0]!.expected!.beat ?? beat + 1) : numerator + 1;
         const avail = Math.max(0.125, nextOnset - beat);
         const actualQ = Math.max(...g.map(n => (n.offT - n.onT) / msPerBeat));
-        const { code, dots } = quantizeDur(Math.min(actualQ, avail));
+        const { code, dots, q } = quantizeDur(Math.min(actualQ, avail));
+        cursor += q;
 
         // Encode the accidental into the key string (e.g. 'c#/4', 'bb/3') so applyAccidentals can
         // decide whether to draw it against the key signature (in-key notes get no accidental glyph).
@@ -355,7 +477,7 @@ const DUR_TABLE: { code: string; q: number; dots: 0 | 1 }[] = [
     { code: '16', q: 0.25, dots: 0 }, { code: '16', q: 0.375, dots: 1 },
     { code: '32', q: 0.125, dots: 0 },
 ];
-function quantizeDur(q: number): { code: string; dots: 0 | 1 } {
+function quantizeDur(q: number): { code: string; dots: 0 | 1; q: number } {
     let best = DUR_TABLE[4]!, bestErr = Infinity;
     for (const d of DUR_TABLE) {
         const err = Math.abs(Math.log2(q / d.q));

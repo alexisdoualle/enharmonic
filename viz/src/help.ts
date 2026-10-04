@@ -57,255 +57,281 @@ const PAGES: Page[] = [
     {
         id: 'overview', nav: 'Overview', title: 'What this is',
         body: `
-<p>A debugger for the <b>enharmonic</b> speller. It runs the real shipped library
+<p>A debugger for the <b>enharmonic</b> speller. It runs the shipped library
 (<a href="https://github.com/alexisdoualle/enharmonic/tree/main/src" target="_blank" rel="noopener"><code>src/</code></a>)
-over a piece note by note and shows every decision it makes. Nothing here re-implements the speller: the
-app only reads what the engine committed.</p>
+over a piece, note by note, and shows each decision. It does not re-implement the speller; it only reads
+what the engine commits.</p>
 
-<p><b>The problem.</b> MIDI gives pitch numbers. Note 61 is one key on the piano, but on paper it is
-C&sharp; or D&flat;, or even B&#x1D12A;. Written music needs a letter (A to G) and an accidental.
-Choosing them from a bare pitch number is enharmonic spelling. There is no audio difference; the
-spellings mean different things to a reader, and only one fits the surrounding music.</p>
+<p><b>The problem.</b> MIDI gives pitch numbers. Note 61 is one piano key, but on paper it can be
+C&sharp;, D&flat; or B&#x1D12A;. Choosing the letter and accidental is enharmonic spelling. The choices
+sound the same, but only one fits the music around it.</p>
 
-<p><b>Two things have to be right.</b></p>
+<p><b>Two things to get right.</b></p>
 <ul>
-<li><b>Coherence</b>: the intervals inside a passage. E&flat;&ndash;G&ndash;B&flat; is a coherent triad;
+<li><b>Coherence</b>: the intervals inside a passage. E&flat;&ndash;G&ndash;B&flat; is a triad;
 E&flat;&ndash;G&ndash;A&sharp; is not.</li>
-<li><b>The side</b>: which side of the spiral of fifths the passage is written on (the C&sharp; side or
-the D&flat; side). A whole passage moved to the other side is still readable music, just notated
-differently.</li>
+<li><b>The side</b>: which side of the spiral of fifths the passage is written on (C&sharp; or D&flat;).
+A whole passage on the other side still reads fine, it is just notated differently.</li>
 </ul>
 
-<p><b>Three tiers.</b> Every note is scored against the composer's spelling:</p>
+<p><b>Three tiers.</b> Each note is scored against the composer's spelling:</p>
 <ul>
-<li><span class="k correct">correct</span> matches the score.</li>
-<li><span class="k flipped">flipped</span> is the right pitch with the whole passage coherently notated
-on the other side. Not an error, just the other notation.</li>
-<li><span class="k wrong">wrong</span> breaks the local consensus: a note that failed to move with its
-neighbours.</li>
+<li><span class="k correct">correct</span>: matches the score.</li>
+<li><span class="k flipped">flipped</span>: right pitch, with the whole passage coherently on the other
+side. Not an error.</li>
+<li><span class="k wrong">wrong</span>: a note that did not move with its neighbours.</li>
 </ul>
-<blockquote class="help-quote"><b>Flipped vs wrong, concretely.</b> Say the composer wrote the triad
-E&flat;&ndash;G&ndash;B&flat;. The same three keys on the other side of the spiral are
-D&sharp;&ndash;F&#x1D12A;&ndash;A&sharp;: a coherent flip, right intervals, just notated sharp instead of
-flat. A passage spelled that way scores <span class="k flipped">flipped</span>, not wrong. Now suppose
-the speller flips the outer notes but leaves the middle one behind and writes
-D&sharp;&ndash;G&ndash;A&sharp;. The G no longer fits: a natural stranded between two sharps, an
-incoherent chord. The rest of the passage is still a clean flip, but that G is
-<span class="k wrong">wrong</span> because it did not move to the side its neighbours did (it should have
-been F&#x1D12A;). Wrong is a note out of step with its own passage. Merely differing from what the
-composer wrote is flipped, not wrong.</blockquote>`,
+<blockquote class="help-quote"><b>Example.</b> The composer wrote E&flat;&ndash;G&ndash;B&flat;. On the
+other side it is D&sharp;&ndash;F&#x1D12A;&ndash;A&sharp;: <span class="k flipped">flipped</span>, not
+wrong. If the speller writes D&sharp;&ndash;G&ndash;A&sharp;, the G is <span class="k wrong">wrong</span>:
+it should have moved to F&#x1D12A; with the others.</blockquote>
+`,
     },
     {
         id: 'model', nav: 'The model', title: 'How a note is spelled',
         body: `
-<p>No key detection anywhere. Spelling falls out of four principles. This is <code>CoreSpeller</code>
-(<code>src/core.ts</code>); every other mode builds on it.</p>
+<p>No key detection. Spelling comes from four rules. This is <code>CoreSpeller</code>
+(<code>src/core.ts</code>); the other modes build on it.</p>
 
 <ol>
-<li><b>Interval scoring.</b> Among a pitch's enharmonic candidates, pick the one that forms the most
-consonant intervals with the running scale. Fifths and thirds reward, augmented and diminished
-intervals punish. The scale drifts into key on its own, with no key ever named.</li>
-<li><b>The 7-letter limit.</b> The running scale holds one spelling per letter A to G. Every note
-overwrites its letter's slot. Spelling a note means choosing which letter to claim.</li>
-<li><b>The recency guard.</b> Interval scoring only compares a candidate against the <i>other</i>
-letters, so it misses a same-letter clash (A&flat; right after A&natural;). The guard penalises a letter
-respelled at a different accidental within a few onsets. It blocks flicker, not real modulation.</li>
-<li><b>The spiral fold.</b> When the scale's average line-of-fifths position drifts more than 8 fifths
-from D, every slot moves one comma back (E&sharp; becomes F, B&sharp; becomes C). It stops a run of sharp
-choices walking the whole scale a comma sharp.</li>
+<li><b>Interval scoring.</b> Of a pitch's possible spellings, pick the one with the most consonant
+intervals against the current scale. Fifths and thirds score up; augmented and diminished intervals score
+down. The scale settles into a key without one ever being named.</li>
+<li><b>Seven letters.</b> The scale holds one spelling per letter, A to G. Each note replaces its letter's
+slot, so spelling a note means choosing its letter.</li>
+<li><b>Recency guard.</b> Interval scoring only compares against the other letters, so it misses A&flat;
+right after A. The guard penalises respelling a letter within a few onsets. It stops flicker, not
+modulation.</li>
+<li><b>Spiral fold.</b> If the scale's average drifts more than 8 fifths from D, every slot moves one comma
+back (E&sharp; becomes F, B&sharp; becomes C). It stops the scale walking a comma sharp.</li>
 </ol>
 
-<p><b>Why the side is separate.</b> Intervals are almost symmetric under a comma shift: D&flat;&ndash;F&ndash;A&flat;
-has the same intervals as C&sharp;&ndash;E&sharp;&ndash;G&sharp;. So interval scoring cannot tell the two
-sides apart. Picking the side needs an absolute position, not a relative one. The fold is the
-coarsest such position: it only catches a large drift. Tracking the side passage by passage is the
-frame's job (see <b>Spiral</b>), and it is what the real-time and two-pass modes add on top of the model here.</p>`,
+<p><b>Why the side is separate.</b> D&flat;&ndash;F&ndash;A&flat; and C&sharp;&ndash;E&sharp;&ndash;G&sharp;
+have the same intervals, so interval scoring can't choose between them. That needs an absolute position.
+The fold is the coarsest one: it only catches a large drift. The frame (see <b>Spiral</b>), which the other
+modes add, sets the side passage by passage.</p>
+`,
     },
     {
         id: 'modes', nav: 'Speller modes', title: 'The four spellers (and the control)',
         body: `
-<p>The <b>speller</b> selector switches which library entry point drives the run. Each rung adds one
-idea and drops the wrong count, at some cost in latency.</p>
+<p>The <b>speller</b> menu picks which library entry point runs. Each mode adds one idea and makes fewer
+wrong notes, at some cost in latency.</p>
 
 <ul>
-<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The frameless baseline: the four
-principles, one drifting scale folded back past a fixed radius. Highest wrong%, but it already reads intervals well.
-Real-time.</li>
-<li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that fixes
-the side as the music plays. The production default. Real-time.</li>
+<li><b>&#9312; Core</b> &nbsp;<code>new CoreSpeller()</code><br>The four rules, no frame. Close to
+real-time on Meredith (0.54% wrong against 0.42%), further behind on harder pieces. Real-time.</li>
+<li><b>&#9313; real-time</b> &nbsp;<code>new Speller()</code><br>Core plus a diatonic frame that sets the
+side as the music plays. The default. Real-time.</li>
 <li><b>&#9314; look-ahead</b> &nbsp;<code>new Speller({ lookAhead: true })</code><br>Real-time plus a
-small forward buffer, so a note can wait for its resolution before committing (an F&sharp;-bound note
-spells E&sharp;, not F). Near-real-time. It is the <b>look-ahead</b> checkbox, on top of real-time.</li>
+short buffer, so a note can wait to see where it goes (a note rising to F&sharp; is E&sharp;, not F). Near
+real-time. Turn it on with the <b>look-ahead</b> checkbox.</li>
 <li><b>&#9315; two-pass</b> &nbsp;<code>spellTwoPass(notes)</code><br>Offline. A forward and a backward
-pass reconcile the side over the whole piece. The accuracy ceiling. A plain function, not a class.</li>
-<li><b>&#8856; control</b><br>A fixed line-of-fifths window baseline (music21 style), for comparison
-only. Not part of the shipped speller.</li>
+pass agree on the side over the whole piece. The most accurate.</li>
+<li><b>&#8856; control</b><br>A fixed line-of-fifths window (as in music21), for comparison. Not part of
+the library.</li>
 </ul>
-<p>Switch modes on the same piece and step through to see where they diverge: it is almost always the
-side, at a modulation, not the intervals.</p>`,
+<p>Switch modes on one piece and step through: they mostly differ on the side, at modulations.</p>
+`,
     },
     {
         id: 'transport', nav: 'Transport & keys', title: 'Playback and shortcuts',
         body: `
-<p>The transport bar drives the playhead. It steps by <b>onset</b> (all notes struck together are one
-onset).</p>
+<p>The transport bar moves the playhead by onset (notes struck together are one onset).</p>
 <ul>
-<li><b>Space</b> play / pause. <b>&larr; &rarr;</b> step one onset. <b>Home / End</b> jump to the start
-or end. Drag the scrub bar to scrub.</li>
-<li><b>tempo</b> sets playback speed (centre is 1&times;). <b>sync</b> delays the playhead to match audio
+<li><b>Space</b>: play / pause. It first stops a recording, or the free take's write head.</li>
+<li><b>&larr; &rarr;</b>: one onset. <b>Home / End</b>: start / end. Drag the scrub bar to scrub.</li>
+<li><b>Enter</b>: record. <b>Backspace / Delete</b>: remove a note. <b>&#8984;Z</b>: undo. See
+<b>Record &amp; export</b>.</li>
+<li><b>tempo</b>: playback speed (centre is 1&times;). <b>sync</b>: delays the playhead to match audio
 latency; raise it for Bluetooth headphones.</li>
-<li><b>&#128266;</b> plays each onset through a small synth. <b>&#127929; MIDI</b> connects a MIDI keyboard
+<li><b>&#128266;</b>: plays each onset on a small synth. <b>&#127929; MIDI</b>: connects a MIDI keyboard
 (see <b>Play live</b>).</li>
-<li><b>&#8984;/Ctrl+C</b> copies the current onset (settings, state, and the full scoring) as text to
-paste to an agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
-</ul>`,
+<li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
+agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
+</ul>
+`,
     },
     {
         id: 'live', nav: 'Play live', title: 'Play notes yourself',
         body: `
-<p>The computer keyboard is a small piano. Press a key to play a note into the real-time speller
-(<code>new Speller()</code>). Try it here: the keys below light up.</p>
+<p>The computer keyboard is a small piano. Keys play into the real-time speller. Try it here: the keys
+below light up and sound, without recording.</p>
 ${keyboardMap()}
 <ul>
-<li><b>Upper piano</b>: the <b>Q</b> row is the white keys from C4 to G5, the number row above it the black keys.</li>
-<li><b>Lower piano</b>: the <b>Z</b> row is the white keys from C3 to E4, the <b>S D G H J</b> keys the black keys.
-<b>, . /</b> are the same C4, D4, E4 as <b>Q W E</b>.</li>
-<li>Keys go by position, not letter: AZERTY and other layouts use the same keys as drawn.</li>
+<li><b>Upper piano</b>: the <b>Q</b> row is the white keys C4 to G5, the number row the black keys.</li>
+<li><b>Lower piano</b>: the <b>Z</b> row is the white keys C3 to E4, <b>S D G H J</b> the black keys.
+<b>, . /</b> repeat C4, D4, E4.</li>
+<li>Keys go by position: AZERTY and other layouts work the same.</li>
 <li>Hold keys together for a chord. A key with Shift, Alt, Ctrl or &#8984; held plays nothing, so browser
-shortcuts keep working. Space, the arrows, Home and End stay transport keys.</li>
+shortcuts still work. Space, the arrows, Home and End stay transport keys.</li>
 </ul>
 
-<p><b>A MIDI keyboard.</b> The <b>&#127929; MIDI</b> button in the transport bar connects every MIDI input.
-The browser asks for permission on that click, never on page load. Once connected the button reads
-<b>&#127929; MIDI &check;</b>, and a device plugged in later is picked up on its own. Notes from a MIDI
-keyboard are not played through the synth: your instrument makes the sound. The button is hidden when the
-browser has no Web MIDI.</p>
+<p><b>MIDI keyboard.</b> <b>&#127929; MIDI</b> connects every MIDI input. The browser asks for permission on
+the first click; after that it connects on its own. The button turns green while a keyboard is connected.
+Notes play on the synth as loud as you play them (turn off &#128266; if your instrument has its own sound).
+The sustain pedal works. The button is hidden if the browser has no Web MIDI.</p>
 
-<p><b>What reacts.</b> Live notes drive the coiled 2D Tonnetz panel. The staff, roll, spiral and scoring
-panels keep showing the loaded piece.</p>`,
+<p><b>Play.</b> Just play: the fixture menu switches to <b>&#127929; free</b>, and every panel follows on the
+same engine as the pieces. Nothing is graded, so notes take their letter's colour. Keys within 50 ms count
+as one chord. While you play, the take is spelled in real time; look-ahead and two-pass re-spell it a
+second after you stop.</p>
+
+<p>The grey line on the roll is the write head: where the next note lands. When you let go, it runs to the
+end of the bar and stops. Rests inside a bar keep their length, and a new phrase starts on a downbeat.
+<b>Space</b> stops it early.</p>
+
+<p>The roll shows bar and beat lines from the tempo and time signature in the transport bar. The free take
+is not quantised to them. To play on a metronome, see <b>Record &amp; export</b>.</p>
+`,
+    },
+    {
+        id: 'record', nav: 'Record & export', title: 'Record, fix and export',
+        body: `
+<p>Two takes sit at the top of the fixture menu:</p>
+<ul>
+<li><b>&#127929; free</b>: whatever you play, in free time.</li>
+<li><b>&#127929; metronome</b>: recorded with <b>&#9679; record</b>, on a metronome grid.</li>
+</ul>
+
+<table class="help-keys">
+<tr><td><b>Enter</b> or <b>&#9679; record</b></td><td>count in four clicks, then record</td></tr>
+<tr><td><b>Space</b></td><td>stops what is moving: a recording, playback, the free take's write head; otherwise plays</td></tr>
+<tr><td>click a note or empty roll</td><td>in the metronome take: move the red line to that bar</td></tr>
+<tr><td><b>Backspace</b> / <b>Delete</b></td><td>remove the note under the playhead</td></tr>
+<tr><td><b>&#8984;Z</b> / Ctrl+Z</td><td>undo the last recording, deletion or clear</td></tr>
+<tr><td><b>clear</b> or <b>&#8679;X</b>, twice</td><td>empty the take shown</td></tr>
+</table>
+
+<p><b>Record.</b> <b>&#9679; record</b> (or <b>Enter</b>) counts in four clicks at the tempo and time
+signature beside it, then records into <b>&#127929; metronome</b>. <b>&#9632; stop</b> or <b>Space</b> ends
+it. The red line follows the time. From anywhere else, it starts the metronome take over from bar 1
+(&#8984;Z brings the old one back).</p>
+
+<p><b>Add on top.</b> In the metronome take, click a note or the empty roll to put the red line at the start
+of that bar, then record. You hear the take from the bar before, and what you play is added. After a
+recording the line waits at the end, so recording again carries on. The take keeps its tempo and time
+signature.</p>
+
+<p><b>Export.</b> <b>&#10515; MusicXML</b> writes a score for MuseScore, Sibelius or Dorico: the shown
+speller's spellings on a grand staff, the key signature from the real-time frame, and the rhythm rounded to
+16ths. The metronome take uses its grid; the free take gets 4/4 and an estimated tempo. Nobody has checked
+the spelling: it is the speller's own.</p>
+
+<p>Both takes are kept across reloads, in this browser.</p>
+`,
     },
     {
         id: 'import', nav: 'Import a score', title: 'Import your own score',
         body: `
-<p>The <b>&#8613; import</b> button, next to the fixture menu, loads a score of your own. You can also drop
-a file anywhere on the page. The format is <b>MusicXML</b>: <code>.musicxml</code> or <code>.xml</code>,
-and compressed <code>.mxl</code>. Every notation app exports it (MuseScore, Sibelius, Finale, Dorico).</p>
+<p><b>&#8613; import</b> (next to the fixture menu), or a file dropped on the page, loads your own score.
+The format is MusicXML: <code>.musicxml</code>, <code>.xml</code> or compressed <code>.mxl</code>. Every
+notation app exports it.</p>
 
-<p>MusicXML keeps the composer's own spelling, so an imported score is graded exactly like the built-in
-fixtures: the speller sees only the pitches, and its output is scored against the notated letters, three
-tiers and all. A plain MIDI file has no spelling to grade against, which is why the import is MusicXML,
-not MIDI.</p>
+<p>MusicXML keeps the composer's spelling, so an import is graded like the built-in pieces. A MIDI file has
+no spelling to grade against, so it isn't accepted.</p>
 
-<p>An import lives in this browser session only. It is never uploaded and never added to the corpus, and
-it shows in the fixture menu as <b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
+<p>An import stays in this browser session. It is never uploaded, and it shows in the fixture menu as
+<b>&#8613; &lt;name&gt; (imported)</b> until you import another.</p>
 
-<p><b>What this first version reads:</b> multiple parts, chords, ties, voices, and transposing instruments
-(a clarinet or horn part is converted to concert pitch so it lines up with the rest). Grace notes are
-skipped and repeats are not expanded (the written order plays once), so the note count can differ from the
-printed score. A short message after import names anything that was skipped or converted.</p>`,
+<p><b>Read:</b> parts, chords, ties, voices, and transposing instruments (converted to concert pitch).
+<b>Skipped:</b> grace notes. Repeats play once, as written. So the note count can differ from the printed
+score. A message after import lists what was skipped or converted.</p>
+`,
     },
     {
         id: 'notation', nav: 'Staff & roll', title: 'The staff and the piano roll',
         body: `
-<p>Both views show the same committed spellings, one as notation and one over time.</p>
+<p>Both show the same spellings: one as notation, one over time.</p>
 <ul>
-<li><b>Staff</b>: the passage engraved from the spellings the engine committed. This is what the choice
-of letter and accidental actually looks like on paper.</li>
-<li><b>Piano roll</b>: every note as a bar, pitch up the y-axis, time across. Each bar is coloured by its
-tier (<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
+<li><b>Staff</b>: the passage on a grand staff, as the engine spelled it.</li>
+<li><b>Piano roll</b>: each note as a bar, pitch going up and time going across, coloured by tier
+(<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
 <span class="k wrong">wrong</span>). The playhead marks the current onset.</li>
 </ul>
-<p>Wrong notes are easiest to spot here: a lone off-colour bar in a run is a note that failed to move
-with its neighbours. The <code>&#127919;</code> key-lanes toggle adds an experimental, display-only read
-of the local and stable collection under the roll.</p>`,
+<p>A wrong note stands out on the roll: one off-colour bar in a run. <code>&#127919;</code> adds an
+experimental, display-only read of the local and home key under the roll.</p>
+`,
     },
     {
         id: 'scoring', nav: 'Scoring panel', title: 'Reading a spelling decision',
         body: `
-<p>This panel opens up the current note's decision, the same numbers the engine used.</p>
-<p><b>Surface rows.</b> The 7-letter scale the engine is holding right now.</p>
+<p>This panel shows the current note's decision, with the engine's own numbers.</p>
+<p><b>Surface rows.</b> The 7-letter scale the engine holds right now.</p>
 <ul>
-<li><b>frame</b>: the bare diatonic collection (the side, before any chromatic colour).</li>
-<li><b>surface</b>: that collection with its live alterations, the scale a candidate is actually scored
-against.</li>
+<li><b>frame</b>: the plain diatonic collection (the side, before chromatic notes).</li>
+<li><b>surface</b>: the frame with its current alterations. Candidates are scored against it.</li>
 </ul>
-<p><b>Candidate table.</b> Every enharmonic spelling of the struck pitch, with its score.</p>
+<p><b>Candidate table.</b> Each spelling of the struck pitch, with its score.</p>
 <ul>
-<li><code>base</code> is the interval consonance against the surface (principle 1).</li>
-<li>the remaining columns are the mechanism deltas: the recency guard, look-ahead, the side leash, the
-vertical guard, and so on, depending on the mode.</li>
-<li>the winner (<b>&#9654;</b>) is the one that maximises <code>base</code> plus the deltas. That is the
-argmax the engine committed, nothing more.</li>
+<li><code>base</code>: interval consonance against the surface (rule 1).</li>
+<li>the other columns: what each mechanism adds or takes away (recency guard, look-ahead, side leash,
+vertical guard, depending on the mode).</li>
+<li><b>&#9654;</b> marks the winner: the highest <code>base</code> plus the rest.</li>
 </ul>
-<p>When a note reads wrong, this table shows why: which term outvoted the coherent spelling.</p>`,
+<p>When a note is wrong, the table shows which term beat the coherent spelling.</p>
+`,
     },
     {
         id: 'spiral', nav: 'Spiral (side)', title: 'The spiral of fifths and the frame',
         body: `
-<p>The spiral is the line of fifths coiled up. Step by fifths (F, C, G, D, ...) and after one full turn
-you land a comma over, on the same piano key spelled the other way (D&flat; and C&sharp;). That turn is
-the <b>side</b>.</p>
-<p>The <b>frame</b> drawn on the spiral is the diatonic collection the engine is holding: which turn of
-the spiral the passage is being written on. It is the app's picture of the side decision.</p>
-<p>Interval scoring cannot set this (it is comma-symmetric), so the frame does it with an absolute
-position on the spiral. In real-time mode the frame is read from the recent raw pitch classes by
-coverage, placed on the nearest turn for continuity, and held so one chromatic note cannot flip it. When
-a passage modulates far enough, the frame folds a comma over, and the notation flips side with it.</p>
+<p>The spiral is the line of fifths coiled up. Go up by fifths (F, C, G, D, ...) and after one full turn
+you land a comma over: the same key spelled the other way (D&flat; becomes C&sharp;). Which turn a passage
+sits on is the <b>side</b>.</p>
+<p>The <b>frame</b> on the spiral is the diatonic collection the engine holds: the side it has chosen. In
+real-time mode the frame is read from the recent pitches, kept on the nearest turn, and held so one
+chromatic note can't flip it. When the music modulates far enough, the frame moves a comma over and the
+spelling flips with it.</p>
 
 <blockquote class="help-quote"><b>Why the side is hard.</b> Coherence stays high in every mode, but the
-side does not always have one right answer. Some of it is convention: a piece is A&flat; major, not
-G&sharp; major. Some is genuinely arbitrary: C&sharp; and D&flat; major are the same key, equally valid
-on paper. And some is a matter of timing, where in a passage the side turns over. A streaming speller
-commits as it goes, so at a modulation it can flip half a passage and leave an incoherent seam; only
-reading the whole piece offline (the two-pass mode) can place the flip where it belongs. Chopin's Prelude
-Op. 28 No. 15 is the stock case: from D&flat; major to its parallel minor he writes C&sharp; minor, not
-D&flat; minor, and only the whole phrase makes that clear.</blockquote>
-<p><b>Two ways to hold the side.</b> Both do the same job, place the collection on the spiral, fold it a
-comma when it drifts too far, and resist a single chromatic flipping it, but they hold it differently. The
-<code>mean</code> button in the spiral panel switches real-time and look-ahead between them:</p>
+side doesn't always have one answer. Some of it is convention: a piece is in A&flat; major, not G&sharp;
+major. Some is a free choice: C&sharp; and D&flat; major are the same key. Some is timing: where in a
+passage the side should turn. A real-time speller commits as it goes, so at a modulation it can flip half
+a passage and leave a seam. Only two-pass, which reads the whole piece, can put the flip in the right
+place. Chopin's Prelude Op. 28 No. 15 shows it: going from D&flat; major to the parallel minor, he writes
+C&sharp; minor, not D&flat; minor.</blockquote>
+
+<p><b>Two ways to hold the side.</b> The <code>mean</code> button in the spiral panel switches real-time
+and look-ahead between them. Both move the collection a comma when it drifts too far, and both resist a
+single chromatic note.</p>
 <ul>
-<li><b>diatonic frame</b> (the shipped default): the frame is an explicit collection, re-read each onset
-from the recent raw pitch classes and held by hysteresis. It holds steady through passing chromatics, so
-it makes fewer incoherent slips; the price is that at a key change it holds the old collection longer and
-flips more of the new section (coherently) onto the other side. Here the frame, its collection, and the
-detected key are one and the same number, so the key lane sits exactly on the frame.</li>
-<li><b>mean</b>: the seven slots simply drift as notes commit, and the side is their running average
-position on the spiral, folded back a comma once that average crosses a deadzone. The average re-orients
-quickly at a key change, so on stitched multi-key material (Bach's WTC book II, dozens of keys back to
-back) it matches the composer's notated side markedly more often, at the cost of a few more incoherent
-slips. A second tell: the detected key (the key lane) is read separately from the drifting surface here,
-so the key lane no longer lines up with the frame the way it does under the diatonic frame. Turn
-<code>mean</code> on over Op. 28 No. 15 to watch the side move more freely where the frame holds it.</li>
-</ul>`,
+<li><b>diatonic frame</b> (default): an explicit collection, re-read at each onset and held with
+hysteresis. It stays steady through passing chromatic notes, so there are fewer wrong notes. At a key
+change it holds the old collection longer, so more of the new section comes out flipped. The key lane sits
+on the frame.</li>
+<li><b>mean</b>: the seven letters drift as notes come in, and the side is their average position, moved
+back a comma past a threshold. It turns faster at a key change, so it matches the composer's side more
+often on music with many keys (Bach's WTC book II), at the cost of a few more wrong notes. The key lane is
+read separately, so it no longer lines up with the frame. Try it on Op. 28 No. 15.</li>
+</ul>
+`,
     },
     {
         id: 'tonnetz', nav: '3D Tonnetz', title: 'The harmonic lattice',
         body: `
-<p>The Tonnetz lays every spelling out in harmonic space: one infinite lattice over the line of fifths,
-projected onto three axes. The whole thing is one identity:</p>
+<p>The Tonnetz places every spelling in harmonic space: one lattice over the line of fifths, on three
+axes.</p>
 <p class="help-eq">n = x + 4y + 7z</p>
-<p><code>n</code> is the line-of-fifths position of the note (C = 0). Each axis is one interval:</p>
+<p><code>n</code> is the note's position on the line of fifths (C = 0).</p>
 <ul>
-<li><b>x</b>: a perfect fifth per step (the horizontal fifth chain).</li>
-<li><b>y</b>: a major third per row (+4 on the line of fifths), so triads read as triangles.</li>
-<li><b>z</b>: one accidental per layer (+7), the same letter one accidental sharper. Directly below any
-node is the same letter one accidental flatter. A letter's spellings stack in a column:
-F&#x1D12B;, F&flat;, F, F&sharp;, F&#x1D12A;.</li>
+<li><b>x</b>: one fifth per step.</li>
+<li><b>y</b>: one major third per row (+4), so triads form triangles.</li>
+<li><b>z</b>: one accidental per layer (+7): the same letter, one sharper. A letter's spellings stack in a
+column: F&#x1D12B;, F&flat;, F, F&sharp;, F&#x1D12A;.</li>
 </ul>
 
-<blockquote class="help-quote"><b>Reading an interval off the lattice.</b> An interval is a difference
-in <code>n</code>, and the ear hears it as the nearest decomposition into the three axes.
-C to E is four steps along the fifths (4,0,0), heard as one major third (0,1,0). C to C&sharp; is (7,0,0),
-heard as one alteration (0,0,1), an augmented unison. B to F is six fifths down (-6,0,0), heard as a fifth
-lowered by an alteration (1,0,-1), a diminished fifth. The quality reads straight off the move: a
-neighbour in the fifths-and-thirds plane (a fifth or a third) is consonant, a farther step (a second or a
-seventh) is neutral, and a move onto the alteration axis is dissonant. That is interval scoring
-(principle 1), summed against every letter of the current frame.</blockquote>
+<blockquote class="help-quote"><b>Intervals.</b> An interval is a difference in <code>n</code>, heard as
+the shortest move on the three axes. C to E is four fifths (4,0,0), heard as one major third (0,1,0). C to
+C&sharp; is (7,0,0), heard as one accidental (0,0,1): an augmented unison. B to F is six fifths down, heard
+as a fifth with one accidental down (1,0,-1): a diminished fifth. A fifth or a third is consonant, a second
+or a seventh is neutral, and a move on the accidental axis is dissonant. Rule 1 adds this up against every
+letter of the frame.</blockquote>
 
-<p>Because <code>n = x + 4y + 7z</code> has many integer solutions, the same note appears at many cells.
-An in-scale note lights up in several places at once. That is inherent to the lattice, not a bug.</p>
-<p>The 2D coiled view shows the sounding pitch classes on the central clock and the spelled targets on
-the outer spiral. The 3D view shows the lattice itself: drag to orbit, scroll to zoom.</p>`,
+<p>Since <code>n = x + 4y + 7z</code> has many solutions, the same note appears in many cells, so a note
+lights up in several places at once. That's expected.</p>
+<p>The 2D view shows the sounding pitch classes on the inner clock and their spellings on the outer
+spiral. The 3D view shows the lattice: drag to orbit, scroll to zoom.</p>
+`,
     },
 ];
 

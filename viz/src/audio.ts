@@ -14,7 +14,8 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
-const voices = new Set<{ oscs: OscillatorNode[]; gain: GainNode }>();
+export interface Voice { oscs: OscillatorNode[]; gain: GainNode; }
+const voices = new Set<Voice>();
 
 /** Set the master output volume (0..1). Works before or after the AudioContext exists. */
 export function setVolume(v: number): void {
@@ -95,8 +96,9 @@ export function scheduleAnchor(leadSec: number): { ctx: number; perf: number } {
 
 const freqOf = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 
-/** `when` (audio-clock seconds) schedules the onset in the future; omit it to play immediately. */
-export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number): void {
+/** `when` (audio-clock seconds) schedules the onset in the future; omit it to play immediately. Returns
+ *  the voice so a held note can be cut short with `releaseVoice`. */
+export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number): Voice {
     const c = ensure();
     const t0 = when != null ? Math.max(when, c.currentTime) : c.currentTime;
     const f = freqOf(midi);
@@ -156,6 +158,20 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     const voice = { oscs: [carrier, modBody, modTine], gain: g };
     voices.add(voice);
     carrier.onended = () => voices.delete(voice);
+    return voice;
+}
+
+/** Release one voice now (a key coming up): the same click-free release tail a timed note ends on. */
+export function releaseVoice(v: Voice): void {
+    if (!ctx || !voices.has(v)) return;
+    const t = ctx.currentTime, release = 0.18;
+    try {
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+        v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
+        v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
+        for (const o of v.oscs) o.stop(t + release + 0.03);
+    } catch { /* voice already stopped */ }
 }
 
 /** "All notes off": fade out + stop every ringing voice with a short click-free release. Called on a
@@ -179,4 +195,29 @@ export function playChord(midis: number[], durSec = 0.9): void {
     if (!midis.length) return;
     const per = 0.28 / Math.sqrt(Math.max(1, midis.length));
     for (const m of midis) playMidi(m, durSec, per);
+}
+
+/** The audio-clock time at which a sound must be scheduled to REACH THE SPEAKERS at `perfMs` (the
+ *  performance clock): getOutputTimestamp pairs the sample now being heard with its performance time,
+ *  so output latency is folded in. Without it, falls back to the reported latency. */
+export function ctxTimeAt(perfMs: number): number {
+    const c = ensure();
+    const ts = c.getOutputTimestamp?.();
+    if (ts && ts.performanceTime && ts.contextTime != null) return ts.contextTime + (perfMs - ts.performanceTime) / 1000;
+    return c.currentTime + (perfMs - performance.now()) / 1000 - (c.outputLatency || c.baseLatency || 0);
+}
+
+/** A short metronome click at audio-clock time `when`; the downbeat is higher and louder. */
+export function playClick(when: number, accent: boolean): void {
+    const c = ensure();
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'square';
+    o.frequency.value = accent ? 1760 : 1320;
+    const peak = accent ? 0.16 : 0.09;
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(peak, when + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0008, when + 0.035);
+    g.gain.linearRampToValueAtTime(0, when + 0.04);
+    o.connect(g).connect(master!);
+    o.start(when); o.stop(when + 0.05);
 }
