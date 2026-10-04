@@ -77,6 +77,24 @@ suite('Speller smoke', () => {
     });
 });
 
+suite('resolved surface', () => {
+    // The surface includes the note just committed: its letter's slot holds exactly its spelling.
+    for (const id of FIXTURES) {
+        for (const lookAhead of [false, true]) {
+            test(`${id}: ${lookAhead ? 'look-ahead' : 'real-time'} surface holds each committed note`, () => {
+                const s = new Speller({ lookAhead });
+                for (const e of loadEvents(id)) {
+                    if (e.type !== 'on') { s.noteOff(e.midi); continue; }
+                    s.noteOn(e.midi, { t: e.t });
+                    const sp = s.getSpelling(e.midi)!;
+                    const slot = s.getResolvedScale()!.find(p => p.step === sp.step)!;
+                    assert(slot.alter === sp.alter, `${id} t=${e.t}: committed ${tok(sp)}, surface ${tok({ ...slot, octave: 0 })}`);
+                }
+            });
+        }
+    }
+});
+
 suite('onset tolerance', () => {
     // A performed chord: the k-th distinct pitch of each onset arrives 7k ms late (a unison keeps its
     // pitch's time, so it stays one onset).

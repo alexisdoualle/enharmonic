@@ -304,6 +304,8 @@ export class SpellingEngine {
     private readonly onsetTolerance: number;
     /** 'diatonic' keep-alive: letter slot → the committed chromatic alteration it holds over the collection. */
     private kept = new Map<number, number>();
+    /** The latest committed spelling, for `getResolvedScale` (the diatonic frame's slots lag it by a note). */
+    private lastCommit: number | null = null;
 
     /** One spelling per letter slot: the drifting scale. Starts at C major. */
     private scale: number[] = [...C_MAJOR];
@@ -486,6 +488,7 @@ export class SpellingEngine {
         if (best === null) return;
         this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
         this.active.set(midi, best);
+        this.lastCommit = best;
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
         if (this.frameMode === 'diatonic') {
             // The frame is the collection; a commit never drifts the SLOTS. But it does record the committed
@@ -709,6 +712,7 @@ export class SpellingEngine {
         this.foldCentre = 2;
         this.frameCentre = 2;
         this.kept.clear();
+        this.lastCommit = null;
         this.lastDecision = null;
     }
 
@@ -723,9 +727,13 @@ export class SpellingEngine {
      */
     setKey(keyTonic: number): void { this.foldCenter = keyTonic + 2; }
 
-    /** Read-only snapshot of the current 7-letter scale (introspection). */
+    /** Read-only snapshot of the current 7-letter surface (introspection). The diatonic frame rebuilds the
+     *  slots at the start of each note and writes nothing at its commit, so the note just committed is
+     *  laid over its letter's slot here: the surface includes it. (The mean frame writes the slot itself.) */
     getResolvedScale(): PitchClass[] {
-        return LETTER_ORDER.map(s => spellingOf(this.scale[s]!));
+        const slots = [...this.scale];
+        if (this.frameMode === 'diatonic' && this.lastCommit !== null) slots[letter(this.lastCommit)] = this.lastCommit;
+        return LETTER_ORDER.map(s => spellingOf(slots[s]!));
     }
 
     /** The diatonic collection's line-of-fifths centre (leash display; a major collection is centred at
