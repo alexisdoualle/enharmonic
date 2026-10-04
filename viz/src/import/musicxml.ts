@@ -77,6 +77,10 @@ function scaleFromFifths(fifths: number): { letter: string; accidental: number }
     return ['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(letter => ({ letter, accidental: acc[letter]! }));
 }
 
+/** Snap a quarter position to a fine grid: summed `duration / divisions` floats drift apart across
+ *  parts (83.4999999999991 vs 83.4999999999997), which would split one onset into two. */
+const snapQ = (q: number): number => Math.round(q * 1e6) / 1e6;
+
 interface Attack {
     onQ: number;      // onset and release in quarter notes from the start; ms come from the tempo map
     offQ: number;
@@ -158,7 +162,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                     const durQ = (num(el, 'duration') ?? 0) / divisions;
                     if (isGrace) { sawGrace = true; continue; }   // no duration, no onset advance
 
-                    const onsetQ = isChord ? lastOnsetQ : posQ;
+                    const onsetQ = isChord ? lastOnsetQ : snapQ(posQ);
                     if (!isChord) { lastOnsetQ = posQ; }
 
                     if (!isRest) {
@@ -169,7 +173,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                             const writtenAlter = num(pitch, 'alter') ?? 0;
                             const snd = toSounding(step, writtenAlter, octave, transpose);
                             const midi = snd.midi;
-                            const offQ = onsetQ + durQ;
+                            const offQ = snapQ(onsetQ + durQ);
                             const tieStop = !!el.querySelector('tie[type="stop"], tied[type="stop"]');
                             const tieStart = !!el.querySelector('tie[type="start"], tied[type="start"]');
                             if (tieStop && pendingTie.has(midi)) {
@@ -179,7 +183,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                             } else {
                                 const a: Attack = {
                                     onQ: onsetQ, offQ, midi, step: snd.step, alter: snd.alter,
-                                    measure: measureNumber, beat: onsetQ - measureStartQ + 1,
+                                    measure: measureNumber, beat: snapQ(onsetQ - measureStartQ) + 1,
                                 };
                                 attacks.push(a);
                                 if (tieStart) pendingTie.set(midi, a);
@@ -208,14 +212,14 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     // encountered in exactly the expected[] order.
     const events: RawEvent[] = [];
     if (respellScale) events.push({ t_ms: 0, type: 'respell', scale: respellScale });
-    const raw: RawEvent[] = [];
-    for (const a of attacks) {
-        raw.push({ t_ms: msAt(a.onQ), type: 'on', midi: a.midi });
-        raw.push({ t_ms: msAt(a.offQ), type: 'off', midi: a.midi });
-    }
-    const rank = (e: RawEvent) => (e.type === 'off' ? 0 : 1);
-    raw.sort((p, q) => p.t_ms - q.t_ms || rank(p) - rank(q) || (p.midi! - q.midi!));
-    events.push(...raw);
+    // Attacks at the same ms keep their attacks[] order (key = index), so on-events pair 1:1 with expected[].
+    const raw: { e: RawEvent; key: number }[] = [];
+    attacks.forEach((a, i) => {
+        raw.push({ e: { t_ms: msAt(a.onQ), type: 'on', midi: a.midi }, key: i });
+        raw.push({ e: { t_ms: msAt(a.offQ), type: 'off', midi: a.midi }, key: a.midi - 1000 });   // offs (negative keys) release before ons
+    });
+    raw.sort((p, q) => p.e.t_ms - q.e.t_ms || p.key - q.key);
+    events.push(...raw.map(r => r.e));
 
     const name = fileName.replace(/\.(musicxml|xml|mxl)$/i, '');
     return { events, expected, name, warnings };
