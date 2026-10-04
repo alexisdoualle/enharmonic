@@ -1,5 +1,5 @@
 /**
- * VexFlow staff: a window of ~4 measures centered on the current note, engraving the fixture's
+ * VexFlow staff: a page of 4 measures holding the current note (pages overlap by one), engraving the fixture's
  * GROUND-TRUTH spellings with the piece's real key signature. Accidentals are context-aware:
  * in-key notes draw no accidental (VexFlow's `Accidental.applyAccidentals`), and mid-piece key
  * changes render with cancellation + new signature. Notehead COLORS still indicate whether the
@@ -10,7 +10,7 @@
  * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
  */
-import { Renderer, Stave, StaveNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
+import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
@@ -81,8 +81,9 @@ export function renderStaff(replay: Replay, step: number): void {
     // numbers never decrease; a decrease marks the next piece's start.
     const [pcLo, pcHi] = pieceRange(replay.notes, cur.onIndex);
     const pcNotes = replay.notes.slice(pcLo, pcHi);
-    const curMeasure = cur.expected?.measure ?? firstMeasure(pcNotes) ?? 1;
-    const start = Math.max(1, curMeasure - 1);
+    const first = firstMeasure(pcNotes) ?? 1;
+    const curMeasure = cur.expected?.measure ?? first;
+    const start = pageStart(curMeasure - first, WINDOW) + first;
     const sounding = soundingSet(replay, s);
     const soundSig = [...sounding].sort((a, b) => a - b).join(',');
 
@@ -97,7 +98,15 @@ export function renderStaff(replay: Replay, step: number): void {
     catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
 }
 
-const LIVE_ONSETS = 16;   // chords shown on the live staff
+/** PAGES: the staff holds still while the music crosses it, then turns to the next page. Pages of `size`
+ *  overlap by one (bars 1-4, 4-7, 7-10), so after a turn the bar just played is still in view. Returns the
+ *  first slot of the page holding slot `i` (0-based); the shared slot belongs to the earlier page. */
+function pageStart(i: number, size: number): number {
+    const step = size - 1;
+    return Math.max(0, Math.ceil(i / step) - 1) * step;
+}
+
+const LIVE_ONSETS = 16;   // chords on a page of the live staff
 const LIVE_GROUP_MS = 50; // notes this close to a chord's first note stack with it (the take's onset tolerance)
 
 /** A live take has no meter and no composer spelling: engrave the speller's own spellings in onset order,
@@ -110,15 +119,18 @@ export function renderLiveStaff(replay: Replay, step: number): void {
     const s = Math.max(0, Math.min(replay.notes.length - 1, step));
     const sounding = soundingSet(replay, s);
 
-    // Chord groups up to the current note, the same grouping the engine used.
+    // Chord groups, the same grouping the engine used; the page holding the current note's chord.
     const groups: ReplayNote[][] = [];
-    for (const n of replay.notes.slice(0, s + 1)) {
+    let curIdx = 0;
+    replay.notes.forEach((n, i) => {
         const g = groups[groups.length - 1];
         if (g && n.onT - g[0]!.onT <= LIVE_GROUP_MS && !g.some(m => m.midi === n.midi)) g.push(n);
         else groups.push([n]);
-    }
-    const shown = groups.slice(-LIVE_ONSETS);
-    const curGroup = shown[shown.length - 1]!;
+        if (i === s) curIdx = groups.length - 1;
+    });
+    const p0 = pageStart(curIdx, LIVE_ONSETS);
+    const shown = groups.slice(p0, p0 + LIVE_ONSETS);
+    const curGroup = groups[curIdx]!;
 
     host.innerHTML = '';
     try {
@@ -138,15 +150,17 @@ export function renderLiveStaff(replay: Replay, step: number): void {
                 });
                 return sn;
             });
-            const voice = new Voice({ num_beats: tickables.length, beat_value: 4 }).setMode(Voice.Mode.SOFT);
-            voice.addTickables(tickables);
+            // Empty slots keep a page's spacing fixed while it fills, so notes never shift as you play.
+            const slots = [...tickables, ...Array.from({ length: LIVE_ONSETS - tickables.length }, () => new GhostNote({ duration: 'q' }))];
+            const voice = new Voice({ num_beats: slots.length, beat_value: 4 }).setMode(Voice.Mode.SOFT);
+            voice.addTickables(slots);
             Accidental.applyAccidentals([voice], 'C');
             return voice;
         };
         const voices = [voiceFor('treble'), voiceFor('bass')];
         const fmt = new Formatter().joinVoices([voices[0]!]).joinVoices([voices[1]!]);
         const lead = 46, rightPad = 18;
-        const noteArea = Math.max(MEASURE_W, Math.ceil(fmt.preCalculateMinTotalWidth(voices)) + 12 * shown.length);
+        const noteArea = Math.max(MEASURE_W, Math.ceil(fmt.preCalculateMinTotalWidth(voices)) + 12 * LIVE_ONSETS);
         const totalW = lead + noteArea + rightPad + 20;
         const avail = host.clientWidth || 0;
         const narrow = avail > 0 && avail < 640;
