@@ -14,8 +14,9 @@
  * so there is exactly one key lane.
  */
 import type { Replay, ReplayNote, Tier } from '../replay.js';
+import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
-import { label } from '../format.js';
+import { label, LETTER_COLOR } from '../format.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -47,7 +48,7 @@ const TIER_COLOR: Record<Tier, string> = { correct: '#57caa0', flipped: '#d8b35a
 interface Layout {
     x: number; w: number; y: number;
     onIndex: number; onT: number; offT: number;
-    tier: Tier; midi: number; committedLabel: string; expectedLabel: string;
+    tier: Tier; midi: number; committedLabel: string; expectedLabel: string; fill: string;
 }
 
 function svgEl(name: string, attrs: Record<string, string | number>): SVGElement {
@@ -57,7 +58,71 @@ function svgEl(name: string, attrs: Record<string, string | number>): SVGElement
 }
 
 let onSeek: (step: number) => void = () => {};
-export function initPianoRoll(seek: (step: number) => void): void { onSeek = seek; }
+let onTime: (t: number) => void = () => {};
+/** `time` is told the time of a click on empty space (after `seek` moves to the nearest note). */
+export function initPianoRoll(seek: (step: number) => void, time?: (t: number) => void): void { onSeek = seek; if (time) onTime = time; }
+
+/** During playback the playhead glides with time: `t` overrides its onset position; null returns it to
+ *  the current note. */
+let playheadAt: number | null = null;
+export function setPlayheadTime(t: number | null): void {
+    if (t !== null && playheadAt === null) follow = true;   // playback starting: follow again
+    playheadAt = t;
+    if (t === null || !playhead) return;
+    const x = PAD + t * pxPerMs;
+    playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
+    keepAtMiddle(x);
+    if (builtForReplay) applyActiveStrokes(builtForReplay, lastStep);   // what is sounding now
+}
+
+/** A moving line (playback, recording, the write head) scrolls the roll smoothly once it passes the middle
+ *  of the view, so it stays there. Once the user scrolls, it lets go until the line reaches the middle of
+ *  the view they scrolled to (it catches up with a look ahead and carries on from there, no jump). */
+function keepAtMiddle(x: number): void {
+    const host = document.getElementById('pianoroll')!;
+    const left = host.scrollLeft, w = host.clientWidth;
+    if (!follow) {
+        if (x < left + w / 2 || x > left + w) return;
+        follow = true;
+    }
+    if (x < left) host.scrollLeft = Math.max(0, x - 60);   // behind the view (playback started there): bring it in
+    else if (x > left + w / 2) host.scrollLeft = x - w / 2;
+    else return;
+    expectedScrollLeft = host.scrollLeft;   // what WE set, so the scroll listener knows it wasn't the user
+}
+
+/** Hide the blue playhead (while recording, the red time line is the head). */
+let playheadHidden = false;
+export function setPlayheadHidden(hidden: boolean): void {
+    playheadHidden = hidden;
+    playhead?.setAttribute('visibility', hidden ? 'hidden' : 'visible');
+}
+
+// The TIME LINE of a live take. The metronome take's is red: where recording starts (dashed), or its clock while
+// it runs. The free take's is grey: its write head, where the next note will land.
+let timeLine: SVGLineElement | null = null;
+let timeLineAt: number | null = null, timeLineMoving = false, timeLineKind: 'record' | 'write' = 'record';
+export function setTimeLine(t: number | null, moving: boolean, kind: 'record' | 'write' = 'record'): void {
+    timeLineAt = t; timeLineMoving = moving; timeLineKind = kind;
+    if (!timeLine) return;
+    if (t === null || t < 0) { timeLine.setAttribute('visibility', 'hidden'); return; }
+    const x = PAD + t * pxPerMs;
+    const host = document.getElementById('pianoroll')!;
+    if (builtForReplay && x + host.clientWidth / 2 > svgWidth) {   // near the roll's end: widen it (bar lines too)
+        const left = host.scrollLeft;
+        build(builtForReplay, builtWithKeyLanes, builtGrid);
+        updatePlayhead(builtForReplay, lastStep);
+        host.scrollLeft = left; expectedScrollLeft = host.scrollLeft;
+        if (moving) keepAtMiddle(x);
+        return;   // build drew the line
+    }
+    timeLine.setAttribute('visibility', 'visible');
+    timeLine.setAttribute('x1', String(x)); timeLine.setAttribute('x2', String(x));
+    timeLine.setAttribute('stroke', kind === 'record' ? '#e06c75' : '#7d8696');
+    timeLine.setAttribute('stroke-width', kind === 'record' ? '2' : '1.5');
+    timeLine.setAttribute('stroke-dasharray', moving || kind === 'write' ? '' : '4 3');
+    if (moving) keepAtMiddle(x);
+}
 
 // The replay we last built the SVG for: rebuild keys off OBJECT IDENTITY. main.ts makes a fresh
 // Replay on every fixture/mode change, so any such change rebuilds automatically; a mere seek (same
@@ -71,6 +136,7 @@ let maxW = 0;                                // widest note, so long-held notes 
 let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex: only the visible ones exist
 let rendered = new Set<number>();            // onIndices currently materialized in the DOM
 let pxPerMs = PX_PER_SEC / 1000;
+let svgWidth = 0;
 let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
 let scrollBound = false;
@@ -82,17 +148,18 @@ let follow = true;
 let expectedScrollLeft = -1;
 
 let builtWithKeyLanes = false;
+let builtGrid: Grid | null = null;
 let builtMobile = false;
 // Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
 const isMobile = () => window.matchMedia('(max-width: 720px)').matches;
-export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false): void {
-    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile) {
-        build(replay, showKeyLanes); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile();
+export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null): void {
+    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid) {
+        build(replay, showKeyLanes, grid); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile(); builtGrid = grid;
     }
     updatePlayhead(replay, step);
 }
 
-function build(replay: Replay, showKeyLanes: boolean): void {
+function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
     rects = []; rendered = new Set(); prevActive = [];
@@ -100,7 +167,10 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
     pxPerMs = (PX_PER_SEC / 1000) * sc;
     rowH = ROW_H * sc;
-    const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs);
+    // A time line gets a view's width of room ahead, so it can sit mid-view and never runs off the roll.
+    const lineEnd = timeLineAt !== null && timeLineAt >= 0 ? PAD + timeLineAt * pxPerMs + host.clientWidth : 0;
+    const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs, lineEnd);
+    svgWidth = width;
     const noteH = (hi - lo + 1) * rowH;
     const laneTop = PAD + noteH + LANE_GAP;                              // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.
@@ -114,6 +184,16 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     svg.setAttribute('height', String(height));
     svg.style.display = 'block';
 
+    // A live take's bar and beat lines: one per click, brighter on each bar, over the whole visible width.
+    if (grid) {
+        const per = clicksPerBar(grid), ms = clickMs(grid);
+        for (let k = -per; PAD + (grid.t0 + k * ms) * pxPerMs <= width; k++) {
+            const x = PAD + (grid.t0 + k * ms) * pxPerMs;
+            if (x < 0) continue;
+            const bar = ((k % per) + per) % per === 0;
+            svg.appendChild(svgEl('line', { x1: x, x2: x, y1: PAD, y2: PAD + noteH, stroke: bar ? '#4d5869' : '#2f3643', 'stroke-width': 1 }));
+        }
+    }
     // faint row guides at octave Cs
     for (let m = lo; m <= hi; m++) {
         if (m % 12 !== 0) continue;
@@ -131,6 +211,8 @@ function build(replay: Replay, showKeyLanes: boolean): void {
             x: PAD + note.onT * pxPerMs, w, y: PAD + (hi - note.midi) * rowH,
             onIndex: note.onIndex, onT: note.onT, offT: note.offT, tier: note.tier, midi: note.midi,
             committedLabel: label(note.committed), expectedLabel: expLabel(note.expected),
+            // Ungraded notes (a live take) take their letter's colour; graded ones their tier's.
+            fill: !note.expected && note.committed ? LETTER_COLOR[note.committed.step]! : TIER_COLOR[note.tier],
         };
     }
     rects = new Array(replay.notes.length).fill(null);
@@ -148,6 +230,7 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     playhead.setAttribute('y1', String(PAD)); playhead.setAttribute('y2', String(lanesBottom));
     playhead.setAttribute('stroke', '#6ea8fe'); playhead.setAttribute('stroke-width', '1.5');   // literal: var() is invalid in an SVG presentation attribute
     svg.appendChild(playhead);
+    setPlayheadHidden(playheadHidden);
 
     // click background → seek to the onset nearest the clicked time. Map the click through the svg's
     // rendered rect (rect.width is the on-screen width, `width` its internal px), so the position stays
@@ -155,8 +238,17 @@ function build(replay: Replay, showKeyLanes: boolean): void {
     svg.addEventListener('click', e => {
         const rect = svg.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (width / rect.width);
-        onSeek(nearestNoteAtTime(replay, (x - PAD) / pxPerMs));
+        const t = (x - PAD) / pxPerMs;
+        onSeek(nearestNoteAtTime(replay, t));
+        onTime(t);
     });
+
+    timeLine = document.createElementNS(SVGNS, 'line') as SVGLineElement;
+    timeLine.setAttribute('y1', String(PAD)); timeLine.setAttribute('y2', String(PAD + noteH));
+    timeLine.setAttribute('stroke', '#e06c75'); timeLine.setAttribute('stroke-width', '2');
+    timeLine.setAttribute('pointer-events', 'none');
+    svg.appendChild(timeLine);
+    setTimeLine(timeLineAt, timeLineMoving, timeLineKind);
 
     host.appendChild(svg);
     if (!scrollBound) {
@@ -166,7 +258,7 @@ function build(replay: Replay, showKeyLanes: boolean): void {
             // playhead scrolls back into view.
             if (Math.abs(host.scrollLeft - expectedScrollLeft) > 2) follow = false;
             renderVisible();
-            applyActiveStrokes(replay, lastStep);
+            if (builtForReplay) applyActiveStrokes(builtForReplay, lastStep);   // the CURRENT replay (bound once)
         });
         scrollBound = true;
     }
@@ -202,10 +294,10 @@ function makeRect(oi: number): void {
     rect.setAttribute('x', String(L.x)); rect.setAttribute('y', String(L.y));
     rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
-    rect.setAttribute('fill', TIER_COLOR[L.tier]);
+    rect.setAttribute('fill', L.fill);
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
-    title.textContent = `${L.committedLabel} (midi ${L.midi}), expected ${L.expectedLabel}`;
+    title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);
     rect.appendChild(title);
     rect.addEventListener('click', e => { e.stopPropagation(); onSeek(L.onIndex); });
     notesGroup!.appendChild(rect);
@@ -345,10 +437,16 @@ function nearestNoteAtTime(replay: Replay, t: number): number {
 let lastStep = 0;
 
 function updatePlayhead(replay: Replay, step: number): void {
-    if (!svg || !playhead || !replay.notes.length) return;
+    if (!svg || !playhead) return;
+    if (!replay.notes.length) {   // an empty take: the playhead waits at the start, in view
+        playhead.setAttribute('x1', String(PAD)); playhead.setAttribute('x2', String(PAD));
+        const host = document.getElementById('pianoroll')!;
+        host.scrollLeft = 0; expectedScrollLeft = 0; follow = true;
+        return;
+    }
     lastStep = step;
     const cur = replay.notes[Math.max(0, Math.min(replay.notes.length - 1, step))]!;
-    const x = PAD + cur.onT * pxPerMs;
+    const x = PAD + (playheadAt ?? cur.onT) * pxPerMs;
     playhead.setAttribute('x1', String(x)); playhead.setAttribute('x2', String(x));
 
     // autoscroll to keep the playhead in view, then materialize the new viewport. While the user
@@ -356,8 +454,9 @@ function updatePlayhead(replay: Replay, step: number): void {
     // playhead drifts back into view on its own.
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, right = left + host.clientWidth;
-    if (!follow && x >= left + 60 && x <= right - 60) follow = true;
-    if (follow && (x < left + 60 || x > right - 60)) {
+    // During playback the gliding playhead scrolls the roll itself (keepAtMiddle); stepping still jumps.
+    if (!follow && playheadAt === null && x >= left + 60 && x <= right - 60) follow = true;
+    if (follow && playheadAt === null && (x < left + 60 || x > right - 60)) {
         host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
         expectedScrollLeft = host.scrollLeft;   // record what WE set, so the scroll listener knows it wasn't the user
     }
@@ -371,18 +470,15 @@ function applyActiveStrokes(replay: Replay, step: number): void {
     for (const oi of prevActive) { const r = rects[oi]; if (r) r.setAttribute('stroke', 'none'); }
     if (!replay.notes.length) { prevActive = []; return; }
     const cur = replay.notes[Math.max(0, Math.min(replay.notes.length - 1, step))]!;
-    const t = cur.onT, curOn = cur.onIndex;
+    // During playback, the notes sounding at the gliding playhead; otherwise at the current onset.
+    const t = playheadAt ?? cur.onT, curOn = cur.onIndex;
     const active: number[] = [];
     for (const oi of rendered) {
         const L = layouts[oi]!;
-        if (L.onT <= t && t < L.offT) {
-            const rect = rects[oi];
-            if (rect) {
-                if (oi === curOn) { rect.setAttribute('stroke', '#ffd230'); rect.setAttribute('stroke-width', '2.5'); }
-                else { rect.setAttribute('stroke', '#8a93a0'); rect.setAttribute('stroke-width', '1'); }
-                active.push(oi);
-            }
-        }
+        const rect = rects[oi];
+        if (!rect) continue;
+        if (oi === curOn) { rect.setAttribute('stroke', '#ffd230'); rect.setAttribute('stroke-width', '2.5'); active.push(oi); }
+        else if (L.onT <= t && t < L.offT) { rect.setAttribute('stroke', '#8a93a0'); rect.setAttribute('stroke-width', '1'); active.push(oi); }
     }
     prevActive = active;
 }
