@@ -224,7 +224,11 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     if (!measures.length) { host.innerHTML = emptyMsg('no notated measures here'); return; }
 
     // tempo + meter so note values reflect real durations and measures aren't 4/4-padded
-    const msPerBeat = estimateMsPerBeat(notes);
+    // The beat length per bar (else the bars shown, else the piece), so a tempo change doesn't misread
+    // the note values after it.
+    const pageBeat = estimateMsPerBeat(notes.filter(n => measures.includes(n.expected?.measure ?? NaN)))
+        ?? estimateMsPerBeat(notes) ?? 500;
+    const beatIn = (m: number) => estimateMsPerBeat(notes.filter(n => n.expected?.measure === m)) ?? pageBeat;
     const numerator = estimateNumerator(notes);
 
     // Per-measure key signature: find a representative note's onset time, then look up the active key.
@@ -247,7 +251,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     // width; squeezing them makes VexFlow overflow notes into the next measure. So width follows content.
     type Built = { m: number; voices: [Voice, Voice]; fmt: Formatter; staveW: number; noteArea: number; keySpec: string; prevKey: string };
     const voiceFor = (clef: string, m: number, keySpec: string): Voice => {
-        let sn = buildMeasureNotes(notes.filter(inStaff(clef)), m, clef, sounding, msPerBeat, numerator);
+        let sn = buildMeasureNotes(notes.filter(inStaff(clef)), m, clef, sounding, beatIn(m), numerator);
         if (!sn.length) sn = [new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: 'wr', align_center: true })];
         const voice = new Voice({ num_beats: numerator, beat_value: 4 }).setMode(Voice.Mode.SOFT);
         voice.addTickables(sn);
@@ -364,7 +368,7 @@ function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zo
 // ms-per-beat from consecutive same-measure onsets (Δt / Δbeat), median for robustness. The
 // fixtures are score-quantized so this is exact, but the median tolerates a stray grace-note or
 // rolled-chord outlier that would otherwise skew a mean.
-function estimateMsPerBeat(notes: ReplayNote[]): number {
+function estimateMsPerBeat(notes: ReplayNote[]): number | null {
     const sorted = notes.filter(n => n.expected?.beat != null).sort((a, b) => a.onT - b.onT);
     const ratios: number[] = [];
     for (let i = 1; i < sorted.length; i++) {
@@ -374,7 +378,7 @@ function estimateMsPerBeat(notes: ReplayNote[]): number {
         const dt = b.onT - a.onT;
         if (db > 0.01 && dt > 0) ratios.push(dt / db);
     }
-    if (!ratios.length) return 500;
+    if (!ratios.length) return null;
     ratios.sort((x, y) => x - y);
     return ratios[ratios.length >> 1]!;
 }
