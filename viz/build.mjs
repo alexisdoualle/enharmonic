@@ -69,11 +69,14 @@ async function copyAssets() {
         }
     }
     await copyFixtureRoot(FIXTURES);
+    const shipped = new Set(ids);
     // Developer-only fixtures override a committed fixture with the same id. This keeps the
     // overlay useful for trying revised ground truth without changing the shipped corpus.
     await copyFixtureRoot(LOCAL_FIXTURES);
     ids.sort();
     await writeFile(join(VIZ, 'fixtures', 'manifest.json'), JSON.stringify([...new Set(ids)], null, 2));
+    // The ids only the local overlay has (never in prod), so the menu can mark them.
+    await writeFile(join(VIZ, 'fixtures', 'local.json'), JSON.stringify([...new Set(ids)].filter(id => !shipped.has(id)), null, 2));
     console.log(`[viz] site → viz-dist/ (landing + CNAME); app + ${new Set(ids).size} fixtures → viz-dist/viz/`);
 }
 

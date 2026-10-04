@@ -1323,7 +1323,10 @@ async function boot() {
     setTempo(1);
     updatePlayBtn();
     const ids = await listFixtures();
-    $<HTMLSelectElement>('fixture').innerHTML = ids.map(id => `<option value="${id}">${id}</option>`).join('');
+    const localOnly = new Set<string>(await fetch('fixtures/local.json').then(r => r.json()).catch(() => []));
+    $<HTMLSelectElement>('fixture').innerHTML = ids.map(id => localOnly.has(id)
+        ? `<option value="${id}" title="local only, not shipped">⌂ ${id}</option>`
+        : `<option value="${id}">${id}</option>`).join('');
     restoreTakes();
     const p = new URLSearchParams(location.search);
     const urlFixture = p.get('fixture');
