@@ -10,8 +10,8 @@
  * one held note), rests (advance the cursor), and transposing instruments (`<transpose>`: written pitch
  * is converted to sounding/concert pitch, MIDI and spelling together, so a clarinet or horn part reads
  * in the same key as the rest). Grace notes are skipped (no duration). Repeats and voltas are NOT
- * expanded: the written order plays once. `<sound tempo>` sets playback speed, else
- * 120 BPM. Compressed `.mxl` (a zip) is read by {@link readMxl}, which inflates the score with the
+ * expanded: the written order plays once. Tempo follows every `<sound tempo>` (or a bare `<metronome>`
+ * mark) through the piece, else 120 BPM. Compressed `.mxl` (a zip) is read by {@link readMxl}, which inflates the score with the
  * browser's native `DecompressionStream` (still no dependency) and hands the XML to {@link parseMusicXml}.
  */
 
@@ -77,9 +77,13 @@ function scaleFromFifths(fifths: number): { letter: string; accidental: number }
     return ['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(letter => ({ letter, accidental: acc[letter]! }));
 }
 
+/** Snap a quarter position to a fine grid: summed `duration / divisions` floats drift apart across
+ *  parts (83.4999999999991 vs 83.4999999999997), which would split one onset into two. */
+const snapQ = (q: number): number => Math.round(q * 1e6) / 1e6;
+
 interface Attack {
-    onMs: number;
-    offMs: number;
+    onQ: number;      // onset and release in quarter notes from the start; ms come from the tempo map
+    offQ: number;
     midi: number;
     step: string;
     alter: number;
@@ -103,8 +107,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     const warnings: string[] = [];
     let sawGrace = false, sawRepeat = false, sawTranspose = false;
 
-    const tempo = firstTempo(doc) ?? 120;
-    const msPerQuarter = 60000 / tempo;
+    const tempos: TempoMark[] = [];
 
     const attacks: Attack[] = [];
     let respellScale: { letter: string; accidental: number }[] | null = null;
@@ -145,6 +148,9 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                         const f = num(el, 'key fifths');
                         if (f != null) respellScale = scaleFromFifths(f);
                     }
+                } else if (tag === 'sound' || tag === 'direction') {
+                    const bpm = tempoOf(el);
+                    if (bpm) tempos.push({ q: posQ, bpm });
                 } else if (tag === 'backup') {
                     posQ -= (num(el, 'duration') ?? 0) / divisions;
                 } else if (tag === 'forward') {
@@ -156,7 +162,7 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                     const durQ = (num(el, 'duration') ?? 0) / divisions;
                     if (isGrace) { sawGrace = true; continue; }   // no duration, no onset advance
 
-                    const onsetQ = isChord ? lastOnsetQ : posQ;
+                    const onsetQ = isChord ? lastOnsetQ : snapQ(posQ);
                     if (!isChord) { lastOnsetQ = posQ; }
 
                     if (!isRest) {
@@ -167,18 +173,17 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
                             const writtenAlter = num(pitch, 'alter') ?? 0;
                             const snd = toSounding(step, writtenAlter, octave, transpose);
                             const midi = snd.midi;
-                            const onMs = Math.round(onsetQ * msPerQuarter);
-                            const offMs = Math.round((onsetQ + durQ) * msPerQuarter);
+                            const offQ = snapQ(onsetQ + durQ);
                             const tieStop = !!el.querySelector('tie[type="stop"], tied[type="stop"]');
                             const tieStart = !!el.querySelector('tie[type="start"], tied[type="start"]');
                             if (tieStop && pendingTie.has(midi)) {
                                 const held = pendingTie.get(midi)!;
-                                held.offMs = offMs;               // extend the held note over this continuation
+                                held.offQ = offQ;                 // extend the held note over this continuation
                                 if (!tieStart) pendingTie.delete(midi);
                             } else {
                                 const a: Attack = {
-                                    onMs, offMs, midi, step: snd.step, alter: snd.alter,
-                                    measure: measureNumber, beat: onsetQ - measureStartQ + 1,
+                                    onQ: onsetQ, offQ, midi, step: snd.step, alter: snd.alter,
+                                    measure: measureNumber, beat: snapQ(onsetQ - measureStartQ) + 1,
                                 };
                                 attacks.push(a);
                                 if (tieStart) pendingTie.set(midi, a);
@@ -198,7 +203,8 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     if (parts.length > 1) warnings.push(`${parts.length} parts merged on a shared clock`);
 
     // ON-event order is (onset asc, midi asc): the bass commits first, and expected pairs 1:1 with it.
-    attacks.sort((p, q) => p.onMs - q.onMs || p.midi - q.midi);
+    attacks.sort((p, q) => p.onQ - q.onQ || p.midi - q.midi);
+    const msAt = tempoMap(tempos);
     const expected: Expected[] = attacks.map(a => ({ step: a.step, alter: a.alter, measure: a.measure, beat: a.beat }));
 
     // Event stream: every attack contributes an on (at onMs) and an off (at offMs). Sort by time, and at
@@ -206,23 +212,51 @@ export function parseMusicXml(xml: string, fileName = 'imported'): ImportResult 
     // encountered in exactly the expected[] order.
     const events: RawEvent[] = [];
     if (respellScale) events.push({ t_ms: 0, type: 'respell', scale: respellScale });
-    const raw: RawEvent[] = [];
-    for (const a of attacks) {
-        raw.push({ t_ms: a.onMs, type: 'on', midi: a.midi });
-        raw.push({ t_ms: a.offMs, type: 'off', midi: a.midi });
-    }
-    const rank = (e: RawEvent) => (e.type === 'off' ? 0 : 1);
-    raw.sort((p, q) => p.t_ms - q.t_ms || rank(p) - rank(q) || (p.midi! - q.midi!));
-    events.push(...raw);
+    // Attacks at the same ms keep their attacks[] order (key = index), so on-events pair 1:1 with expected[].
+    const raw: { e: RawEvent; key: number }[] = [];
+    attacks.forEach((a, i) => {
+        raw.push({ e: { t_ms: msAt(a.onQ), type: 'on', midi: a.midi }, key: i });
+        raw.push({ e: { t_ms: msAt(a.offQ), type: 'off', midi: a.midi }, key: a.midi - 1000 });   // offs (negative keys) release before ons
+    });
+    raw.sort((p, q) => p.e.t_ms - q.e.t_ms || p.key - q.key);
+    events.push(...raw.map(r => r.e));
 
     const name = fileName.replace(/\.(musicxml|xml|mxl)$/i, '');
     return { events, expected, name, warnings };
 }
 
-/** First `<sound tempo>` in the document (quarter-notes per minute), or null. */
-function firstTempo(doc: Document): number | null {
-    const t = doc.querySelector('sound[tempo]')?.getAttribute('tempo');
-    return t ? Number(t) : null;
+export interface TempoMark { q: number; bpm: number }   // at quarter `q`, `bpm` quarter notes a minute
+
+/** Quarter notes a minute set by a `<sound tempo>` or a `<direction>`: its `<sound tempo>`, else a
+ *  `<metronome>` mark (beat unit, dotted or not, and per-minute), or null. */
+function tempoOf(el: Element): number | null {
+    const snd = el.nodeName === 'sound' ? el : el.querySelector('sound[tempo]');
+    const t = Number(snd?.getAttribute('tempo'));
+    if (t > 0) return t;
+    const met = el.nodeName === 'direction' ? el.querySelector('metronome') : null;
+    const unit = text(met, 'beat-unit'), perMin = num(met, 'per-minute');
+    const UNIT_Q: Record<string, number> = { whole: 4, half: 2, quarter: 1, eighth: 0.5, '16th': 0.25 };
+    if (!unit || !perMin || !(unit in UNIT_Q)) return null;
+    return perMin * UNIT_Q[unit]! * (met!.querySelector('beat-unit-dot') ? 1.5 : 1);
+}
+
+/** Quarter position to ms under the tempo marks (any order, parts may repeat a mark). Before the first
+ *  mark the first tempo applies; with no mark, 120. */
+export function tempoMap(marks: TempoMark[]): (q: number) => number {
+    const sorted = marks.slice().sort((a, b) => a.q - b.q);
+    const segs: { q: number; ms: number; msPerQ: number }[] = [{ q: 0, ms: 0, msPerQ: 60000 / (sorted[0]?.bpm ?? 120) }];
+    for (const m of sorted) {
+        const last = segs[segs.length - 1]!;
+        const ms = last.ms + (m.q - last.q) * last.msPerQ;
+        if (m.q <= last.q) last.msPerQ = 60000 / m.bpm;   // same place (or before the start): the later mark wins
+        else segs.push({ q: m.q, ms, msPerQ: 60000 / m.bpm });
+    }
+    return q => {
+        let i = segs.length - 1;
+        while (i > 0 && segs[i]!.q > q) i--;
+        const sg = segs[i]!;
+        return Math.round(sg.ms + (q - sg.q) * sg.msPerQ);
+    };
 }
 
 // ── .mxl (compressed MusicXML) ─────────────────────────────────────────────────

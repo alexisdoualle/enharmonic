@@ -6,6 +6,7 @@ await import('./viz.test.js');
 await import('./examples/standalone.test.js');
 await import('./chromatic-lines.test.js');
 await import('./export.test.js');
+await import('./import.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;
