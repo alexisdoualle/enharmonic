@@ -1,5 +1,5 @@
 /**
- * CoreSpeller: the four-principle enharmonic speller, self-contained.
+ * CoreSpeller: four principles, one file, no imports.
  *
  * Meredith clean (195,972 notes), each principle added in turn:
  *
@@ -9,48 +9,31 @@
  *   + 4 (spiral fold)         99.37%    99.46%    0.54%
  *   real-time Speller         99.53%    99.58%    0.42%
  *
- * The basic spelling model in one file, zero imports. A truncated version of the
- * shipped real-time Speller: the four principles alone, without the settings that
- * fine-tune the enharmonic side. `src/core.ts` is the source of truth; this file is a
- * derived copy, pinned to it by `test/examples/standalone.test.ts` (equal spellings
- * on every fixture). Kept for pedagogy. On its own, this model reads spellings coherently
- * (intervals right, flicker-free), at the cost of sometimes landing on the wrong side of the
- * spiral of fifths (C# vs Db). Note: coherent means an entire section is transposed to a comma: e.g.
- * a passage the composer wrote in Db major is spelled in C# major instead. A lone note cannot be
- * "flipped": if what was a Db major chord is spelled in C# major: C# F G#, "F" is considered "wrong", 
- * because it disagrees with its neighbors, even if that note was in the original score. 
- * It wasn't transposed correctly, it should be "E#".
+ * The real-time Speller cut down to its four principles, without the side tracking.
+ * `src/core.ts` is the source of truth; `test/examples/standalone.test.ts` keeps this
+ * copy identical to it on every fixture.
  *
- * Four principles, and nothing else:
- *   1. INTERVAL SCORING. Among a pitch's enharmonic candidates, pick the one that
- *      forms the most consonant intervals with the running "resolved scale"
- *      (consonances reward, augmented/diminished punish). The scale drifts into key
- *      with no explicit key detection.
- *   2. The 7-LETTER LIMIT. The resolved scale holds one spelling per letter A-G.
- *      Every note overwrites its letter's slot; spelling a note means choosing which
- *      letter to claim.
- *   3. THE RECENCY GUARD. Interval scoring reads a candidate against the OTHER letters
- *      only, so it misses a same-letter clash (A♭ right after A♮). The guard docks a
- *      candidate whose letter was last committed at a different accidental within K
- *      onsets, so a slot cannot flicker against its recent self. Bounded on purpose: it
- *      blocks flicker, not real modulation.
- *   4. THE SPIRAL FOLD. Interval scoring is relative: it cannot tell D♭ from C♯, so a
- *      run of sharp choices can walk the whole scale a comma sharp (C𝄪 D♯ E♯ F𝄪 G♯ A♯ B♯)
- *      with nothing to pull it back. The fold is the absolute brake: when the scale's
- *      average line-of-fifths position drifts more than 8 fifths from D, every slot moves
- *      one comma back toward D (E♯ becomes F, B♯ becomes C). Every major key from F♭ to
- *      G♯ sits inside the radius.
+ * It spells coherently but can put a passage on the wrong side of the spiral of fifths.
+ * A whole section one comma off is flipped, not wrong: D♭ major spelled as C♯ major.
+ * A note that misses the shift is wrong: in C♯ F G♯, the F should be E♯.
  *
- * Frameless and persistent: one drifting scale whose slots are overwritten, never
- * reverted. The weakest form of the speller. The shipped Speller adds finer side
- * tracking (a diatonic-anchor leash), an optional look-ahead, and more; spellTwoPass runs the same model
- * offline in two passes.
+ * Four principles:
+ *   1. INTERVAL SCORING. Of a pitch's spellings, pick the one with the most consonant
+ *      intervals against the running scale (consonances score up, augmented and
+ *      diminished down). The scale settles into a key without detecting one.
+ *   2. THE 7-LETTER LIMIT. The scale holds one spelling per letter A-G. Each note
+ *      replaces its letter's slot, so spelling a note means choosing its letter.
+ *   3. THE RECENCY GUARD. Interval scoring skips the candidate's own letter, so it
+ *      misses A♭ right after A♮. The guard docks a letter respelled within K onsets.
+ *      It stops flicker, not modulation.
+ *   4. THE SPIRAL FOLD. Interval scoring can't tell D♭ from C♯, so the scale can walk
+ *      a comma sharp (C𝄪 D♯ E♯ F𝄪 G♯ A♯ B♯). When its average drifts more than 8 fifths
+ *      from D, every slot moves one comma back (E♯ becomes F, B♯ becomes C). Every
+ *      major key from F♭ to G♯ stays inside.
  *
- * The principles all but solve coherence (intervals right and
- * flicker-free, well under 1% incoherent). The residual gap from coherent to exact is
- * the SIDE: the fold only catches a large drift, so a passage can still sit on the other
- * enharmonic side (a coherent flip, e.g. D♭ F A♭ for C♯ E♯ G♯: notation, not error).
- * The full Speller tracks the side more closely.
+ * One scale, its slots overwritten and never reverted. The shipped Speller adds a
+ * diatonic-anchor leash that tracks the side passage by passage, and an optional
+ * look-ahead. spellTwoPass runs it offline in two passes.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
