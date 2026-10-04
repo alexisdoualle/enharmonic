@@ -16,3 +16,9 @@ export function ascii(p: Pitch | PitchClass | null): string {
     const suffix = p.alter === 0 ? '' : (p.alter > 0 ? '#'.repeat(p.alter) : 'b'.repeat(-p.alter));
     return `${p.step}${suffix}`;
 }
+
+/** One colour per letter, shared by the coiled Tonnetz and the piano roll's ungraded (live take) notes. */
+export const LETTER_COLOR: Record<string, string> = {
+    C: '#cb6a62', G: '#e0975a', D: '#cdb45c', A: '#6fb389',
+    E: '#5aa79b', B: '#6f95c4', F: '#9c78bd',
+};

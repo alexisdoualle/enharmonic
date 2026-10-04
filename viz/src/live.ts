@@ -16,6 +16,8 @@ export interface LiveState {
 }
 
 type Listener = (state: LiveState) => void;
+/** Where recorded input goes: `t` is the event's timeStamp; `velocity` (1..127) sets the synth's loudness. */
+export type LiveSink = (type: 'on' | 'off', midi: number, sound: boolean, t: number, velocity?: number) => void;
 
 const pcOf = (midi: number) => ((midi % 12) + 12) % 12;
 const spellingKey = (p: { step: string; alter: number }) => `${p.step}:${p.alter}`;
@@ -39,6 +41,13 @@ export class LiveSpeller {
     private previousBackbone: Set<string> | null = null;
     private listeners = new Set<Listener>();
     private midiStatus = 'computer keyboard ready';
+    /** When set, keyboard and MIDI notes go here instead of this model's own speller (the debugger
+     *  records them into a live take). */
+    private sink: LiveSink | null = null;
+
+    setInputSink(sink: LiveSink | null): void {
+        this.sink = sink;
+    }
 
     subscribe(listener: Listener): () => void {
         this.listeners.add(listener);
@@ -323,7 +332,9 @@ export class LiveSpeller {
         this.previousBackbone = selectSevenNodeLoF(this.filledCells, { previous: previousBackbone ?? undefined });
     }
 
-    noteOn(midi: number, sound = true): void {
+    /** `t` is the input event's timeStamp (performance.now() clock), so a chord keeps its real spread. */
+    noteOn(midi: number, sound = true, t = performance.now(), velocity = 100): void {
+        if (this.sink) { this.sink('on', midi, sound, t, velocity); return; }
         if (this.held.has(midi)) return;
         this.speller.noteOn(midi, { t: performance.now() });
         const spelling = this.speller.getSpelling(midi);
@@ -337,7 +348,8 @@ export class LiveSpeller {
         this.emit();
     }
 
-    noteOff(midi: number): void {
+    noteOff(midi: number, t = performance.now()): void {
+        if (this.sink) { this.sink('off', midi, false, t); return; }
         if (!this.held.has(midi)) return;
         this.speller.noteOff(midi);
         this.held.delete(midi);
@@ -385,16 +397,24 @@ export function connectLiveInput(model: LiveSpeller): void {
         if (/INPUT|SELECT|TEXTAREA/.test(tag)) return;
         event.preventDefault();
         down.add(event.code);
-        model.noteOn(midi);
+        model.noteOn(midi, true, event.timeStamp);
     };
     const onKeyUp = (event: KeyboardEvent) => {
         const midi = COMPUTER_KEYS[event.code];
         if (midi === undefined) return;
         down.delete(event.code);
-        model.noteOff(midi);
+        model.noteOff(midi, event.timeStamp);
+    };
+    // A key let go while the page has no focus sends no keyup: release everything held on blur or hide.
+    const releaseAll = () => {
+        const t = performance.now();
+        for (const code of down) model.noteOff(COMPUTER_KEYS[code]!, t);
+        down.clear();
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 }
 
 /** True when this browser exposes Web MIDI at all (so the UI can hide the button otherwise). */
@@ -418,12 +438,30 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
     midiRequested = true;
     model.setMidiStatus('requesting MIDI access…');
     return navigator.requestMIDIAccess({ sysex: false }).then(access => {
+        // SUSTAIN PEDAL (CC64): while it is down a released key keeps sounding, so its note-off waits for the
+        // pedal to lift. A sustained key struck again is released first, then re-struck, as on a piano.
+        let pedal = false;
+        const sustained = new Set<number>();
+        const keysDown = new Set<number>();
+        const attached = new WeakSet<WebMidi.MIDIInput>();
         const attach = (input: WebMidi.MIDIInput) => {
+            if (attached.has(input)) return;
+            attached.add(input);
             input.addEventListener('midimessage', event => {
-                const [status, midi, velocity] = event.data;
-                const command = status! & 0xf0;
-                if (command === 0x90 && velocity! > 0) model.noteOn(midi!, false);
-                else if (command === 0x80 || (command === 0x90 && velocity === 0)) model.noteOff(midi!);
+                const [status, data1, data2] = event.data;
+                const command = status! & 0xf0, t = event.timeStamp;
+                if (command === 0x90 && data2! > 0) {
+                    keysDown.add(data1!);
+                    if (sustained.delete(data1!)) model.noteOff(data1!, t);
+                    model.noteOn(data1!, true, t, data2!);   // through the synth (most controllers have no sound)
+                } else if (command === 0x80 || (command === 0x90 && data2 === 0)) {
+                    keysDown.delete(data1!);
+                    if (pedal) sustained.add(data1!);
+                    else model.noteOff(data1!, t);
+                } else if (command === 0xb0 && data1 === 64) {
+                    pedal = data2! >= 64;
+                    if (!pedal) { for (const m of sustained) model.noteOff(m, t); sustained.clear(); }
+                }
             });
         };
         access.inputs.forEach(attach);
@@ -431,6 +469,12 @@ export function connectMidi(model: LiveSpeller): Promise<void> {
         model.setMidiStatus(names.length ? `MIDI: ${names.join(', ')}` : 'MIDI ready · computer keyboard ready');
         access.addEventListener('statechange', event => {
             if (event.port.type === 'input' && event.port.state === 'connected') attach(event.port as WebMidi.MIDIInput);
+            if (event.port.type === 'input' && event.port.state === 'disconnected') {
+                // Unplugged mid-note: its note-offs will never come, so release what it held (and the pedal).
+                const t = performance.now();
+                for (const m of new Set([...keysDown, ...sustained])) model.noteOff(m, t);
+                keysDown.clear(); sustained.clear(); pedal = false;
+            }
             const current = [...access.inputs.values()].map(input => input.name).filter(Boolean);
             model.setMidiStatus(current.length ? `MIDI: ${current.join(', ')}` : 'MIDI ready · computer keyboard ready');
         });

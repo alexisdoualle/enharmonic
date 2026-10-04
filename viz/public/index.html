@@ -20,13 +20,15 @@
     <strong>enharmonic</strong> <span class="sub">speller debugger</span>
     <label>fixture <select id="fixture"></select></label>
     <button class="ctl" id="import-btn" title="import a MusicXML score (.musicxml / .xml / .mxl) as a gradeable fixture — or drop the file anywhere">↥ import</button>
+    <button class="ctl" id="take-export-xml" title="download the take shown as MusicXML, spelled by the speller shown" hidden>⤓ MusicXML</button>
+    <button class="ctl" id="take-export" title="download the take shown as a fixture events.json" hidden>⤓ events</button>
     <input type="file" id="import-file" accept=".musicxml,.xml,.mxl,application/vnd.recordare.musicxml+xml,application/vnd.recordare.musicxml,text/xml" hidden />
     <label>speller
       <select id="mode">
         <option value="core">① Core speller</option>
         <option value="rt">② real-time</option>
         <option value="tp">④ two-pass (offline)</option>
-        <option value="control">⊘ control — fixed-LoF window (music21)</option>
+        <option value="control" title="the control: a fixed line-of-fifths window (music21's default spelling)">⊘ control (fixed LoF)</option>
       </select>
     </label>
     <label class="ctl" id="look-ahead-ctl" title="③ near-real-time: let each note wait for its resolution (a small forward buffer) before committing — `new Speller({ lookAhead: true })`"><input type="checkbox" id="look-ahead" checked /> ③ look-ahead</label>
@@ -51,6 +53,12 @@
       <span id="volume-val" class="pos">90%</span></label>
     <label class="ctl" title="show / hide the sheet-music staff"><input type="checkbox" id="show-staff" checked /> ♫ staff</label>
     <button class="ctl midi-btn" id="midi-enable" title="connect a MIDI keyboard (asks for permission on click)">🎹 MIDI</button>
+    <span class="ctl metro" title="record against a metronome: a 4-click countdown, then bar 1; stop (or Space) ends it">
+      <button class="ctl midi-btn" id="metro-toggle" type="button">● record</button>
+      <button class="ctl midi-btn" id="take-clear" type="button" title="empty the take shown: click twice, or Shift+X twice (undo with ⌘Z)" hidden>clear</button>
+      <input type="number" id="metro-bpm" min="30" max="260" step="1" value="90" aria-label="tempo in beats per minute" /> bpm
+      <select id="metro-meter" aria-label="time signature"><option>2/4</option><option>3/4</option><option selected>4/4</option><option>6/8</option></select>
+      <span id="metro-beat" class="metro-beat"></span></span>
     <label class="ctl" id="key-lanes-ctl" hidden title="EXPERIMENTAL (display-only): show the local + stable collection/key lanes under the piano roll"><input type="checkbox" id="key-lanes" /> 🎯🧪</label>
     <label class="ctl" title="playback speed (logarithmic; centre = 1×)">tempo
       <input type="range" id="tempo" min="-1" max="1" step="0.01" value="0" />
