@@ -76,13 +76,18 @@ export function setPlayheadTime(t: number | null): void {
 }
 
 /** A moving line (playback, recording, the write head) scrolls the roll smoothly once it passes the middle
- *  of the view, so it stays there. Once the user scrolls, it lets go until the line reaches the middle of
- *  the view they scrolled to (it catches up with a look ahead and carries on from there, no jump). */
+ *  of the view, so it stays there. Once the user scrolls, it lets go until the line crosses the middle of
+ *  the view they scrolled to (no jump). Scrolled back past the line, the view stays put. */
+let lastLineX = -Infinity;
 function keepAtMiddle(x: number): void {
     const host = document.getElementById('pianoroll')!;
     const left = host.scrollLeft, w = host.clientWidth;
+    const prevX = lastLineX;
+    lastLineX = x;
     if (!follow) {
-        if (x < left + w / 2 || x > left + w) return;
+        // Re-engage only when the line crosses the middle going forward: a line already past the
+        // middle (the user scrolled back) must not snap the view.
+        if (!(prevX < left + w / 2 && x >= left + w / 2 && x <= left + w)) return;
         follow = true;
     }
     if (x < left) host.scrollLeft = Math.max(0, x - 60);   // behind the view (playback started there): bring it in
