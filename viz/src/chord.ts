@@ -239,7 +239,11 @@ const TEMPLATE_MASKS: number[] = (() => {
 const subsetOfSomeTemplate = (mask: number) => TEMPLATE_MASKS.some(t => (mask & t) === mask);
 
 export type ChordSource = 'sounding' | 'arpeggio';
-export interface ChordReading { read: ChordRead; source: ChordSource; /** notes in the arpeggio span (arpeggio only) */ span?: number; }
+export interface ChordReading {
+    read: ChordRead; source: ChordSource; /** notes in the arpeggio span (arpeggio only) */ span?: number;
+    /** still-sounding notes older than the span: part of the named chord (`heldIn`) or outside it (`heldOut`) */
+    heldIn?: PitchClass[]; heldOut?: PitchClass[];
+}
 
 /**
  * Chords in time, HIGH CONFIDENCE ONLY ("longest chord-pure suffix"): from note `i` walk back over `notes`,
@@ -248,11 +252,10 @@ export interface ChordReading { read: ChordRead; source: ChordSource; /** notes 
  * pc-set EQUALS a template's (complete, no extras), via findChord on the committed spellings. No
  * passing-tone logic: a non-chord tone simply ends the span.
  */
-export function arpeggioChord(
-    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number,
-): { read: ChordRead; span: number } | null {
+/** Length of the longest chord-pure suffix ending at note `i` (0 if note i is unread). */
+function walkSpan(notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number): number {
     const cur = notes[i];
-    if (!cur?.committed) return null;
+    if (!cur?.committed) return 0;
     let mask = 0, n = 0;
     for (let k = i; k >= 0 && n < ARPEGGIO_MAX_NOTES; k--) {
         const nt = notes[k]!;
@@ -261,6 +264,13 @@ export function arpeggioChord(
         if (!subsetOfSomeTemplate(m)) break;
         mask = m; n++;
     }
+    return n;
+}
+
+export function arpeggioChord(
+    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number,
+): { read: ChordRead; span: number } | null {
+    const n = walkSpan(notes, i);
     if (n < 3) return null;
     const span: ChordNote[] = [];
     for (let k = i - n + 1; k <= i; k++) span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true });
@@ -273,18 +283,38 @@ export function arpeggioChord(
 export function chordReading(
     replay: { snapshots: ReadonlyArray<Parameters<typeof chordAt>[0]>; notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }> }, i: number,
 ): ChordReading {
-    const read = chordAt(replay.snapshots[i]!);
+    const snap = replay.snapshots[i]!;
+    const read = chordAt(snap);
     if (read.type && read.status === 'complete') return { read, source: 'sounding' };
-    const arp = arpeggioChord(replay.notes, i);
-    return arp ? { read: arp.read, source: 'arpeggio', span: arp.span } : { read, source: 'sounding' };
+    // Notes still sounding cannot be erased by the walk: only released notes drop out. Held notes older
+    // than the span join it; if span + held is an exact chord of ANY type (its extra note is sounding,
+    // not left over from a previous chord), name it.
+    const notes = replay.notes, n = walkSpan(notes, i);
+    if (n >= 1) {
+        const inSpan = new Set<string>();
+        const span: ChordNote[] = [];
+        for (let k = i - n + 1; k <= i; k++) { inSpan.add(`${notes[k]!.midi}@${notes[k]!.onT}`); span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true }); }
+        const held = snap.sounding.filter(s => !inSpan.has(`${s.midi}@${s.onT}`));
+        const spanPcs = new Set(span.map(s => mod12(s.midi)));
+        const heldNew = held.filter(h => !spanPcs.has(mod12(h.midi)));
+        if (heldNew.length) {
+            const u = findChord([...span, ...held.map(h => ({ midi: h.midi, pitch: h.pitch, struck: false }))]);
+            if (u.type && u.status === 'complete') return { read: u, source: 'arpeggio', span: n, heldIn: heldNew.map(h => h.pitch as PitchClass) };
+        }
+        const arp = arpeggioChord(notes, i);
+        if (arp) return { read: arp.read, source: 'arpeggio', span: arp.span, ...(heldNew.length ? { heldOut: heldNew.map(h => h.pitch as PitchClass) } : {}) };
+    }
+    return { read, source: 'sounding' };
 }
 
 /** `chordText` plus the arpeggio provenance: "F major (arpeggio, last 5 notes)". */
 export function chordReadingText(r: ChordReading, fmt: (p: PitchClass) => string = uni): string {
     if (r.source !== 'arpeggio') return chordText(r.read, fmt);
     const t = CHORD_TYPES.find(x => x.id === r.read.type)!;
-    const base = r.read.coherent ? `${fmt(r.read.root!)} ${t.name}` : chordText(r.read, fmt).replace(/ \(complete\)$/, '');
-    return `${base} (arpeggio, last ${r.span} notes)`;
+    const base = r.read.coherent ? `${fmt(r.read.root!)} ${t.name}` : chordText(r.read, fmt).replace(/ \(complete[^)]*\)$/, '');
+    const list = (ps: PitchClass[]) => [...new Set(ps.map(p => fmt(p)))].join(', ');
+    if (r.heldIn?.length) return `${base} (arpeggio + held ${list(r.heldIn)}, last ${r.span} notes)`;
+    return `${base} (arpeggio, last ${r.span} notes${r.heldOut?.length ? `; ${list(r.heldOut)} held` : ''})`;
 }
 
 export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; /** inferred over time from recent notes, not from the sounding set */ arpeggio?: boolean; span?: number; }

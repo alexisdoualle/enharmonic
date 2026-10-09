@@ -132,6 +132,12 @@ suite('viz chord arpeggio (longest chord-pure suffix)', () => {
         const segs = chordSegments(r.snapshots, 1e9, r.notes).filter(s => s.read.type && s.t0 < 1900);
         assertEq(segs.map(s => s.read.short), ['C']);
     });
+    test('bach wtc1 prelude 1 step 24: held C joins the D minor arpeggio, D minor 7', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const c = chordReading(r, 23);
+        assertEq([c.source, c.read.type], ['arpeggio', 'min7']);
+        assert(chordReadingText(c, label).includes('held C'), chordReadingText(c, label));
+    });
     test('an arpeggiated dominant seventh is named in time', () => {
         const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
         const g7 = [n(55, 0, 'G'), n(59, 250, 'B'), n(62, 500, 'D'), n(65, 750, 'F')];
