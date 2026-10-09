@@ -51,7 +51,7 @@ suite('viz chord finder', () => {
     });
     test('B D F G# is a symmetric diminished 7, named from its spelled root G#', () => {
         const r = findChord(notes('B3 D4 F4 G#4'));
-        assertEq([r.type, r.status, r.symmetric, r.coherent, r.short], ['dim7', 'complete', true, true, 'dim7']);
+        assertEq([r.type, r.status, r.symmetric, r.coherent, r.short], ['dim7', 'complete', true, true, 'G♯°7']);
         assert(chordText(r, label).startsWith('G♯ diminished 7'), chordText(r, label));
     });
     test('Ab C Eb F# is a German sixth; the same pcs with a Gb are a dominant 7', () => {

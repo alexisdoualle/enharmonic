@@ -37,7 +37,7 @@ const CHORD_TYPES: ChordType[] = [
     { id: 'maj7', name: 'major 7', short: r => `${r}maj7`, seventh: true, tones: [[0, 0, 'root'], [4, 2, 'third'], [7, 4, 'fifth'], [11, 6, 'seventh']] },
     { id: 'min7', name: 'minor 7', short: r => `${r}m7`, seventh: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [7, 4, 'fifth'], [10, 6, 'seventh']] },
     { id: 'hdim7', name: 'half-diminished 7', short: r => `${r}ø7`, seventh: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [10, 6, 'seventh']] },
-    { id: 'dim7', name: 'diminished 7', short: () => 'dim7', symmetric: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [9, 6, 'seventh']] },
+    { id: 'dim7', name: 'diminished 7', short: r => `${r}°7`, symmetric: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [9, 6, 'seventh']] },
     // Augmented sixths, rooted on the ♭6: aug6th above it is the ♯4 (here letter +5).
     { id: 'it6', name: 'Italian sixth', short: () => 'It+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [10, 5, '♯4']] },
     { id: 'fr6', name: 'French sixth', short: () => 'Fr+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [6, 3, '2'], [10, 5, '♯4']] },
