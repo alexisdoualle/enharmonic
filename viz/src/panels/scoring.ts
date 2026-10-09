@@ -7,7 +7,7 @@
  * decision trace (`decision()`), so the table is exactly the decision the shipped speller made.
  */
 import type { Snapshot } from '../replay.js';
-import type { DecisionCandidate } from '../decision.js';
+import { candidateTotal, deltaColumns, otherDelta } from '../decision.js';
 import type { PitchClass } from '../../../src/index.js';
 import { rawIntervalBetween, intervalBetween, intervalLabel } from '../../../src/interval.js';
 import { label } from '../format.js';
@@ -82,21 +82,9 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     const frameByLetter = new Map(dec.frame.map(p => [p.step, p]));
     const hasGuard = dec.candidates.some(c => c.guardDelta !== undefined);
     const hasSide = dec.candidates.some(c => c.sideDelta !== undefined);
-    const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
-    // Delta columns depend on the SPELLER (structural), not on this onset's values, so the table never gains
-    // or loses a column between notes: the real-time preset shows Side (anchor) + Grd (guard), + LA
-    // when it looks ahead (`laActive`); the streaming modes show LA/NS. Columns compose.
-    const deltaCols: { label: string; title: string; val: (c: DecisionCandidate) => number }[] = [];
-    if (hasSide) deltaCols.push({ label: 'Side', title: 'side-anchor penalty: −anchor × fifths outside the collection', val: c => c.sideDelta ?? 0 });
-    if (hasGuard) deltaCols.push({ label: 'Grd', title: 'recency-guard penalty', val: c => c.guardDelta ?? 0 });
-    if ((hasSide || hasGuard) && laActive) deltaCols.push({ label: 'LA', title: 'look-ahead: step toward the resolution', val: c => c.laDelta });
-    // Look-ahead preset (Grd but no Side): nsDelta carries its drift-leash + vertical-guard penalty; show it
-    // so the total reconciles (otherwise a candidate can win with no visible reason, e.g. the op28/4 dim7).
-    if (hasGuard && !hasSide) deltaCols.push({ label: 'Vrt', title: 'drift-leash + vertical-guard penalty', val: c => c.nsDelta });
-    if (!hasSide && !hasGuard) deltaCols.push(
-        { label: 'LA', title: 'look-ahead delta', val: c => c.laDelta },
-        { label: 'NS', title: 'neighbour-step delta', val: c => c.nsDelta },
-    );
+    const total = candidateTotal;
+    // Columns are shared with the copy text (deltaColumns) so the two layouts cannot drift.
+    const deltaCols = deltaColumns(dec.candidates, laActive).map(d => ({ label: d.h, title: d.title, val: d.val }));
     const chosenKey = `${dec.chosen.step}:${dec.chosen.alter}`;
     const baseWin = dec.candidates.reduce((b, c) => (c.base > b.base ? c : b), dec.candidates[0]!);
     const totalWin = dec.candidates.reduce((b, c) => (total(c) > total(b) ? c : b), dec.candidates[0]!);
@@ -164,7 +152,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
         const movers: string[] = [];
         if (totalWin.laDelta - baseWin.laDelta > 0) movers.push('look-ahead');
         if ((totalWin.guardDelta ?? 0) - (baseWin.guardDelta ?? 0) > 0) movers.push('recency guard');
-        if (totalWin.nsDelta - baseWin.nsDelta > 0) movers.push(hasGuard ? 'vertical guard / drift leash' : 'neighbour-step');
+        if (otherDelta(totalWin) - otherDelta(baseWin) > 0) movers.push(hasGuard ? 'vertical guard / drift leash' : 'neighbour-step');
         const mech = movers.length ? movers.join(' + ') : 'the deltas';
         notes.push(`${mech} moved the pick ${label(baseWin.c)} → ${label(totalWin.c)}`);
     } else {

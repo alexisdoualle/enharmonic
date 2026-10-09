@@ -343,7 +343,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             decision = gd
                 ? {
                     frame: gd.scale,
-                    candidates: gd.candidates.map(x => ({ c: x.c, base: x.base, laDelta: x.laDelta, nsDelta: x.daDelta + x.vertDelta, guardDelta: x.guardDelta, sideDelta: x.sideDelta })),
+                    candidates: gd.candidates.map(x => ({ c: x.c, base: x.base, laDelta: x.laDelta, nsDelta: 0, guardDelta: x.guardDelta, sideDelta: x.sideDelta, vertDelta: x.vertDelta, daDelta: x.daDelta, leanDelta: x.leanDelta })),
                     chosen: gd.chosen, override: 'none',
                 }
                 : coreDecision(before, e.midi!, committed);

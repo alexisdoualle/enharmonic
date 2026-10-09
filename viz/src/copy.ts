@@ -9,7 +9,7 @@
 import type { AppState } from './state.js';
 import { SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, current } from './state.js';
 import type { Snapshot, ReplayNote, Mode } from './replay.js';
-import type { DecisionCandidate } from './decision.js';
+import { candidateTotal, deltaColumns } from './decision.js';
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { ascii } from './format.js';
 import { collectionSegments } from './music/pianoroll.js';
@@ -108,27 +108,15 @@ export function contextReport(s: AppState): string {
     L.push('');
 
     L.push('## decision');
-    L.push(...decisionLines(snap, s.mode === 'la'));
+    L.push(...decisionLines(snap, s.mode === 'la' || (s.mode === 'rt' && s.lookAhead)));
     return L.join('\n');
 }
 
 function decisionLines(snap: Snapshot, laActive: boolean): string[] {
     const dec = snap.decision;
     if (!dec) return ['(batch two-pass: no per-onset scoring trace)'];
-    const hasSide = dec.candidates.some(c => c.sideDelta !== undefined);
-    const hasGuard = dec.candidates.some(c => c.guardDelta !== undefined);
-    const total = (c: DecisionCandidate) => c.base + c.laDelta + c.nsDelta + (c.guardDelta ?? 0) + (c.sideDelta ?? 0);
-    // Columns are STRUCTURAL (per speller), not per-onset, so the table never gains/loses a column between
-    // notes: the real-time preset shows Side + Grd (+ LA when it looks ahead); the streaming modes
-    // show LA + NS. Same layout as the scoring panel.
-    const cols: { h: string; val: (c: DecisionCandidate) => number }[] = [];
-    if (hasSide) cols.push({ h: 'Side', val: c => c.sideDelta ?? 0 });
-    if (hasGuard) cols.push({ h: 'Grd', val: c => c.guardDelta ?? 0 });
-    if ((hasSide || hasGuard) && laActive) cols.push({ h: 'LA', val: c => c.laDelta });
-    // The look-ahead preset (Grd but no Side) also carries the drift-leash + vertical-guard penalty in nsDelta;
-    // show it so the printed total always reconciles (it was silently omitted, hiding why a candidate won).
-    if (hasGuard && !hasSide) cols.push({ h: 'Vrt', val: c => c.nsDelta });
-    if (!hasSide && !hasGuard) cols.push({ h: 'LA', val: c => c.laDelta }, { h: 'NS', val: c => c.nsDelta });
+    const total = candidateTotal;
+    const cols = deltaColumns(dec.candidates, laActive);
     const out = ['  cand  base' + cols.map(c => padL(c.h, 5)).join('') + '  total'];
     for (const c of dec.candidates) {
         const chosen = c.c.step === dec.chosen.step && c.c.alter === dec.chosen.alter;
