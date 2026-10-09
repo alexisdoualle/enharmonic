@@ -14,6 +14,7 @@
  * German from dominant 7: the same keys spelled with a minor seventh are a dominant 7.
  */
 import type { Pitch, PitchClass } from '../../src/index.js';
+import { triadColor, triadColorAt } from './music/triadColor.js';
 
 export interface ChordNote { midi: number; pitch: Pitch; /** struck at this onset (false = held over from earlier) */ struck: boolean; }
 
@@ -219,7 +220,7 @@ export function chordAt(snap: { t: number; sounding: ReadonlyArray<{ midi: numbe
     return findChord(snap.sounding.map(s => ({ midi: s.midi, pitch: s.pitch, struck: s.onT >= snap.t })));
 }
 
-export interface ChordSegment { read: ChordRead; t0: number; t1: number; }
+export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; }
 
 /**
  * Contiguous spans over which the identified chord stays the same, for the piano-roll chord lane.
@@ -228,7 +229,7 @@ export interface ChordSegment { read: ChordRead; t0: number; t1: number; }
  * spelling + coherence; a change of status (complete/subset) or of held notes keeps the same span.
  */
 export function chordSegments(
-    snaps: ReadonlyArray<{ t: number; sounding: ReadonlyArray<{ midi: number; pitch: Pitch; onT: number }> }>,
+    snaps: ReadonlyArray<{ t: number; resolvedScale?: PitchClass[] | null; sounding: ReadonlyArray<{ midi: number; pitch: Pitch; onT: number }> }>,
     durationMs: number,
 ): ChordSegment[] {
     const segs: ChordSegment[] = [];
@@ -239,8 +240,43 @@ export function chordSegments(
         const k = read.type ? `${read.short}${read.coherent ? '' : '!'}` : '';
         if (k === key && segs.length) continue;
         if (segs.length) segs[segs.length - 1]!.t1 = snaps[i]!.t;
-        segs.push({ read, t0: snaps[i]!.t, t1: durationMs });
+        segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null });
         key = k;
     }
     return segs;
 }
+
+const SEMI_OF: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const spellPc = (p: PitchClass) => mod12(SEMI_OF[p.step]! + p.alter);
+const FIFTHS_IDX: Record<string, number> = { F: 0, C: 1, G: 2, D: 3, A: 4, E: 5, B: 6 };
+const fifthsOf = (p: PitchClass) => FIFTHS_IDX[p.step]! + p.alter * 7;
+
+/** Fill colour for a chord read, shared with the Tonnetz panel (viz/src/music/triadColor.ts). Triads and
+ *  sevenths take the gradient of their TRIAD (root, third, fifth) at the committed spellings, placed
+ *  within `surface`; diminished/half-dim/dim7 and augmented use fixed colours, augmented sixths 'aug6'.
+ *  An incoherent read is coloured by its pc-identity chord (root named by pc). null = no chord. */
+export function chordColor(r: ChordRead, surface: readonly PitchClass[] | null): string | null {
+    if (!r.type) return null;
+    const surf = surface && surface.length === 7 ? surface : DEFAULT_SURFACE;
+    const fixed = r.type === 'dim' || r.type === 'hdim7' || r.type === 'dim7' ? 'diminished'
+        : r.type === 'aug' ? 'augmented'
+        : r.type === 'it6' || r.type === 'fr6' || r.type === 'ger6' ? 'aug6' : null;
+    if (fixed) return triadColor(fixed, undefined, surf);
+    const minor = r.type === 'min' || r.type === 'min7';
+    const quality = minor ? 'minor' : 'major';
+    const root = r.root!;
+    // Fifths position of the root, from any matched chord note (committed spelling) when coherent.
+    // Offsets above the root on the chain: root 0, major third +4, minor third -3, fifth +1.
+    const rootPc = spellPc(root);
+    let rootPos = fifthsOf(root);
+    if (r.coherent) {
+        for (const n of r.chordNotes) {
+            const off = mod12(spellPc(n) - rootPc);
+            const rel = off === 0 ? 0 : off === 7 ? 1 : off === (minor ? 3 : 4) ? (minor ? -3 : 4) : null;
+            if (rel !== null) { rootPos = fifthsOf(n) - rel; break; }
+        }
+    }
+    const mean = rootPos + (minor ? (0 - 3 + 1) / 3 : (0 + 4 + 1) / 3);
+    return triadColorAt(quality, mean, surf);
+}
+const DEFAULT_SURFACE: PitchClass[] = (['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const).map(step => ({ step, alter: 0 }));

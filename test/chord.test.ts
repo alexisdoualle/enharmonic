@@ -82,3 +82,20 @@ suite('viz chord finder', () => {
         assertEq(text('C4'), 'none (one note)');
     });
 });
+
+import { triadColor } from '../viz/src/music/triadColor.js';
+import { chordColor } from '../viz/src/chord.js';
+suite('viz triadColor (shared with the Tonnetz panel)', () => {
+    const cMaj = ['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(step => ({ step, alter: 0 }));
+    const sp = (...xs: [string, number][]) => xs.map(([step, alter]) => ({ step, alter }));
+    test('golden hexes unchanged by the refactor', () => {
+        assertEq(triadColor('major', sp(['C', 0], ['E', 0], ['G', 0]), cMaj), '#ffd680');
+        assertEq(triadColor('minor', sp(['A', 0], ['C', 0], ['E', 0]), cMaj), '#9ebffa');
+        assertEq(triadColor('diminished', undefined, cMaj), '#f8bbd9');
+    });
+    test('chord lane: dominant 7 takes its triad colour; dim7 and aug6 take fixed colours', () => {
+        const col = (spec: string) => chordColor(findChord(notes(spec)), cMaj as never);
+        assertEq(col('G3 B3 D4 F4'), triadColor('major', sp(['G', 0], ['B', 0], ['D', 0]), cMaj));
+        assertEq(col('B3 D4 F4 Ab4'), triadColor('diminished', undefined, cMaj));
+    });
+});

@@ -17,7 +17,7 @@ import type { Replay, ReplayNote, Tier } from '../replay.js';
 import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
-import { chordSegments, chordText } from '../chord.js';
+import { chordColor, chordSegments, chordText } from '../chord.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -349,7 +349,7 @@ function laneText(host: SVGSVGElement, x: number, y: number, str: string, fill: 
 
 // The chord the speller's committed spellings amount to, as contiguous spans (display-only; see ../chord.ts).
 // Complete = solid; subset/partial = dimmer fill (the chord sits inside or short of the sounding set);
-// incoherently spelled = muted red, italic, "⚠" (identity by pc, spelling does not stack in thirds).
+// incoherently spelled = pc-identity colour, muted, red outline, italic, "⚠" (identity by pc, spelling does not stack in thirds).
 // A thin underline marks a span whose chord leans on HELD notes (struck earlier, still ringing).
 function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {
     const segs = chordSegments(replay.snapshots, replay.durationMs);
@@ -361,7 +361,7 @@ function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, lane
         named++;
         const x = PAD + seg.t0 * pxPerMs, w = Math.max(0, (seg.t1 - seg.t0) * pxPerMs);
         const bad = !r.coherent, full = r.status === 'complete';
-        const rect = svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: bad ? '#5a3238' : '#34506b', 'fill-opacity': full ? 1 : 0.55 });
+        const rect = svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: chordColor(r, seg.surface) ?? '#34506b', 'fill-opacity': bad ? 0.5 : full ? 1 : 0.55, ...(bad ? { stroke: '#c0505e', 'stroke-width': 1 } : {}) });
         const title = document.createElementNS(SVGNS, 'title');
         title.textContent = chordText(r, p => label(p));
         rect.appendChild(title);
@@ -371,7 +371,7 @@ function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, lane
         if (w > str.length * 6 + 6) {
             const t = document.createElementNS(SVGNS, 'text');
             t.setAttribute('x', String(x + w / 2)); t.setAttribute('y', String(laneTop + LANE_H / 2 + 4));
-            t.setAttribute('fill', bad ? '#e9b9bf' : '#e6e8ec'); t.setAttribute('font-size', '10'); t.setAttribute('text-anchor', 'middle');
+            t.setAttribute('fill', bad ? '#7a1f2b' : '#1b1f27'); t.setAttribute('font-size', '10'); t.setAttribute('text-anchor', 'middle');
             if (bad) t.setAttribute('font-style', 'italic');
             t.textContent = str;
             host.appendChild(t);

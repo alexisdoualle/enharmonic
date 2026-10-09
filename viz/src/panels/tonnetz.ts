@@ -16,7 +16,7 @@ import { pcOf } from '../replay.js';
 import type { LiveState } from '../live.js';
 import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSceneV2.js';
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
-import { extendedFifthsPos } from '../tonnetz3d/LatticeGeometry.js';
+import { triadColor as sharedTriadColor } from '../music/triadColor.js';
 import type { LetterName } from '../tonnetz3d/types.js';
 
 // Grid footprint: wide enough along the fifths chain to hold a key's neighbourhood, a few third-rows
@@ -30,48 +30,9 @@ const DEFAULT_SCALE_SPEC: [LetterName, number][] = [
 ];
 const defaultScale = (): PitchClass[] => DEFAULT_SCALE_SPEC.map(([l, a]) => new PitchClass(l, a));
 
-// Triangle colouring, ported verbatim from the tonnetz app's getTriadColor so the hues match. Major and
-// minor triads take a hue GRADIENT along the fifths chain (the triad's mean fifths-position within the
-// current scale range), which is the app's "hue offset" look; other qualities use fixed fallback colours.
-const MAJOR_HUE_LOW = 65, MAJOR_HUE_HIGH = 10;   // major gradient endpoints
-const MINOR_HUE_LOW = 197, MINOR_HUE_HIGH = 236; // minor gradient endpoints
-const TRIAD_FALLBACK: Record<string, string> = {
-    major: '#ffcc80', minor: '#abcefb', diminished: '#f8bbd9', augmented: '#c8e6c9',
-    flat5: '#f295c4', aug6: '#f5be9e', aug3: '#b39ddb', dim3: '#80cbc4',
-};
-
-function hslToHex(h: number, s: number, l: number): string {
-    h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-    const m = l - c / 2;
-    let r = 0, g = 0, b = 0;
-    if (h < 60) { r = c; g = x; }
-    else if (h < 120) { r = x; g = c; }
-    else if (h < 180) { g = c; b = x; }
-    else if (h < 240) { g = x; b = c; }
-    else if (h < 300) { r = x; b = c; }
-    else { r = c; b = x; }
-    const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-/** getTriadColor for the scene config: matches the tonnetz app. `scale` (the current surface) sets the
- *  fifths range the major/minor gradient normalises against. */
-function triadColor(type: string, notes?: PitchClass[]): string {
-    if (notes && notes.length === 3 && (type === 'major' || type === 'minor') && scale.length >= 7) {
-        const scalePos = scale.map(p => extendedFifthsPos(p.letterName, p.accidental));
-        const min = Math.min(...scalePos), max = Math.max(...scalePos), range = max - min;
-        if (range > 0) {
-            const pos = notes.map(n => extendedFifthsPos(n.letterName, n.accidental));
-            const t = Math.max(0, Math.min(1, ((pos[0]! + pos[1]! + pos[2]!) / 3 - min) / range));
-            return type === 'major'
-                ? hslToHex(MAJOR_HUE_LOW + t * (MAJOR_HUE_HIGH - MAJOR_HUE_LOW), 100, 75)
-                : hslToHex(MINOR_HUE_LOW + t * (MINOR_HUE_HIGH - MINOR_HUE_LOW), 90, 80);
-        }
-    }
-    return TRIAD_FALLBACK[type] ?? '#abcefb';
-}
+// Triangle colouring lives in ../music/triadColor.ts (shared with the piano-roll chord lane); this
+// binds it to the panel's current surface.
+const triadColor = (type: string, notes?: PitchClass[]): string => sharedTriadColor(type, notes, scale);
 
 // A lightweight stand-in for the tonnetz app's accumulator, enough to keep the harmony readable without
 // porting the real thing. Two decays feed `getNoteActivation(pc)`:
