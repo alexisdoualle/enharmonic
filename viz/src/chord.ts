@@ -227,8 +227,10 @@ export const ARPEGGIO_MAX_MS = 2000;
 /** Chord types that can be named over TIME (an arpeggio): triads, plus the dominant seventh. Other sevenths
  *  are two triads sharing two notes (A minor 7 = A minor + C major), so a change of triad in time produces
  *  their notes; they are named only when sounding together. The dominant seventh is the one exception (too
- *  strong a sonority to ignore even when its seventh is disconnected, Alexis 2026-10-09). */
-const TIME_TYPES: ReadonlySet<TypeId> = new Set<TypeId>(['maj', 'min', 'dim', 'aug', 'dom7']);
+ *  strong a sonority to ignore even when its seventh is disconnected, Alexis 2026-10-09), and the
+ *  diminished seventh for the same reason (a rootless dominant ninth; its two diminished triads are its own
+ *  parts, so they cannot fake it the way two neighbouring triads fake a minor seventh). */
+const TIME_TYPES: ReadonlySet<TypeId> = new Set<TypeId>(['maj', 'min', 'dim', 'aug', 'dom7', 'dim7']);
 
 /** Pitch-class sets (as 12-bit masks) of every TIME chord type in every transposition. */
 const TEMPLATE_MASKS: number[] = (() => {
@@ -354,7 +356,11 @@ export function chordSegments(
         // One box per CHORD: the source (sounding vs arpeggio) is not part of the key, so a chord whose
         // reading alternates between held notes and the recent span stays one box. The box is marked as
         // inferred over time only if no part of it was confirmed by notes sounding together.
-        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}` : '';
+        // Symmetric chords (dim7, augmented) are named after their lowest note, so key them by pitch-class
+        // set: a diminished seventh whose bass moves stays one box.
+        const k = !read.type ? '' : read.symmetric
+            ? `${read.type}:${[...pcsOf(read)].sort((x, y) => x - y).join('.')}${read.coherent ? '' : '!'}`
+            : `${read.short}${read.coherent ? '' : '!'}`;
         if (k === key && segs.length) {
             const last = segs[segs.length - 1]!;
             if (cr.source === 'sounding' && last.arpeggio) { delete last.arpeggio; delete last.span; }

@@ -143,6 +143,14 @@ suite('viz chord arpeggio (longest chord-pure suffix)', () => {
         const types = [36, 37, 38, 39, 40, 41, 42, 43].map(i => chordReading(r, i).read.type);
         assert(types.every(x => x === 'dom7'), JSON.stringify(types));
     });
+    test('bach wtc1 prelude 1 bar 12: one diminished 7 throughout, one lane box', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const types = [184, 185, 186, 187, 188, 189, 190].map(i => chordReading(r, i).read.type);
+        assert(types.every(x => x === 'dim7'), JSON.stringify(types));
+        const t0 = r.snapshots[184]!.t, t1 = r.snapshots[190]!.t;
+        const segs = chordSegments(r.snapshots, 1e9, r.notes).filter(s => s.t1 > t0 && s.t0 <= t1);
+        assertEq(segs.length, 1);
+    });
     test('an arpeggiated dominant seventh is named in time', () => {
         const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
         const g7 = [n(55, 0, 'G'), n(59, 250, 'B'), n(62, 500, 'D'), n(65, 750, 'F')];
