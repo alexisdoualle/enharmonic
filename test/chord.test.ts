@@ -122,6 +122,17 @@ suite('viz chord arpeggio (longest chord-pure suffix)', () => {
         assertEq([c.source, c.read.short, c.span], ['arpeggio', 'F', 5]);
         assertEq(chordReadingText(c, label), 'F major (arpeggio, last 5 notes)');
     });
+    test('mozart_k545 step 26: no A minor 7 bleed (time names triads and dominant 7 only)', () => {
+        const r = real('mozart_k545');
+        const c = chordReading(r, 25);
+        assert(c.source === 'sounding' && c.read.type !== 'min7', chordReadingText(c, label));
+    });
+    test('an arpeggiated dominant seventh is named in time', () => {
+        const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
+        const g7 = [n(55, 0, 'G'), n(59, 250, 'B'), n(62, 500, 'D'), n(65, 750, 'F')];
+        const a = arpeggioChord(g7, 3);
+        assert(a !== null && a.read.type === 'dom7' && a.span === 4, JSON.stringify(a?.read.type));
+    });
     test('chopin op28 no15 step 401: D-flat major, sounding and complete, unchanged', () => {
         const r = real('chopin_prelude_op28_no15');
         const c = chordReading(r, 400);

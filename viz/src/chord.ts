@@ -224,10 +224,16 @@ export function chordAt(snap: { t: number; sounding: ReadonlyArray<{ midi: numbe
 export const ARPEGGIO_MAX_NOTES = 12;
 export const ARPEGGIO_MAX_MS = 2000;
 
-/** Pitch-class sets (as 12-bit masks) of every chord template in every transposition. */
+/** Chord types that can be named over TIME (an arpeggio): triads, plus the dominant seventh. Other sevenths
+ *  are two triads sharing two notes (A minor 7 = A minor + C major), so a change of triad in time produces
+ *  their notes; they are named only when sounding together. The dominant seventh is the one exception (too
+ *  strong a sonority to ignore even when its seventh is disconnected, Alexis 2026-10-09). */
+const TIME_TYPES: ReadonlySet<TypeId> = new Set<TypeId>(['maj', 'min', 'dim', 'aug', 'dom7']);
+
+/** Pitch-class sets (as 12-bit masks) of every TIME chord type in every transposition. */
 const TEMPLATE_MASKS: number[] = (() => {
     const out = new Set<number>();
-    for (const t of CHORD_TYPES) for (let r = 0; r < 12; r++) out.add(t.tones.reduce((m, [s]) => m | (1 << mod12(r + s)), 0));
+    for (const t of CHORD_TYPES) if (TIME_TYPES.has(t.id)) for (let r = 0; r < 12; r++) out.add(t.tones.reduce((m, [s]) => m | (1 << mod12(r + s)), 0));
     return [...out];
 })();
 const subsetOfSomeTemplate = (mask: number) => TEMPLATE_MASKS.some(t => (mask & t) === mask);
@@ -259,7 +265,7 @@ export function arpeggioChord(
     const span: ChordNote[] = [];
     for (let k = i - n + 1; k <= i; k++) span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true });
     const read = findChord(span);
-    return read.type && read.status === 'complete' ? { read, span: n } : null;
+    return read.type && read.status === 'complete' && TIME_TYPES.has(read.type) ? { read, span: n } : null;
 }
 
 /** The sounding reading if it is a COMPLETE chord; else the arpeggio reading if one is named; else the
