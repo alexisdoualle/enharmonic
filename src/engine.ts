@@ -25,6 +25,7 @@
 import type { Pitch, PitchClass } from './pitch.js';
 import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
+import { CadenceSide, type CadenceSideOptions, type CadenceLogEntry } from './cadence-side.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -173,6 +174,9 @@ export interface EngineOptions {
      *  chords arrive spread over a few tens of ms; exact-`t` grouping splits them into several onsets.
      *  Causal (no waiting). 0 = exact `t` equality (default). */
     onsetTolerance?: number;
+    /** CADENCE-SIDE (research, default off; diatonic frame only): move the frame one comma onto the
+     *  key-signature-convention side of a key that has LASTED (see cadence-side.ts). */
+    cadenceSide?: CadenceSideOptions;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -302,6 +306,9 @@ export class SpellingEngine {
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
     private readonly onsetTolerance: number;
+    private readonly cadence: CadenceSide | null;
+    private readonly cadenceBarLen: number;
+    private curBar = 0;
     /** 'diatonic' keep-alive: letter slot → the committed chromatic alteration it holds over the collection. */
     private kept = new Map<number, number>();
     /** The latest committed spelling, for `getResolvedScale` (the diatonic frame's slots lag it by a note). */
@@ -375,7 +382,12 @@ export class SpellingEngine {
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         this.onsetTolerance = opts.onsetTolerance ?? 0;
+        this.cadence = opts.cadenceSide && this.frameMode === 'diatonic' ? new CadenceSide(opts.cadenceSide) : null;
+        this.cadenceBarLen = opts.cadenceSide?.barLen ?? 2000;
     }
+
+    /** Research read-out: every pending / fire / cancel / drop the cadence-side rule logged. */
+    cadenceLog(): readonly CadenceLogEntry[] { return this.cadence?.log ?? []; }
 
     /**
      * Commit a spelling for `midi`: the candidate whose combined score (interval fit plus every enabled
@@ -383,13 +395,19 @@ export class SpellingEngine {
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
      * feeds the look-ahead when enabled.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, bar?: number): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER is a re-strike (a same-instant unison stays).
             ? !(t - this.lastT <= this.onsetTolerance) || (t !== this.lastT && this.curOnsetMidis.has(midi))
             : t !== this.lastT);
         if (newOnset) {
+            // CADENCE-SIDE: the onset that just ended is complete; read its chord and maybe shift the frame
+            // one comma BEFORE this onset's collection is computed.
+            if (this.cadence && this.onset >= 0) {
+                const shift = this.cadence.onsetEnd(this.held.keys(), this.lastT, this.curBar, this.onset, this.frameCentre - 2);
+                if (shift !== 0) { this.frameCentre += shift; this.kept.clear(); }
+            }
             this.curOnsetMidis.clear();
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -404,6 +422,10 @@ export class SpellingEngine {
         }
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
         this.curOnsetMidis.add(midi);
+        if (this.cadence) {
+            this.curBar = bar ?? (t !== undefined ? Math.floor(t / this.cadenceBarLen) : this.onset);
+            this.cadence.note(midi, t ?? this.onset);
+        }
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -722,6 +744,7 @@ export class SpellingEngine {
         this.kept.clear();
         this.lastCommit = null;
         this.lastDecision = null;
+        this.cadence?.reset();
     }
 
     /**

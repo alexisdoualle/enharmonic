@@ -14,6 +14,7 @@
 import type { Pitch, PitchClass } from './pitch.js';
 import type { NoteContext } from './kernel.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET, collectionAt } from './engine.js';
+import type { CadenceSideOptions } from './cadence-side.js';
 
 export interface SpellerOptions {
     /**
@@ -39,6 +40,8 @@ export interface SpellerOptions {
      * default exact-`t` grouping each note is its own onset. Causal: no note waits. Default 0.
      */
     onsetTolerance?: number;
+    /** RESEARCH, default off: the cadence-side rule (see cadence-side.ts). Look-ahead preset only is validated. */
+    cadenceSide?: CadenceSideOptions;
 }
 
 export class Speller {
@@ -48,7 +51,11 @@ export class Speller {
     constructor(opts: SpellerOptions = {}) {
         this.lookAhead = opts.lookAhead ?? false;
         const preset = this.lookAhead ? LA_PRESET : RT_PRESET;
-        this.engine = new SpellingEngine(opts.onsetTolerance ? { ...preset, onsetTolerance: opts.onsetTolerance } : preset);
+        this.engine = new SpellingEngine({
+            ...preset,
+            ...(opts.onsetTolerance ? { onsetTolerance: opts.onsetTolerance } : {}),
+            ...(opts.cadenceSide ? { cadenceSide: opts.cadenceSide } : {}),
+        });
         // An initial key is just setKey at t=0 plus a matching frame seed (see setKey / keyTonic).
         if (opts.keyTonic !== undefined) { this.engine.setKey(opts.keyTonic); this.engine.reset(collectionAt(opts.keyTonic + 2)); }
     }
@@ -66,7 +73,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
-        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0);
+        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.bar);
     }
 
     noteOff(midi: number): void {
@@ -85,6 +92,9 @@ export class Speller {
     reset(scale?: readonly PitchClass[], hard = false): void {
         this.engine.reset(scale ?? [], hard);
     }
+
+    /** Research read-out of the cadence-side rule's pending / fire / cancel / drop events. */
+    cadenceLog() { return this.engine.cadenceLog(); }
 
     /** Current 7-letter surface. */
     getResolvedScale(): PitchClass[] | null {

@@ -11,6 +11,9 @@ export interface NoteContext {
     readonly resolveDir?: number;
     /** Event timestamp. Notes sharing a `t` are one onset (a chord); a new `t` starts a new onset. */
     readonly t?: number;
+    /** Bar (measure) index of this note, when the caller knows it. Used only by the research `cadenceSide`
+     *  option; without it the engine falls back to `floor(t / barLen)`. */
+    readonly bar?: number;
 }
 
 /**
