@@ -13,8 +13,9 @@
  * `src/core.ts` is the source of truth; `test/examples/standalone.test.ts` keeps this
  * copy identical to it on every fixture.
  *
- * It spells coherently but can put a passage on the wrong side of the spiral of fifths.
- * A whole section one comma off is flipped, not wrong: D♭ major spelled as C♯ major.
+ * It spells coherently. The fold stops long drifts, but inside its radius it can still put a
+ * passage on the wrong side of the spiral of fifths. A whole section one comma off is flipped,
+ * not wrong: D♭ major spelled as C♯ major (both inside the radius).
  * A note that misses the shift is wrong: in C♯ F G♯, the F should be E♯.
  *
  * Four principles:
