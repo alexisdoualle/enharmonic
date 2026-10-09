@@ -14,15 +14,23 @@ import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot,
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
-const WINDOW = 4;          // measures shown
+const WINDOW = 4;          // most measures on a page (fewer when dense bars would not fit)
 const MEASURE_W = 260;
 const STAVE_Y = 60;        // stave top in the initial canvas; the SVG is then cropped to real content
 const STAFF_H = 300;       // initial canvas height (generous); overridden to the engraved content height
-const ZOOM_MIN = 0.4;      // floor for the width-fit zoom: below this a very dense window scrolls sideways
+const ZOOM_MIN = 0.7;      // floor for the final zoom: a denser page scrolls sideways, centred on the current note
 const GAP = 70;             // the bass stave's top, below the treble stave's (a grand staff, split at middle C)
 const REST_KEY: Record<string, string> = { treble: 'b/4', bass: 'd/3' };
 const inStaff = (clef: string) => (n: ReplayNote) => (n.midi >= 60) === (clef === 'treble');
 const STAFF_SCALE = 0.8;  // engrave small, so a grand staff (and most ledger lines) fits the band without scrolling
+
+/** Zoom that fits the page to the panel width: only shrink, never enlarge, and never below ZOOM_MIN, so a
+ *  dense page keeps its size and scrolls. A narrow (phone) panel has no floor and fits the width instead. */
+function zoomFor(avail: number, totalW: number): number {
+    const narrow = avail > 0 && avail < 640;
+    const fit = Math.min(1, avail > 0 ? (avail - 2) / totalW : 1) * STAFF_SCALE;
+    return narrow ? Math.max(0.1 * STAFF_SCALE, fit * 0.85) : Math.max(ZOOM_MIN, fit);
+}
 const ACC: Record<number, string> = { 2: '##', 1: '#', 0: '', [-1]: 'b', [-2]: 'bb' };
 
 // Major-key names indexed by accidental count (VexFlow draws the right glyphs).
@@ -83,19 +91,61 @@ export function renderStaff(replay: Replay, step: number): void {
     const pcNotes = replay.notes.slice(pcLo, pcHi);
     const first = firstMeasure(pcNotes) ?? 1;
     const curMeasure = cur.expected?.measure ?? first;
-    const start = pageStart(curMeasure - first, WINDOW) + first;
     const sounding = soundingSet(replay, s);
     const soundSig = [...sounding].sort((a, b) => a - b).join(',');
 
     // Fit-to-width depends on the panel's inner width, so bucket it into the cache token: a window
     // resize that crosses a bucket busts the cache and re-fits (main wires a resize → render).
     const avail = host.clientWidth || 0;
-    const token = `${pcLo}|${start}|${soundSig}|${Math.round(avail / 40)}`;
+    const [start, count] = pageOf(replay, pcLo, pcNotes, curMeasure, avail);
+    const token = `${pcLo}|${start}|${count}|${soundSig}|${Math.round(avail / 40)}`;
     if (replay === builtForReplay && token === builtToken) return;
     builtForReplay = replay; builtToken = token;
 
-    try { build(host, start, sounding, pcNotes, avail, replay.respells); }
+    try { build(host, start, count, sounding, pcNotes, avail, replay.respells); }
     catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
+}
+
+const EST_ONSET_W = 42;   // rough engraved width of one onset, to size pages before engraving them
+
+// Pages of the current piece, cached per replay, piece and width bucket: [first measure, bar count][].
+let pagesKey = '', pagesFor: Replay | null = null, pages: [number, number][] = [];
+
+/** The page holding measure `m`: up to WINDOW bars, fewer when dense bars would not fit the panel at
+ *  ZOOM_MIN. Pages are cut greedily from the piece start, so they hold still while the music crosses
+ *  them. Pages overlap by one bar (the shared bar belongs to the earlier page). */
+function pageOf(replay: Replay, pcLo: number, notes: ReplayNote[], m: number, avail: number): [number, number] {
+    const narrow = avail > 0 && avail < 640;
+    const key = `${pcLo}|${narrow ? 'n' : Math.round(avail / 40)}`;
+    if (pagesFor !== replay || pagesKey !== key) {
+        pagesFor = replay; pagesKey = key;
+        pages = cutPages(notes, narrow || avail <= 0 ? Infinity : (avail - 2) * STAFF_SCALE / ZOOM_MIN);
+    }
+    return pages.find(([a, c]) => m >= a && m < a + c) ?? pages[pages.length - 1] ?? [m, WINDOW];
+}
+
+function cutPages(notes: ReplayNote[], budget: number): [number, number][] {
+    const onsets = new Map<number, Set<number>>();   // measure → distinct onset times
+    for (const n of notes) {
+        const m = n.expected?.measure;
+        if (m == null) continue;
+        let set = onsets.get(m);
+        if (!set) onsets.set(m, set = new Set());
+        set.add(Math.round(n.onT));
+    }
+    if (!onsets.size) return [];
+    const lo = Math.min(...onsets.keys()), hi = Math.max(...onsets.keys());
+    const widthOf = (m: number) => Math.max(MEASURE_W, 40 + EST_ONSET_W * (onsets.get(m)?.size ?? 0));
+    const out: [number, number][] = [];
+    let a = lo;
+    for (;;) {
+        let c = 1, w = 120 + widthOf(a);   // 120: clef, key signature and margins
+        while (c < WINDOW && a + c <= hi && w + widthOf(a + c) <= budget) { w += widthOf(a + c); c++; }
+        out.push([a, c]);
+        if (a + c > hi) break;
+        a += c > 1 ? c - 1 : 1;
+    }
+    return out;
 }
 
 /** PAGES: the staff holds still while the music crosses it, then turns to the next page. Pages of `size`
@@ -163,8 +213,7 @@ export function renderLiveStaff(replay: Replay, step: number): void {
         const noteArea = Math.max(MEASURE_W, Math.ceil(fmt.preCalculateMinTotalWidth(voices)) + 12 * LIVE_ONSETS);
         const totalW = lead + noteArea + rightPad + 20;
         const avail = host.clientWidth || 0;
-        const narrow = avail > 0 && avail < 640;
-        const zoom = Math.max(narrow ? 0.1 : ZOOM_MIN, Math.min(1, avail > 0 ? (avail - 2) / totalW : 1)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
+        const zoom = zoomFor(avail, totalW);
         const renderer = new Renderer(host as HTMLDivElement, Renderer.Backends.SVG);
         const ctx = renderer.getContext();
         renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
@@ -180,7 +229,7 @@ export function renderLiveStaff(replay: Replay, step: number): void {
         fmt.format(voices, noteArea);
         voices[0]!.draw(ctx, staves[0]!);
         voices[1]!.draw(ctx, staves[1]!);
-        fitToBand(host, staves[0]!, 'treble', zoom, totalW, narrow);
+        fitToBand(host, staves[0]!, zoom, totalW);
     } catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
 }
 
@@ -217,10 +266,10 @@ function soundingSet(replay: Replay, step: number): Set<number> {
     return out;
 }
 
-function build(host: HTMLElement, start: number, sounding: Set<number>, notes: ReplayNote[], avail: number, respells: RespellEvent[]): void {
+function build(host: HTMLElement, start: number, count: number, sounding: Set<number>, notes: ReplayNote[], avail: number, respells: RespellEvent[]): void {
     host.innerHTML = '';
     const measures: number[] = [];
-    for (let m = start; m < start + WINDOW; m++) if (notes.some(n => n.expected?.measure === m)) measures.push(m);
+    for (let m = start; m < start + count; m++) if (notes.some(n => n.expected?.measure === m)) measures.push(m);
     if (!measures.length) { host.innerHTML = emptyMsg('no notated measures here'); return; }
 
     // tempo + meter so note values reflect real durations and measures aren't 4/4-padded
@@ -275,14 +324,9 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
     });
 
     const totalW = built.reduce((a, b) => a + b.staveW, 0) + 20;
-    // Zoom the whole engraving to fit the panel width (only shrink, never enlarge; floored so a very
-    // dense bar stays legible and scrolls instead of collapsing). Draw stays in logical coordinates;
+    // Zoom the whole engraving to fit the panel width (see zoomFor). Draw stays in logical coordinates;
     // ctx.scale maps them into the smaller SVG, so all the width/collision maths above is unaffected.
-    // On a narrow (phone) panel drop the floor so the window fits the width instead of side-scrolling.
-    const narrow = avail > 0 && avail < 640;
-    const widthZoom = avail > 0 ? (avail - 2) / totalW : 1;
-    const floor = narrow ? 0.1 : ZOOM_MIN;
-    const zoom = Math.max(floor, Math.min(1, widthZoom)) * (narrow ? 0.85 : 1) * STAFF_SCALE;
+    const zoom = zoomFor(avail, totalW);
     renderer.resize(Math.ceil(totalW * zoom), Math.ceil(STAFF_H * zoom));
     if (zoom !== 1) ctx.scale(zoom, zoom);
 
@@ -317,7 +361,7 @@ function build(host: HTMLElement, start: number, sounding: Set<number>, notes: R
         x += b.staveW;
     }
 
-    fitToBand(host, firstStave, 'treble', zoom, totalW, narrow);
+    fitToBand(host, firstStave, zoom, totalW);
 }
 
 /** Size the SVG to the engraved content, but keep at least half a band of room on each side of the
@@ -335,8 +379,7 @@ function watchScroll(host: HTMLElement): void {
 /** Forget the user's staff scroll (a new piece or take is centred again). */
 export function resetStaffScroll(): void { userScrollTop = null; }
 
-function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zoom: number, totalW: number, narrow: boolean): void {
-    void clef; void narrow;
+function fitToBand(host: HTMLElement, firstStave: Stave | null, zoom: number, totalW: number): void {
     const svg = host.querySelector('svg');
     if (svg instanceof SVGSVGElement && firstStave) {
         try {
@@ -361,8 +404,23 @@ function fitToBand(host: HTMLElement, firstStave: Stave | null, clef: string, zo
             host.scrollTop = userScrollTop ?? Math.max(0, (centerY - top - bandU / 2) * zoom);
             expectedScrollTop = host.scrollTop;
             watchScroll(host);
+            // A page wider than the panel scrolls sideways: centre the sounding notes.
+            const cx = soundingCentreX(svg);
+            if (cx != null) host.scrollLeft = Math.max(0, cx * zoom - host.clientWidth / 2);
         } catch { /* getBBox unavailable (detached node): leave the fixed-size engraving */ }
     } else host.scrollTop = 0;
+}
+
+const SOUNDING_FILLS = ['#1f6feb', '#8957e5'];
+
+/** Mid x (drawing units) of the sounding noteheads, from their fill colour; null when none is drawn. */
+function soundingCentreX(svg: SVGSVGElement): number | null {
+    let lo = Infinity, hi = -Infinity;
+    for (const el of svg.querySelectorAll<SVGGraphicsElement>(SOUNDING_FILLS.map(c => `[fill="${c}"]`).join(','))) {
+        const b = el.getBBox();
+        lo = Math.min(lo, b.x); hi = Math.max(hi, b.x + b.width);
+    }
+    return lo <= hi ? (lo + hi) / 2 : null;
 }
 
 // ms-per-beat from consecutive same-measure onsets (Δt / Δbeat), median for robustness. The
