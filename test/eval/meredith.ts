@@ -9,6 +9,7 @@
  *   npm run meredith                   # score the clean corpus
  *   npm run meredith -- --noisy        # score the noisy (human-MIDI-like) corpus
  *   npm run meredith -- --check        # also assert exact% >= the published thresholds
+ *   npm run meredith -- --ablate       # build Core up one principle per row (1+2, +3, +4)
  *
  * `exact` = strict composer-spelling match (ps13's metric, comparable to their 99.31%);
  * `coherent` = exact + contextually coherent enharmonic flip (the three-tier scorer, ±16 consensus).
@@ -31,6 +32,7 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
 const counts = process.argv.includes('--counts');
+const ablate = process.argv.includes('--ablate');
 // `--json <path>` also writes the aggregate tiers as machine-readable JSON (consumed by the
 // scoreboard figure generator, tools/figures/three-tier.mjs), so the scoreboard is sourced from
 // THIS repo's shipped modes.
@@ -85,13 +87,20 @@ function events(notes: Note[]): { t: number; on: boolean; midi: number; i: numbe
     return evs;
 }
 
-type Mode = 'core' | 'rt' | 'la' | 'tp';
+type Mode = 'core12' | 'core123' | 'core' | 'rt' | 'la' | 'tp';
+
+/** Core with principles 3 (recency guard) and 4 (spiral fold) switched off one at a time. */
+function core(mode: Mode): CoreSpeller {
+    if (mode === 'core12') return new CoreSpeller(0, 3, 0, 0);
+    if (mode === 'core123') return new CoreSpeller(2, 3, 0, 0);
+    return new CoreSpeller();
+}
 
 function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     if (mode === 'tp') {
         return spellTwoPass(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) as (Pitch | null)[];
     }
-    const s: StreamingSpeller = mode === 'core' ? new CoreSpeller()
+    const s: StreamingSpeller = mode.startsWith('core') ? core(mode)
         : new Speller({ lookAhead: mode === 'la' });
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
@@ -121,17 +130,17 @@ const files = readdirSync(dir).filter(f => f.endsWith('.opnd-m')).sort();
 
 // --- score ---------------------------------------------------------------------------------
 const MODES: { key: Mode; label: string }[] = [
-    { key: 'core', label: 'core' },
+    ...(ablate ? [
+        { key: 'core12' as const, label: 'principles 1 + 2' },
+        { key: 'core123' as const, label: '+ 3 (recency guard)' },
+    ] : []),
+    { key: 'core', label: ablate ? '+ 4 (spiral fold)' : 'core' },
     { key: 'rt', label: 'real-time' },
     { key: 'la', label: 'look-ahead' },
     { key: 'tp', label: 'two-pass' },
 ];
-const agg: Record<Mode, { correct: number; flipped: number; wrong: number; unread: number; total: number }> = {
-    core: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
-    rt: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
-    la: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
-    tp: { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 },
-};
+const agg = Object.fromEntries((['core12', 'core123', 'core', 'rt', 'la', 'tp'] as const).map(k =>
+    [k, { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 }])) as Record<Mode, { correct: number; flipped: number; wrong: number; unread: number; total: number }>;
 for (const f of files) {
     const notes = parseOpndv(readFileSync(join(dir, f), 'utf8'));
     const expected = notes.map(n => ({ step: n.step, alter: n.alter }));
@@ -149,11 +158,12 @@ const committedOf = (a: { correct: number; flipped: number; wrong: number }) => 
 const pct = (n: number, d: number) => (100 * n / d).toFixed(2).padStart(6);
 const absTotal = MODES.reduce((s, { key }) => s + agg[key].unread, 0);
 console.log(`\nMeredith 8x25000: ${noisy ? 'NOISY (human-MIDI-like)' : 'CLEAN'}, ${files.length} movements, ${agg.rt.total} notes${absTotal ? ` (some abstained; % over committed)` : ''}`);
-console.log(`  ${'mode'.padEnd(12)} ${'exact%'.padStart(7)} ${'coherent%'.padStart(9)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
+const W = ablate ? 20 : 12;
+console.log(`  ${'mode'.padEnd(W)} ${'exact%'.padStart(7)} ${'coherent%'.padStart(9)} ${'flip%'.padStart(6)} ${'wrong%'.padStart(6)}`);
 for (const { key, label } of MODES) {
     const a = agg[key];
     const n = committedOf(a);
-    console.log(`  ${label.padEnd(12)} ${pct(a.correct, n)}% ${pct(a.correct + a.flipped, n)}% ${pct(a.flipped, n)}% ${pct(a.wrong, n)}%`);
+    console.log(`  ${label.padEnd(W)} ${pct(a.correct, n)}% ${pct(a.correct + a.flipped, n)}% ${pct(a.flipped, n)}% ${pct(a.wrong, n)}%`);
 }
 if (counts) {
     const a = agg.tp;
