@@ -25,6 +25,9 @@ export function recentNotesLines(replay: Replay, step: number, n = RECENT_NOTES)
             step: String(i + 1),
             where: place(x),
             midi: String(x.midi),
+            dur: String(Math.round(x.offT - x.onT)),
+            // when this note ends relative to the current note's onset: + = still sounding then
+            ends: (() => { const d = Math.round(x.offT - (replay.notes[step]?.onT ?? x.onT)); return d > 0 ? `+${d}` : String(d); })(),
             pc: String(((x.midi % 12) + 12) % 12),
             got: sp(x.committed),
             exp: sp(x.expected),
@@ -33,13 +36,13 @@ export function recentNotesLines(replay: Replay, step: number, n = RECENT_NOTES)
     });
     const w = (f: (r: (typeof rows)[number]) => string, h: string) => Math.max(h.length, ...rows.map(r => f(r).length));
     const ws = w(r => r.step, 'step'), ww = w(r => r.where, 'm.beat'), wm = w(r => r.midi, 'midi'),
-        wp = w(r => r.pc, 'pc'), wg = w(r => r.got, 'committed'), we = w(r => r.exp, 'expected');
-    const line = (m: string, a: string, b: string, c: string, d: string, e: string, f: string, g: string) =>
-        `${m} ${a.padStart(ws)}  ${b.padEnd(ww)}  ${c.padStart(wm)}  ${d.padStart(wp)}  ${e.padEnd(wg)}  ${f.padEnd(we)}  ${g}`;
+        wp = w(r => r.pc, 'pc'), wd = w(r => r.dur, 'dur ms'), wn = w(r => r.ends, 'ends'), wg = w(r => r.got, 'committed'), we = w(r => r.exp, 'expected');
+    const line = (m: string, a: string, b: string, c: string, d: string, h: string, k: string, e: string, f: string, g: string) =>
+        `${m} ${a.padStart(ws)}  ${b.padEnd(ww)}  ${c.padStart(wm)}  ${d.padStart(wp)}  ${h.padStart(wd)}  ${k.padStart(wn)}  ${e.padEnd(wg)}  ${f.padEnd(we)}  ${g}`;
     return [
         `## recent notes (last ${n}, oldest first)`,
-        line(' ', 'step', 'm.beat', 'midi', 'pc', 'committed', 'expected', 'tier'),
-        ...rows.map(r => line(r.mark, r.step, r.where, r.midi, r.pc, r.got, r.exp, r.tier)),
+        line(' ', 'step', 'm.beat', 'midi', 'pc', 'dur ms', 'ends', 'committed', 'expected', 'tier'),
+        ...rows.map(r => line(r.mark, r.step, r.where, r.midi, r.pc, r.dur, r.ends, r.got, r.exp, r.tier)),
         '',
     ];
 }
