@@ -121,9 +121,9 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, onsetTo
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
         if (e.on) { s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
-        // Read the note's committed spelling (before release); release the midi only once its LAST overlapping
+        // Read the note's committed spelling (before release); the engine counts note-ons per pitch and drops it only once its LAST overlapping
         // voice ends, so read-back never falls through and the vertical guard's ringing set stays correct.
-        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); if (q.length === 0) s.noteOff(midi); } }
+        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); } s.noteOff(midi); }
     }
     return out;
 }

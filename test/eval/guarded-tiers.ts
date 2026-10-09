@@ -33,7 +33,7 @@ function driveCore(N: TwoPassNote[]): (Pitch | null)[] {
     const out: (Pitch | null)[] = new Array(N.length).fill(null); const pend = new Map<number, number[]>();
     for (const e of evs) { const midi = N[e.i]!.midi;
         if (e.on) { s.noteOn(midi, { t: e.t }); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
-        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = s.getSpelling(midi); if (q.length === 0) s.noteOff(midi); } } }
+        else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = s.getSpelling(midi); } s.noteOff(midi); }
     return out;
 }
 

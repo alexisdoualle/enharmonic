@@ -26,6 +26,10 @@ export class CoreSpeller {
     /** midi → the spelling committed for that sounding note. Per note, so read-back survives a
      *  later note overwriting the same letter slot. */
     private active = new Map<number, number>();
+    /** Note-ons per pitch still ringing. A pitch leaves `active` only when its count reaches 0, so the shorter of two
+     *  overlapping same-pitch voices ending first does not drop the pitch while the other still holds it. A re-strike
+     *  overwrites `active[midi]` (latest commit's spelling wins; read-back at note-off sees that one). */
+    private held = new Map<number, number>();
     /** Principle 3 memory: letter slot → the onset and spelling last committed there. */
     private lastByLetter: ({ onset: number; n: number } | undefined)[] = [];
     /** Onset counter (co-struck notes sharing a `t` are one onset); −1 before the first note. */
@@ -84,6 +88,7 @@ export class CoreSpeller {
         // Principle 2: the winner overwrites its letter's slot.
         this.scale[letter(best)] = best;
         this.active.set(midi, best);
+        this.held.set(midi, (this.held.get(midi) ?? 0) + 1);
         // Principle 3: remember when this letter was set.
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
         // Principle 4: the scale's line-of-fifths sum, measured from D (2 per slot). Past the radius,
@@ -96,7 +101,9 @@ export class CoreSpeller {
     }
 
     noteOff(midi: number): void {
-        this.active.delete(midi);
+        const c = (this.held.get(midi) ?? 1) - 1;
+        if (c > 0) this.held.set(midi, c);
+        else { this.held.delete(midi); this.active.delete(midi); }
     }
 
     /** The current scale, C to B (for the viz). */

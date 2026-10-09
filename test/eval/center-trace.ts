@@ -62,7 +62,7 @@ for (const e of evs) {
         const scale = engine.getResolvedScale();
         centre[e.i] = scale.reduce((s, p) => s + lofOf(p), 0) / scale.length;
         (pend.get(m) ?? pend.set(m, []).get(m)!).push(e.i);
-    } else { const q = pend.get(m); if (q?.length) { out[q.shift()!] = engine.getSpelling(m); if (q.length === 0) engine.noteOff(m); } }
+    } else { const q = pend.get(m); if (q?.length) { out[q.shift()!] = engine.getSpelling(m); } engine.noteOff(m);
 }
 
 // ── Per-onset velocity + swing flags ───────────────────────────────────────────────────────────────────

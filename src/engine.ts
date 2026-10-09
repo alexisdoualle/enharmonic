@@ -312,6 +312,10 @@ export class SpellingEngine {
     /** midi → the spelling committed while that note is sounding, so read-back at note-off returns the
      *  note's OWN spelling even if a later same-letter note has since overwritten the slot. */
     private active = new Map<number, number>();
+    /** Note-ons per pitch still ringing. A pitch leaves `active` only when its count reaches 0, so the shorter of two
+     *  overlapping same-pitch voices ending first does not drop the pitch while the other still holds it. A re-strike
+     *  overwrites `active[midi]` (latest commit's spelling wins; read-back at note-off sees that one). */
+    private held = new Map<number, number>();
     /** letter slot → the onset and spelling last committed there, the recency guard's memory. */
     private lastByLetter: ({ onset: number; n: number } | undefined)[] = [];
     /** Running onset counter (co-struck notes share one onset); −1 before the first note. */
@@ -488,6 +492,7 @@ export class SpellingEngine {
         if (best === null) return;
         this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
         this.active.set(midi, best);
+        this.held.set(midi, (this.held.get(midi) ?? 0) + 1);
         this.lastCommit = best;
         this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
         if (this.frameMode === 'diatonic') {
@@ -685,7 +690,9 @@ export class SpellingEngine {
     }
 
     noteOff(midi: number): void {
-        this.active.delete(midi);
+        const c = (this.held.get(midi) ?? 1) - 1;
+        if (c > 0) this.held.set(midi, c);
+        else { this.held.delete(midi); this.active.delete(midi); }
     }
 
     /**
@@ -698,6 +705,7 @@ export class SpellingEngine {
         this.scale = [...C_MAJOR];
         for (const pc of scale) { const n = lofOf(pc); this.scale[letter(n)] = n; }
         this.active.clear();
+        this.held.clear();
         this.lastByLetter = [];
         this.onset = -1;
         this.lastT = NaN;

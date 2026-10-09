@@ -260,6 +260,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     const dirs = onsetDirs(events);
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
+    const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
     // Two display-only collection lanes (local tonicizations + stable home key), independent of the frame.
     const localReader = new CollectionReader(LOCAL_HALF_LIFE_MS, LOCAL_HYSTERESIS);
     const stableReader = new CollectionReader(STABLE_HALF_LIFE_MS, STABLE_HYSTERESIS);
@@ -285,7 +286,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 : engine ? engine.getSpelling(e.midi!) : null;
             if (isCore) core!.noteOff(e.midi!);
             else if (engine) engine.noteOff(e.midi!);
-            sounding.delete(e.midi!); soundingOnT.delete(e.midi!);
+            { const c = (soundingN.get(e.midi!) ?? 1) - 1; if (c > 0) soundingN.set(e.midi!, c); else { soundingN.delete(e.midi!); sounding.delete(e.midi!); soundingOnT.delete(e.midi!); } }
             const q = open.get(e.midi!);
             if (q && q.length) {
                 const ni = q.shift()!;
@@ -349,7 +350,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 }
                 : coreDecision(before, e.midi!, committed);
         }
-        if (committed) { sounding.set(e.midi!, committed); soundingOnT.set(e.midi!, e.t_ms); }
+        if (committed) { sounding.set(e.midi!, committed); soundingOnT.set(e.midi!, e.t_ms); soundingN.set(e.midi!, (soundingN.get(e.midi!) ?? 0) + 1); }
         // Display-only collection reads over the raw pitch-class stream; labels spelled on the frame's side.
         localReader.observe(e.midi!, e.t_ms);
         stableReader.observe(e.midi!, e.t_ms);
