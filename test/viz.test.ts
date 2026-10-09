@@ -18,6 +18,7 @@ import { assert, assertEq, suite, test } from './framework.js';
 import { FIXTURES, REPO_ROOT, loadEvents, loadExpected, onsetKeys, predict, type Mode } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
 import { buildReplay, withSectionAutoResets, type RawEvent } from '../viz/src/replay.js';
+import { recentNotesLines, RECENT_NOTES } from '../viz/src/recent.js';
 import { readableSearch, sideOverridesFromSearch, stepFromSearch, writeSideOverrides } from '../viz/src/state.js';
 
 // The viz replays every benchmark speller, including the baseline mode (`core`).
@@ -108,4 +109,19 @@ suite('viz live take', () => {
             assert(diff < 0, `onset ${diff} spelled differently`);
         });
     }
+});
+
+suite('viz recent-notes buffer', () => {
+    const id = 'chopin_prelude_op28_no15';
+    const replay = buildReplay('rt', loadRaw(id), loadExpected(id));
+    test('last N notes up to the current one, oldest first, 1-based steps, current marked', () => {
+        const rows = recentNotesLines(replay, 400).slice(2, -1);
+        assertEq(rows.length, RECENT_NOTES);
+        assert(rows[RECENT_NOTES - 1]!.startsWith('▶') && rows.slice(0, -1).every(r => r.startsWith(' ')), 'only the last row is marked');
+        assertEq(rows.map(r => Number(r.trim().replace('▶', '').trim().split(/\s+/)[0])), [394, 395, 396, 397, 398, 399, 400, 401]);
+        assert(rows.every((r, i) => r.endsWith(replay.notes[393 + i]!.tier)), 'tier matches the viz note tier');
+    });
+    test('near the start the buffer is shorter, not padded', () => {
+        assertEq(recentNotesLines(replay, 2).slice(2, -1).length, 3);
+    });
 });

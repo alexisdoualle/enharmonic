@@ -13,6 +13,7 @@ import { candidateTotal, deltaColumns } from './decision.js';
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { ascii } from './format.js';
 import { chordAt, chordText } from './chord.js';
+import { place, recentNotesLines } from './recent.js';
 import { collectionSegments } from './music/pianoroll.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -35,12 +36,6 @@ const pitch = (p: Pitch | PitchClass | null | undefined): string =>
 const sgn = (n: number) => (n > 0 ? '+' + n : String(n));
 const pad = (s: string, w: number) => s.padEnd(w);
 const padL = (s: string, w: number) => s.padStart(w);
-
-/** Where in the score an onset sits, when the fixture's ground truth says. */
-function place(n: ReplayNote | undefined): string {
-    const e = n?.expected;
-    return e?.measure != null ? `m${e.measure}${e.beat != null ? ` b${e.beat}` : ''}` : '';
-}
 
 /** Settings header: shared by both reports, so a paste always says what produced it. */
 function header(s: AppState): string[] {
@@ -108,6 +103,8 @@ export function contextReport(s: AppState): string {
         : '—'}`);
     L.push(`chord: ${chordText(chordAt(snap), ascii)}`);
     L.push('');
+
+    L.push(...recentNotesLines(s.replay, s.step));
 
     L.push('## decision');
     L.push(...decisionLines(snap, s.mode === 'la' || (s.mode === 'rt' && s.lookAhead)));
