@@ -345,6 +345,9 @@ export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the
  * chord struck bass-first does not flicker through its partial stacks. Identity = type + name
  * spelling + coherence; a change of status (complete/subset) or of held notes keeps the same span.
  */
+/** An empty reading, for lane spans that show no chord. */
+const NONE_READ: ChordRead = findChord([]);
+
 export function chordSegments(
     snaps: ReadonlyArray<{ t: number; resolvedScale?: PitchClass[] | null; sounding: ReadonlyArray<{ midi: number; pitch: Pitch; onT: number }> }>,
     durationMs: number,
@@ -355,7 +358,10 @@ export function chordSegments(
     for (let i = 0; i < snaps.length; i++) {
         if (i + 1 < snaps.length && snaps[i + 1]!.t === snaps[i]!.t) continue;   // wait for the last note at this time
         const cr: ChordReading = notes ? chordReading({ snapshots: snaps, notes }, i) : { read: chordAt(snaps[i]!), source: 'sounding' };
-        const read = cr.read;
+        // The LANE shows high-confidence chords only: complete (no partial sevenths, no subset with extra
+        // notes) and coherently spelled (an incoherent reading is a pitch-class coincidence, usually a
+        // melodic note; the chord: text line still reports it as a warning).
+        const read = cr.read.type && cr.read.status === 'complete' && cr.read.coherent ? cr.read : NONE_READ;
         // One box per CHORD: the source (sounding vs arpeggio) is not part of the key, so a chord whose
         // reading alternates between held notes and the recent span stays one box. The box is marked as
         // inferred over time only if no part of it was confirmed by notes sounding together.
