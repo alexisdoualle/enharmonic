@@ -17,6 +17,7 @@ import type { Replay, ReplayNote, Tier } from '../replay.js';
 import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
+import { chordSegments, chordText } from '../chord.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -177,7 +178,8 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const width = Math.max(host.clientWidth, PAD * 2 + replay.durationMs * pxPerMs, lineEnd);
     svgWidth = width;
     const noteH = (hi - lo + 1) * rowH;
-    const laneTop = PAD + noteH + LANE_GAP;                              // frame-key lane (spelling frame)
+    const chordLaneTop = PAD + noteH + LANE_GAP;                         // chord lane (display-only), just above the key lane
+    const laneTop = chordLaneTop + LANE_H + CAPTION_H + LANE_GAP2;       // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.
     const localLaneTop = laneTop + LANE_H + CAPTION_H + LANE_GAP2;       // LOCAL collection (tonicizations)
     const stableLaneTop = localLaneTop + LANE_H + CAPTION_H + LANE_GAP2; // STABLE collection (home key)
@@ -225,6 +227,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     notesGroup = document.createElementNS(SVGNS, 'g') as SVGGElement;
     svg.appendChild(notesGroup);
 
+    buildChordLane(replay, svg, width, chordLaneTop);
     buildKeyLane(replay, svg, width, laneTop);
     if (showKeyLanes) {
         buildCollectionLane(replay, svg, width, localLaneTop, 'local');
@@ -342,6 +345,40 @@ function laneText(host: SVGSVGElement, x: number, y: number, str: string, fill: 
     t.setAttribute('fill', fill); t.setAttribute('font-size', String(size)); t.setAttribute('text-anchor', anchor);
     t.textContent = str;
     host.appendChild(t);
+}
+
+// The chord the speller's committed spellings amount to, as contiguous spans (display-only; see ../chord.ts).
+// Complete = solid; subset/partial = dimmer fill (the chord sits inside or short of the sounding set);
+// incoherently spelled = muted red, italic, "⚠" (identity by pc, spelling does not stack in thirds).
+// A thin underline marks a span whose chord leans on HELD notes (struck earlier, still ringing).
+function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {
+    const segs = chordSegments(replay.snapshots, replay.durationMs);
+    host.appendChild(svgEl('rect', { x: PAD, y: laneTop, width: Math.max(0, width - PAD * 2), height: LANE_H, fill: '#1b1f27' }));
+    let named = 0;
+    for (const seg of segs) {
+        const r = seg.read;
+        if (!r.type) continue;
+        named++;
+        const x = PAD + seg.t0 * pxPerMs, w = Math.max(0, (seg.t1 - seg.t0) * pxPerMs);
+        const bad = !r.coherent, full = r.status === 'complete';
+        const rect = svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: bad ? '#5a3238' : '#34506b', 'fill-opacity': full ? 1 : 0.55 });
+        const title = document.createElementNS(SVGNS, 'title');
+        title.textContent = chordText(r, p => label(p));
+        rect.appendChild(title);
+        host.appendChild(rect);
+        if (r.held.length) host.appendChild(svgEl('rect', { x, y: laneTop + LANE_H - 2, width: w, height: 2, fill: '#d0a020', 'fill-opacity': 0.8 }));
+        const str = (bad ? '⚠ ' : '') + r.short;
+        if (w > str.length * 6 + 6) {
+            const t = document.createElementNS(SVGNS, 'text');
+            t.setAttribute('x', String(x + w / 2)); t.setAttribute('y', String(laneTop + LANE_H / 2 + 4));
+            t.setAttribute('fill', bad ? '#e9b9bf' : '#e6e8ec'); t.setAttribute('font-size', '10'); t.setAttribute('text-anchor', 'middle');
+            if (bad) t.setAttribute('font-style', 'italic');
+            t.textContent = str;
+            host.appendChild(t);
+        }
+    }
+    laneText(host, PAD + 2, laneTop + 8, 'chord (committed spellings)', '#8b93a1', 'start', 8);
+    laneText(host, PAD, laneTop + LANE_H + 12, `chord: ${named} named span${named === 1 ? '' : 's'} · ⚠ = incoherent spelling · amber underline = leans on held notes · dim = subset/partial`, '#9aa4b2', 'start', 9);
 }
 
 function buildKeyLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {

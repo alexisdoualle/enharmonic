@@ -220,6 +220,7 @@ body.live-only { background: #fff; }
 .surf-cell.overlaid { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .surf-spell { display: block; font-size: 12px; line-height: 1.2; font-weight: 600; }
 .sounding { display: flex; gap: 6px; flex-wrap: wrap; }
+.chord-line { font-size: 13px; line-height: 1.4; }
 .sound-chip { padding: 3px 9px; border-radius: 12px; background: #232833; border: 1px solid var(--line); font-size: 13px; }
 .sound-chip.current { background: var(--tonic); border-color: var(--accent); }
 

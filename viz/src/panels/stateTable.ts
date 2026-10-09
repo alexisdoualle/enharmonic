@@ -7,6 +7,7 @@
 import type { Snapshot } from '../replay.js';
 import type { PitchClass } from '../../../src/index.js';
 import { label } from '../format.js';
+import { chordAt, chordText } from '../chord.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const TIER_TEXT: Record<string, string> = { correct: '✓ correct', flipped: '⇄ flipped (coherent side)', wrong: '✗ wrong', unread: '∅ unread' };
@@ -47,6 +48,12 @@ export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void
         sounding.appendChild(chip);
     }
     host.appendChild(labelled(`sounding (${snap.sounding.length})`, sounding));
+
+    // The chord the committed spellings amount to (display-only).
+    const chord = document.createElement('div');
+    chord.className = 'chord-line';
+    chord.textContent = chordText(chordAt(snap), label);
+    host.appendChild(labelled('chord', chord));
 
     if (snap.frameLofTonic == null && snap.resolvedScale == null)
         host.appendChild(row('frame', 'batch two-pass: whole-piece decision, no streaming frame'));

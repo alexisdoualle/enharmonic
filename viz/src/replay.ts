@@ -69,7 +69,7 @@ export interface RawEvent {
 export interface RespellEvent { t_ms: number; scale: { letter: string; accidental: number }[]; }
 export interface Expected { step: string; alter: number; measure?: number; beat?: number; }
 
-export interface Sounding { midi: number; pitch: Pitch; }
+export interface Sounding { midi: number; pitch: Pitch; onT: number; }   // onT: when it was struck (display-only; lets the chord line tell held from struck-now)
 
 /** The captured state at one onset: everything the panels render. */
 export interface Snapshot {
@@ -259,6 +259,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         : null;
     const dirs = onsetDirs(events);
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
+    const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     // Two display-only collection lanes (local tonicizations + stable home key), independent of the frame.
     const localReader = new CollectionReader(LOCAL_HALF_LIFE_MS, LOCAL_HYSTERESIS);
     const stableReader = new CollectionReader(STABLE_HALF_LIFE_MS, STABLE_HYSTERESIS);
@@ -284,7 +285,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 : engine ? engine.getSpelling(e.midi!) : null;
             if (isCore) core!.noteOff(e.midi!);
             else if (engine) engine.noteOff(e.midi!);
-            sounding.delete(e.midi!);
+            sounding.delete(e.midi!); soundingOnT.delete(e.midi!);
             const q = open.get(e.midi!);
             if (q && q.length) {
                 const ni = q.shift()!;
@@ -348,7 +349,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 }
                 : coreDecision(before, e.midi!, committed);
         }
-        if (committed) sounding.set(e.midi!, committed);
+        if (committed) { sounding.set(e.midi!, committed); soundingOnT.set(e.midi!, e.t_ms); }
         // Display-only collection reads over the raw pitch-class stream; labels spelled on the frame's side.
         localReader.observe(e.midi!, e.t_ms);
         stableReader.observe(e.midi!, e.t_ms);
@@ -362,7 +363,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             expected: exp ? { step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'], octave } : null,
             resolvedScale, frame, frameLofTonic, frameMeanTonic, keyCenterLof, frameKeyLof, decision, twoPass,
             localColl, stableColl,
-            sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch })).sort((a, b) => a.midi - b.midi),
+            sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch, onT: soundingOnT.get(midi)! })).sort((a, b) => a.midi - b.midi),
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
         });
         const ni = notes.length;

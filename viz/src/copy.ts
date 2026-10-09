@@ -12,6 +12,7 @@ import type { Snapshot, ReplayNote, Mode } from './replay.js';
 import { candidateTotal, deltaColumns } from './decision.js';
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { ascii } from './format.js';
+import { chordAt, chordText } from './chord.js';
 import { collectionSegments } from './music/pianoroll.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
@@ -105,6 +106,7 @@ export function contextReport(s: AppState): string {
     L.push(`sounding: ${snap.sounding.length
         ? snap.sounding.map(x => pitch(x.pitch) + (x.midi === snap.midi ? '*' : '')).join(' ') + '   (* = this note)'
         : '—'}`);
+    L.push(`chord: ${chordText(chordAt(snap), ascii)}`);
     L.push('');
 
     L.push('## decision');
