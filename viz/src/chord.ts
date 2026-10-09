@@ -150,8 +150,11 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
                 const rots = tonePcs.filter(p => byPc.has(p));
                 coherent = rots.some(tryRoot);
             } else coherent = tryRoot(rootPc);
+            // A symmetric chord is named from the rotation its SPELLING stacks in thirds from (C#-E-G-Bb is
+            // C# diminished 7 whatever the bass); only if no rotation stacks, from the lowest chord note.
+            const spelledRoot = t.symmetric ? tonePcs.filter(p => byPc.has(p)).find(tryRoot) : undefined;
             const nameRootPc = t.symmetric
-                ? mod12(Math.min(...present.map(p => byPc.get(p)!.midi)))   // lowest chord note
+                ? spelledRoot ?? mod12(Math.min(...present.map(p => byPc.get(p)!.midi)))
                 : rootPc;
             const nameRootNote = byPc.get(nameRootPc);
             cands.push({
@@ -204,7 +207,7 @@ export function chordText(r: ChordRead, fmt: (p: PitchClass) => string = uni): s
     const t = CHORD_TYPES.find(x => x.id === r.type)!;
     const seq = (ps: PitchClass[]) => ps.map(fmt).join('–');
     const name = `${fmt(r.root!)} ${t.name}`;
-    const sym = r.symmetric ? ' (symmetric: named from lowest note)' : '';
+    const sym = r.symmetric && !r.coherent ? ' (symmetric: named from lowest note)' : '';
     const bits: string[] = [r.status!];
     if (r.status === 'partial') bits.push(`missing ${r.missing.join(', ')}`);
     if (r.extras.length) bits.push(`extra ${r.extras.map(fmt).join(', ')}`);

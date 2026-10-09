@@ -49,10 +49,10 @@ suite('viz chord finder', () => {
         const r = findChord(notes('C#4 E#4 G#4'));
         assertEq([r.type, r.coherent, r.short], ['maj', true, 'C♯']);
     });
-    test('B D F G# is a symmetric diminished 7, named from the lowest note', () => {
+    test('B D F G# is a symmetric diminished 7, named from its spelled root G#', () => {
         const r = findChord(notes('B3 D4 F4 G#4'));
         assertEq([r.type, r.status, r.symmetric, r.coherent, r.short], ['dim7', 'complete', true, true, 'dim7']);
-        assert(chordText(r, label).includes('B diminished 7 (symmetric: named from lowest note)'), chordText(r, label));
+        assert(chordText(r, label).startsWith('G♯ diminished 7'), chordText(r, label));
     });
     test('Ab C Eb F# is a German sixth; the same pcs with a Gb are a dominant 7', () => {
         const g = findChord(notes('Ab3 C4 Eb4 F#4'));
