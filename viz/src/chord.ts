@@ -220,7 +220,68 @@ export function chordAt(snap: { t: number; sounding: ReadonlyArray<{ midi: numbe
     return findChord(snap.sounding.map(s => ({ midi: s.midi, pitch: s.pitch, struck: s.onT >= snap.t })));
 }
 
-export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; }
+/** Cap on the arpeggio look-back: at most this many notes, within this many ms of the current onset. */
+export const ARPEGGIO_MAX_NOTES = 12;
+export const ARPEGGIO_MAX_MS = 2000;
+
+/** Pitch-class sets (as 12-bit masks) of every chord template in every transposition. */
+const TEMPLATE_MASKS: number[] = (() => {
+    const out = new Set<number>();
+    for (const t of CHORD_TYPES) for (let r = 0; r < 12; r++) out.add(t.tones.reduce((m, [s]) => m | (1 << mod12(r + s)), 0));
+    return [...out];
+})();
+const subsetOfSomeTemplate = (mask: number) => TEMPLATE_MASKS.some(t => (mask & t) === mask);
+
+export type ChordSource = 'sounding' | 'arpeggio';
+export interface ChordReading { read: ChordRead; source: ChordSource; /** notes in the arpeggio span (arpeggio only) */ span?: number; }
+
+/**
+ * Chords in time, HIGH CONFIDENCE ONLY ("longest chord-pure suffix"): from note `i` walk back over `notes`,
+ * accumulating pitch classes, until adding the next older note would leave every chord template, or the
+ * cap (ARPEGGIO_MAX_NOTES / ARPEGGIO_MAX_MS from note i's onset) is hit. The span is named only when its
+ * pc-set EQUALS a template's (complete, no extras), via findChord on the committed spellings. No
+ * passing-tone logic: a non-chord tone simply ends the span.
+ */
+export function arpeggioChord(
+    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number,
+): { read: ChordRead; span: number } | null {
+    const cur = notes[i];
+    if (!cur?.committed) return null;
+    let mask = 0, n = 0;
+    for (let k = i; k >= 0 && n < ARPEGGIO_MAX_NOTES; k--) {
+        const nt = notes[k]!;
+        if (!nt.committed || cur.onT - nt.onT > ARPEGGIO_MAX_MS) break;
+        const m = mask | (1 << mod12(nt.midi));
+        if (!subsetOfSomeTemplate(m)) break;
+        mask = m; n++;
+    }
+    if (n < 3) return null;
+    const span: ChordNote[] = [];
+    for (let k = i - n + 1; k <= i; k++) span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true });
+    const read = findChord(span);
+    return read.type && read.status === 'complete' ? { read, span: n } : null;
+}
+
+/** The sounding reading if it is a COMPLETE chord; else the arpeggio reading if one is named; else the
+ *  sounding reading (none / partial / subset). */
+export function chordReading(
+    replay: { snapshots: ReadonlyArray<Parameters<typeof chordAt>[0]>; notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }> }, i: number,
+): ChordReading {
+    const read = chordAt(replay.snapshots[i]!);
+    if (read.type && read.status === 'complete') return { read, source: 'sounding' };
+    const arp = arpeggioChord(replay.notes, i);
+    return arp ? { read: arp.read, source: 'arpeggio', span: arp.span } : { read, source: 'sounding' };
+}
+
+/** `chordText` plus the arpeggio provenance: "F major (arpeggio, last 5 notes)". */
+export function chordReadingText(r: ChordReading, fmt: (p: PitchClass) => string = uni): string {
+    if (r.source !== 'arpeggio') return chordText(r.read, fmt);
+    const t = CHORD_TYPES.find(x => x.id === r.read.type)!;
+    const base = r.read.coherent ? `${fmt(r.read.root!)} ${t.name}` : chordText(r.read, fmt).replace(/ \(complete\)$/, '');
+    return `${base} (arpeggio, last ${r.span} notes)`;
+}
+
+export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; /** inferred over time from recent notes, not from the sounding set */ arpeggio?: boolean; span?: number; }
 
 /**
  * Contiguous spans over which the identified chord stays the same, for the piano-roll chord lane.
@@ -231,16 +292,18 @@ export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the
 export function chordSegments(
     snaps: ReadonlyArray<{ t: number; resolvedScale?: PitchClass[] | null; sounding: ReadonlyArray<{ midi: number; pitch: Pitch; onT: number }> }>,
     durationMs: number,
+    notes?: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>,
 ): ChordSegment[] {
     const segs: ChordSegment[] = [];
     let key: string | null = null;
     for (let i = 0; i < snaps.length; i++) {
         if (i + 1 < snaps.length && snaps[i + 1]!.t === snaps[i]!.t) continue;   // wait for the last note at this time
-        const read = chordAt(snaps[i]!);
-        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}` : '';
+        const cr: ChordReading = notes ? chordReading({ snapshots: snaps, notes }, i) : { read: chordAt(snaps[i]!), source: 'sounding' };
+        const read = cr.read;
+        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}${cr.source === 'arpeggio' ? '~' : ''}` : '';
         if (k === key && segs.length) continue;
         if (segs.length) segs[segs.length - 1]!.t1 = snaps[i]!.t;
-        segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null });
+        segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null, ...(cr.source === 'arpeggio' ? { arpeggio: true, span: cr.span } : {}) });
         key = k;
     }
     return segs;

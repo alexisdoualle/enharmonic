@@ -99,3 +99,55 @@ suite('viz triadColor (shared with the Tonnetz panel)', () => {
         assertEq(col('B3 D4 F4 Ab4'), triadColor('diminished', undefined, cMaj));
     });
 });
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { REPO_ROOT, loadExpected } from './eval/fixtures.js';
+import { buildReplay, type RawEvent } from '../viz/src/replay.js';
+import { chordAt, arpeggioChord, chordReading, chordReadingText } from '../viz/src/chord.js';
+
+suite('viz chord arpeggio (longest chord-pure suffix)', () => {
+    const real = (id: string) => buildReplay('rt', JSON.parse(readFileSync(join(REPO_ROOT, 'fixtures', id, 'events.json'), 'utf8')) as RawEvent[], loadExpected(id), {});
+
+    test('mozart_k545 step 11: C major via arpeggio (sounding alone is one note)', () => {
+        const r = real('mozart_k545');
+        assertEq(chordText(chordAt(r.snapshots[10]!), label), 'none (one note)');
+        const c = chordReading(r, 10);
+        assertEq([c.source, c.read.short], ['arpeggio', 'C']);
+        assert(chordReadingText(c, label).startsWith('C major (arpeggio, last '), chordReadingText(c, label));
+    });
+    test('mozart_k545 step 28: F major via arpeggio over A4 F4 A4 A5 C4', () => {
+        const r = real('mozart_k545');
+        const c = chordReading(r, 27);
+        assertEq([c.source, c.read.short, c.span], ['arpeggio', 'F', 5]);
+        assertEq(chordReadingText(c, label), 'F major (arpeggio, last 5 notes)');
+    });
+    test('chopin op28 no15 step 401: D-flat major, sounding and complete, unchanged', () => {
+        const r = real('chopin_prelude_op28_no15');
+        const c = chordReading(r, 400);
+        assertEq([c.source, c.read.short, c.read.status], ['sounding', 'D♭', 'complete']);
+        assert(!chordReadingText(c, label).includes('arpeggio'), chordReadingText(c, label));
+    });
+
+    // Synthetic: committed spellings are plain naturals; notes 100 ms apart.
+    const syn = (names: string) => names.split(' ').map((n, k) => {
+        const midi = 60 + BASE[n]!;
+        return { midi, onT: k * 100, committed: { step: n as Letter, alter: 0 as Accidental, octave: 4 } };
+    });
+    test('C E G is named C major from the third note', () => {
+        const a = arpeggioChord(syn('C E G'), 2);
+        assertEq([a?.read.short, a?.span], ['C', 3]);
+    });
+    test('C E G D E G: the D joins the span (Em7 subset) but E G D is not a complete chord, so none', () => {
+        // the rule walks back through D (and G E) until C breaks it: span 5 = {E,G,D}, not equal to a template
+        assertEq(arpeggioChord(syn('C E G D E G'), 5), null);
+    });
+    test('C E G D C: span {C,D} stops at G; none', () => {
+        assertEq(arpeggioChord(syn('C E G D C'), 4), null);
+    });
+    test('a repeated chord tone keeps the span; the cap is 12 notes / 2000 ms', () => {
+        assertEq(arpeggioChord(syn('C E G C E G C E G C E G C'), 12)?.span, 12);
+        const slow = syn('C E G').map((n, k) => ({ ...n, onT: k * 1500 }));
+        assertEq(arpeggioChord(slow, 2), null);   // C is 3000 ms back: span {E,G} only
+    });
+});

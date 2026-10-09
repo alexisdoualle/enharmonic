@@ -7,12 +7,12 @@
 import type { Snapshot } from '../replay.js';
 import type { PitchClass } from '../../../src/index.js';
 import { label } from '../format.js';
-import { chordAt, chordText } from '../chord.js';
+import { chordAt, chordText, chordReading, chordReadingText } from '../chord.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const TIER_TEXT: Record<string, string> = { correct: '✓ correct', flipped: '⇄ flipped (coherent side)', wrong: '✗ wrong', unread: '∅ unread' };
 
-export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void {
+export function renderStateTable(host: HTMLElement, snap: Snapshot | null, replay?: Parameters<typeof chordReading>[0]): void {
     host.innerHTML = '';
     const title = document.createElement('div');
     title.className = 'panel-title';
@@ -52,7 +52,7 @@ export function renderStateTable(host: HTMLElement, snap: Snapshot | null): void
     // The chord the committed spellings amount to (display-only).
     const chord = document.createElement('div');
     chord.className = 'chord-line';
-    chord.textContent = chordText(chordAt(snap), label);
+    chord.textContent = replay ? chordReadingText(chordReading(replay, snap.onIndex), label) : chordText(chordAt(snap), label);
     host.appendChild(labelled('chord', chord));
 
     if (snap.frameLofTonic == null && snap.resolvedScale == null)
