@@ -306,8 +306,15 @@ export function chordSegments(
         if (i + 1 < snaps.length && snaps[i + 1]!.t === snaps[i]!.t) continue;   // wait for the last note at this time
         const cr: ChordReading = notes ? chordReading({ snapshots: snaps, notes }, i) : { read: chordAt(snaps[i]!), source: 'sounding' };
         const read = cr.read;
-        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}${cr.source === 'arpeggio' ? '~' : ''}` : '';
-        if (k === key && segs.length) continue;
+        // One box per CHORD: the source (sounding vs arpeggio) is not part of the key, so a chord whose
+        // reading alternates between held notes and the recent span stays one box. The box is marked as
+        // inferred over time only if no part of it was confirmed by notes sounding together.
+        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}` : '';
+        if (k === key && segs.length) {
+            const last = segs[segs.length - 1]!;
+            if (cr.source === 'sounding' && last.arpeggio) { delete last.arpeggio; delete last.span; }
+            continue;
+        }
         if (segs.length) segs[segs.length - 1]!.t1 = snaps[i]!.t;
         segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null, ...(cr.source === 'arpeggio' ? { arpeggio: true, span: cr.span } : {}) });
         key = k;

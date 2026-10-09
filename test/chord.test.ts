@@ -104,7 +104,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT, loadExpected } from './eval/fixtures.js';
 import { buildReplay, type RawEvent } from '../viz/src/replay.js';
-import { chordAt, arpeggioChord, chordReading, chordReadingText } from '../viz/src/chord.js';
+import { chordAt, arpeggioChord, chordReading, chordReadingText, chordSegments } from '../viz/src/chord.js';
 
 suite('viz chord arpeggio (longest chord-pure suffix)', () => {
     const real = (id: string) => buildReplay('rt', JSON.parse(readFileSync(join(REPO_ROOT, 'fixtures', id, 'events.json'), 'utf8')) as RawEvent[], loadExpected(id), {});
@@ -126,6 +126,11 @@ suite('viz chord arpeggio (longest chord-pure suffix)', () => {
         const r = real('mozart_k545');
         const c = chordReading(r, 25);
         assert(c.source === 'sounding' && c.read.type !== 'min7', chordReadingText(c, label));
+    });
+    test('bach wtc1 prelude 1, bar 1: one C box, whether read from held notes or the recent span', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const segs = chordSegments(r.snapshots, 1e9, r.notes).filter(s => s.read.type && s.t0 < 1900);
+        assertEq(segs.map(s => s.read.short), ['C']);
     });
     test('an arpeggiated dominant seventh is named in time', () => {
         const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
