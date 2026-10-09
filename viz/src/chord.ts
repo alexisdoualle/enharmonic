@@ -285,26 +285,41 @@ export function chordReading(
 ): ChordReading {
     const snap = replay.snapshots[i]!;
     const read = chordAt(snap);
-    if (read.type && read.status === 'complete') return { read, source: 'sounding' };
-    // Notes still sounding cannot be erased by the walk: only released notes drop out. Held notes older
-    // than the span join it; if span + held is an exact chord of ANY type (its extra note is sounding,
-    // not left over from a previous chord), name it.
-    const notes = replay.notes, n = walkSpan(notes, i);
-    if (n >= 1) {
-        const inSpan = new Set<string>();
-        const span: ChordNote[] = [];
-        for (let k = i - n + 1; k <= i; k++) { inSpan.add(`${notes[k]!.midi}@${notes[k]!.onT}`); span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true }); }
-        const held = snap.sounding.filter(s => !inSpan.has(`${s.midi}@${s.onT}`));
-        const spanPcs = new Set(span.map(s => mod12(s.midi)));
-        const heldNew = held.filter(h => !spanPcs.has(mod12(h.midi)));
-        if (heldNew.length) {
-            const u = findChord([...span, ...held.map(h => ({ midi: h.midi, pitch: h.pitch, struck: false }))]);
-            if (u.type && u.status === 'complete') return { read: u, source: 'arpeggio', span: n, heldIn: heldNew.map(h => h.pitch as PitchClass) };
-        }
-        const arp = arpeggioChord(notes, i);
-        if (arp) return { read: arp.read, source: 'arpeggio', span: arp.span, ...(heldNew.length ? { heldOut: heldNew.map(h => h.pitch as PitchClass) } : {}) };
+    const time = timeReading(replay.notes, snap, i);
+    if (read.type && read.status === 'complete') {
+        // The most complete consistent reading wins: if the chord over time CONTAINS the sounding chord
+        // (G major or B diminished inside G7 when the figuration alternates), the sounding chord is just
+        // the part of it audible at this instant; name the larger one.
+        if (time && time.read.type && contains(time.read, read) && pcsOf(time.read).size > pcsOf(read).size) return time;
+        return { read, source: 'sounding' };
     }
-    return { read, source: 'sounding' };
+    return time ?? { read, source: 'sounding' };
+}
+
+const pcsOf = (r: ChordRead): Set<number> => new Set(r.chordNotes.map(p => spellPc(p as PitchClass)));
+const contains = (big: ChordRead, small: ChordRead): boolean => { const b = pcsOf(big); return [...pcsOf(small)].every(p => b.has(p)); };
+
+/** The chord over time at note i: the longest chord-pure suffix plus the notes still sounding (held notes
+ *  cannot be erased by the walk); null if nothing exact is named. */
+function timeReading(
+    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>,
+    snap: Parameters<typeof chordAt>[0], i: number,
+): ChordReading | null {
+    const n = walkSpan(notes, i);
+    if (n < 1) return null;
+    const inSpan = new Set<string>();
+    const span: ChordNote[] = [];
+    for (let k = i - n + 1; k <= i; k++) { inSpan.add(`${notes[k]!.midi}@${notes[k]!.onT}`); span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true }); }
+    const held = snap.sounding.filter(s => !inSpan.has(`${s.midi}@${s.onT}`));
+    const spanPcs = new Set(span.map(s => mod12(s.midi)));
+    const heldNew = held.filter(h => !spanPcs.has(mod12(h.midi)));
+    if (heldNew.length) {
+        const u = findChord([...span, ...held.map(h => ({ midi: h.midi, pitch: h.pitch, struck: false }))]);
+        if (u.type && u.status === 'complete') return { read: u, source: 'arpeggio', span: n, heldIn: heldNew.map(h => h.pitch as PitchClass) };
+    }
+    const arp = arpeggioChord(notes, i);
+    if (arp) return { read: arp.read, source: 'arpeggio', span: arp.span, ...(heldNew.length ? { heldOut: heldNew.map(h => h.pitch as PitchClass) } : {}) };
+    return null;
 }
 
 /** `chordText` plus the arpeggio provenance: "F major (arpeggio, last 5 notes)". */

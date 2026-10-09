@@ -138,6 +138,11 @@ suite('viz chord arpeggio (longest chord-pure suffix)', () => {
         assertEq([c.source, c.read.type], ['arpeggio', 'min7']);
         assert(chordReadingText(c, label).includes('held C'), chordReadingText(c, label));
     });
+    test('bach wtc1 prelude 1 bar 3: G7 throughout, not G major / B diminished alternating', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const types = [36, 37, 38, 39, 40, 41, 42, 43].map(i => chordReading(r, i).read.type);
+        assert(types.every(x => x === 'dom7'), JSON.stringify(types));
+    });
     test('an arpeggiated dominant seventh is named in time', () => {
         const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
         const g7 = [n(55, 0, 'G'), n(59, 250, 'B'), n(62, 500, 'D'), n(65, 750, 'F')];
