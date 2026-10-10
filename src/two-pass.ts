@@ -23,6 +23,7 @@ import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
 import { SpellingEngine, TP_PASS_PRESET } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
+import { applyCadenceSideTp, type CadenceSideTpOptions } from './cadence-side-tp.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -59,6 +60,11 @@ export interface TwoPassOptions {
     /** Group notes starting within this many `t` units of an onset's first note into that onset, in both
      *  passes (the backward pass sees reversed note-offs as its onsets). Default 0 (exact `t`). */
     onsetTolerance?: number;
+    /**
+     * RESEARCH, default off. Offline cadence-side: after the merge, comma-shift spans whose key (a persistent
+     * V->I) is better written on its other key-signature side. See cadence-side-tp.ts.
+     */
+    cadenceSide?: CadenceSideTpOptions;
 }
 
 /** One note's per-pass reconciliation trace (introspection / visualiser only). */
@@ -134,6 +140,7 @@ function order(notes: readonly TwoPassNote[]) {
     const sorted = idx.map(i => notes[i]!);
     return {
         notes: sorted,
+        idx,
         restore<T>(spelled: T[]): T[] {
             const out: T[] = new Array(notes.length);
             idx.forEach((orig, pos) => { out[orig] = spelled[pos]!; });
@@ -274,7 +281,19 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
     if (notes.length === 0) return [];
     const sorted = order(notes);
     const core = twoPassCore(sorted.notes, opts);
-    return sorted.restore(core.spellings.map(toPc));
+    let sp = core.spellings;
+    if (opts.cadenceSide) {
+        const cso = opts.cadenceSide;
+        const bars = cso.bars ? sorted.idx.map(i => cso.bars![i]!) : null;
+        const r = applyCadenceSideTp(sorted.notes, sp, bars, cso);
+        sp = r.spellings;
+        if (cso.log) for (const e of r.log) {
+            const [v, y, s, en] = e.sortedIdx.map(k => sorted.idx[Math.min(k, sorted.idx.length - 1)]!) as [number, number, number, number];
+            const { sortedIdx: _s, ...rest } = e;
+            cso.log.push({ ...rest, vNote: v, yNote: y, seamNote: s, endNote: e.sortedIdx[3]! >= sorted.idx.length ? sorted.idx.length : en });
+        }
+    }
+    return sorted.restore(sp.map(toPc));
 }
 
 /** Diagnostic entry point for the visualiser. Shares the exact production resolver; adds per-note trace. */
