@@ -38,7 +38,7 @@ const pcMask = (midi: number): number => 1 << (((midi % 12) + 12) % 12);
 
 /** Key-signature spelling of a tonic pc: the relative-major line-of-fifths position t (C=0) nearest 0
  *  whose pitch class is `majorPc`; null on a tie (F#/Gb major, D#/Eb minor). */
-function conventionT(majorPc: number): number | null {
+export function conventionT(majorPc: number): number | null {
     let best = 99, bt: number | null = null, tie = false;
     for (let t = -11; t <= 11; t++) {
         if ((((t * 7) % 12) + 12) % 12 !== majorPc) continue;
@@ -82,7 +82,7 @@ export class CadenceSide {
 
     /** The chord read at the end of an onset: the sounding notes plus the longest chord-pure suffix of
      *  the recent span (pc-exact: no extras, no partial chords). */
-    private read(sounding: Iterable<number>, tNow: number): Chord | null {
+    read(sounding: Iterable<number>, tNow: number): Chord | null {
         let sMask = 0; for (const m of sounding) sMask |= pcMask(m);
         let span = 0;
         for (let k = this.recent.length - 1; k >= 0; k--) {
