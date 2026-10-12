@@ -10,6 +10,7 @@ import { renderScoring } from './panels/scoring.js';
 import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
+import { initSpirals } from './panels/spirals.js';
 import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
@@ -22,13 +23,23 @@ import { layoutTake, toMusicXml } from './export/musicxml.js';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const state: AppState = { ...initialState };
 let liveTonnetz: ReturnType<typeof initLiveTonnetz>;
+let spirals: ReturnType<typeof initSpirals>;
 
-// 3D tonnetz: a whole-panel swap for the right column (the 3D lattice ⇄ the coiled Tonnetz). The 3D
+// The right column shows one of three views: the 3D lattice, the coiled Tonnetz, or the two spirals. The 3D
 // panel pulls in three.js, so `panels/tonnetz.js` is LAZY-loaded on first activation and its render loop
-// only spins up then. Toggled from the small overlay button on each panel, persisted per-browser. Default
-// is the 3D lattice: only an explicit switch to 2D is stored as '0'.
-const TONNETZ3D_KEY = 'viz.tonnetz3d';
-let tonnetz3dOn = (() => { try { return localStorage.getItem(TONNETZ3D_KEY) !== '0'; } catch { return true; } })();
+// only spins up then. Switched from the small overlay buttons on each panel, persisted per-browser. Default
+// is the 3D lattice; an older stored '0' under the 3D key means the coiled view.
+type TonnetzView = 'lattice' | 'coiled' | 'spirals';
+const TONNETZ_VIEW_KEY = 'viz.tonnetzView';
+const VIEW_PANEL: Record<TonnetzView, string> = { lattice: 'tonnetz', coiled: 'live-tonnetz', spirals: 'spirals' };
+let tonnetzView: TonnetzView = (() => {
+    try {
+        const v = localStorage.getItem(TONNETZ_VIEW_KEY);
+        if (v === 'lattice' || v === 'coiled' || v === 'spirals') return v;
+        return localStorage.getItem('viz.tonnetz3d') === '0' ? 'coiled' : 'lattice';
+    } catch { return 'lattice'; }
+})();
+let tonnetz3dOn = tonnetzView === 'lattice';
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
@@ -63,8 +74,10 @@ function applyPanelVisibility() {
     const showTonnetz = !mobile || mobileTab === 'tonnetz';
     $('scoring').style.display = showScoring ? '' : 'none';
     $('wheel').style.display = showSpiral ? '' : 'none';
-    $('live-tonnetz').style.display = showTonnetz && !tonnetz3dOn ? '' : 'none';
-    $('tonnetz').style.display = showTonnetz && tonnetz3dOn ? 'flex' : 'none';
+    $('live-tonnetz').style.display = showTonnetz && tonnetzView === 'coiled' ? '' : 'none';
+    $('tonnetz').style.display = showTonnetz && tonnetzView === 'lattice' ? 'flex' : 'none';
+    $('spirals').style.display = showTonnetz && tonnetzView === 'spirals' ? 'flex' : 'none';
+    spirals?.setVisible(showTonnetz && tonnetzView === 'spirals');
     for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).classList.toggle('active', mobileTab === t);
     if (showTonnetz && tonnetz3dOn) ensureTonnetz3d();
 }
@@ -83,13 +96,14 @@ function ensureTonnetz3d() {
     }).catch(err => {
         tonnetz3dLoading = false;
         console.error('3D tonnetz failed to load', err);
-        setTonnetz3d(false);
+        setTonnetzView('coiled');
     });
 }
 
-function setTonnetz3d(on: boolean) {
-    tonnetz3dOn = on;
-    try { localStorage.setItem(TONNETZ3D_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+function setTonnetzView(view: TonnetzView) {
+    tonnetzView = view;
+    tonnetz3dOn = view === 'lattice';
+    try { localStorage.setItem(TONNETZ_VIEW_KEY, view); } catch { /* storage blocked */ }
     applyPanelVisibility();
     render();
 }
@@ -101,17 +115,27 @@ function setMobileTab(tab: PanelTab) {
     render();   // the newly shown panel needs the current snapshot (staff re-fit, 3D paint, …)
 }
 
-/** Append the corner overlay button that swaps this panel for the other tonnetz view. Its own panel
- *  hides when inactive, so the visible panel always shows exactly one switch (to the other view). */
-function addViewSwitch(panelId: string, labelText: string, to3d: boolean) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'view-switch';
-    btn.textContent = labelText;
-    btn.title = to3d ? 'switch to the 3D tonnetz lattice (drag to orbit, scroll to zoom)'
-                     : 'switch to the coiled 2D tonnetz';
-    btn.addEventListener('click', () => setTonnetz3d(to3d));
-    $(panelId).appendChild(btn);
+const VIEW_SWITCH: Record<TonnetzView, [label: string, title: string]> = {
+    lattice: ['3D lattice', 'switch to the 3D tonnetz lattice (drag to orbit, scroll to zoom)'],
+    coiled: ['2D coiled', 'switch to the coiled 2D tonnetz'],
+    spirals: ['spirals', 'switch to the pitch-class and letter spirals'],
+};
+
+/** Append the corner overlay buttons that swap this view's panel for each of the other two. A panel hides
+ *  when inactive, so the visible one always shows the switches to the others. */
+function addViewSwitches(view: TonnetzView) {
+    const bar = document.createElement('div');
+    bar.className = 'view-switches';
+    for (const other of Object.keys(VIEW_SWITCH) as TonnetzView[]) {
+        if (other === view) continue;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'view-switch';
+        [btn.textContent, btn.title] = VIEW_SWITCH[other];
+        btn.addEventListener('click', () => setTonnetzView(other));
+        bar.appendChild(btn);
+    }
+    $(VIEW_PANEL[view]).appendChild(bar);
 }
 
 /** Top-toolbar MIDI button. Web MIDI is requested only on this explicit click (never on load); the
@@ -1205,8 +1229,8 @@ function wire() {
     // playback identically; it only paints while it is the visible view and its scene has been built.
     liveTonnetz.model.subscribe(s => { if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetzLive(s); });
     // Small overlay on each panel swaps to the other view (each button names the view it opens).
-    addViewSwitch('tonnetz', '2D coiled', false);
-    addViewSwitch('live-tonnetz', '3D lattice', true);
+    spirals = initSpirals($('spirals'), liveTonnetz.model);
+    for (const view of Object.keys(VIEW_PANEL) as TonnetzView[]) addViewSwitches(view);
     wireMidiButton();
     // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
     for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).addEventListener('click', () => setMobileTab(t));

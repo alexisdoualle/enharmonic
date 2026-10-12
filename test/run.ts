@@ -2,6 +2,7 @@ import { summarize } from './framework.js';
 
 await import('./speller.test.js');
 await import('./liveTonnetz.test.js');
+await import('./spirals.test.js');
 await import('./viz.test.js');
 await import('./chord.test.js');
 await import('./examples/standalone.test.js');

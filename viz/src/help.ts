@@ -49,6 +49,7 @@ const PANEL_PAGE: Record<string, string> = {
     wheel: 'spiral',
     'live-tonnetz': 'tonnetz',
     tonnetz: 'tonnetz',
+    spirals: 'spirals',
     pianoroll: 'notation',
     transport: 'transport',
 };
@@ -304,6 +305,23 @@ back a comma past a threshold. It turns faster at a key change, so it matches th
 often on music with many keys (Bach's WTC book II), at the cost of a few more wrong notes. The key lane is
 read separately, so it no longer lines up with the frame. Try it on Op. 28 No. 15.</li>
 </ul>
+`,
+    },
+    {
+        id: 'spirals', nav: 'Spirals', title: 'Pitch class and letter',
+        body: `
+<p>The 35 spellings (F&#x1D12B; to B&#x1D12A;) are one line of fifths, wound two ways.</p>
+<ul>
+<li><b>Left, 12 fifths a turn.</b> One spoke per piano key: MIDI gives this. The spellings of one key sit a
+ring apart (D&#x1D12B;, C, B&sharp;). A sounding key lights its clock slot and points out to its spellings;
+the solid spike goes to the one the speller chose.</li>
+<li><b>Right, 7 fifths a turn.</b> One spoke per letter: the speller picks this. The accidentals are the
+rings (C&flat;, C, C&sharp;).</li>
+</ul>
+<p>The letter and the pitch class together fix the spelling. The blue band is the speller's seven-letter
+surface. A diatonic key is one unbroken turn. An altered note breaks it: on the left it jumps to another
+ring, on the right it sits one ring out on its own spoke, and the fifths it bends are coloured, pink for
+diminished and green for augmented. B to F, the diminished fifth of every major key, is always pink.</p>
 `,
     },
     {
