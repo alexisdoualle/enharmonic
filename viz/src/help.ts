@@ -86,6 +86,9 @@ side. Not an error.</li>
 other side it is D&sharp;&ndash;F&#x1D12A;&ndash;A&sharp;: <span class="k flipped">flipped</span>, not
 wrong. If the speller writes D&sharp;&ndash;G&ndash;A&sharp;, the G is <span class="k wrong">wrong</span>:
 it should have moved to F&#x1D12A; with the others.</blockquote>
+
+<p><b>The cards.</b> The three cards under the music each show one of five views, picked from the menu in
+the card's corner. Picking a view already shown elsewhere swaps the two. The &#x2922; button expands a card.</p>
 `,
     },
     {

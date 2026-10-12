@@ -16,6 +16,7 @@ import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoic
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { mountExpandButtons } from './modal.js';
+import { VIEWS, VIEW_PANEL, VIEW_LABEL, DEFAULT_SLOTS, assign, parseSlots, slotColumns, type View, type Slots } from './slots.js';
 import { label } from './format.js';
 import { parseMusicXml, readMxl } from './import/musicxml.js';
 import { Metronome, clicksPerBar, clickMs, barMs, COUNT_IN, type Grid } from './metronome.js';
@@ -26,21 +27,22 @@ const state: AppState = { ...initialState };
 let liveTonnetz: ReturnType<typeof initLiveTonnetz>;
 let spirals: ReturnType<typeof initSpirals>;
 
-// The right column shows one of three views: the 3D lattice, the coiled Tonnetz, or the two spirals. The 3D
-// panel pulls in three.js, so `panels/tonnetz.js` is LAZY-loaded on first activation and its render loop
-// only spins up then. Switched from the small overlay buttons on each panel, persisted per-browser. Default
-// is the 3D lattice; an older stored '0' under the 3D key means the coiled view.
-type TonnetzView = 'lattice' | 'coiled' | 'spirals';
-const TONNETZ_VIEW_KEY = 'viz.tonnetzView';
-const VIEW_PANEL: Record<TonnetzView, string> = { lattice: 'tonnetz', coiled: 'live-tonnetz', spirals: 'spirals' };
-let tonnetzView: TonnetzView = (() => {
+// The 3D panel pulls in three.js, so `panels/tonnetz.js` is LAZY-loaded the first time its card is shown
+// and its render loop only spins up then.
+const SLOTS_KEY = 'viz.slots';
+const SLOT_TABS = ['tab-slot-0', 'tab-slot-1', 'tab-slot-2'];
+/** The stored layout; before slots, only the right card was chosen (viz.tonnetzView, older viz.tonnetz3d). */
+let slots: Slots = (() => {
     try {
-        const v = localStorage.getItem(TONNETZ_VIEW_KEY);
-        if (v === 'lattice' || v === 'coiled' || v === 'spirals') return v;
-        return localStorage.getItem('viz.tonnetz3d') === '0' ? 'coiled' : 'lattice';
-    } catch { return 'lattice'; }
+        const stored = parseSlots(localStorage.getItem(SLOTS_KEY));
+        if (stored) return stored;
+        const v = localStorage.getItem('viz.tonnetzView');
+        const right: View = v === 'coiled' || v === 'spirals' ? v : v === 'lattice' ? 'lattice'
+            : localStorage.getItem('viz.tonnetz3d') === '0' ? 'coiled' : 'lattice';
+        return ['scoring', 'wheel', right];
+    } catch { return DEFAULT_SLOTS; }
 })();
-let tonnetz3dOn = tonnetzView === 'lattice';
+let tonnetz3dOn = false;   // the 3D card is on screen
 let tonnetz3d: typeof import('./panels/tonnetz.js') | null = null;
 let tonnetz3dLoading = false;
 
@@ -58,29 +60,30 @@ function setStaffVisible(v: boolean) {
     if (v) render();   // re-fit the staff to the (now-restored) band
 }
 
-// On phones the three side panels don't fit side by side, so only one shows at a time and a small tab
-// bar switches between them (scoring / spiral / tonnetz). On wider screens all three show and the tab
-// bar is hidden. `mobileTab` is which one is active in the narrow layout.
+// The three cards under the music are slots, each showing one of five views (scoring, spiral of fifths,
+// coiled Tonnetz, spirals, 3D lattice), picked from the small menu in each card's corner. A view is in at
+// most one slot: picking one already shown elsewhere swaps the two. On phones one slot shows at a time and
+// the tab bar switches between them. `mobileSlot` is the active one in the narrow layout.
 const MOBILE_MQ = window.matchMedia('(max-width: 720px)');
-type PanelTab = 'scoring' | 'spiral' | 'tonnetz';
-let mobileTab: PanelTab = 'tonnetz';
+let mobileSlot = 2;
 
-/** Set every side panel's visibility from the layout (all three on wide screens; only the active tab on
- *  phones) and the 3D/2D choice within the tonnetz slot; reflect the active tab; and lazy-build the 3D
- *  scene once its panel is actually on screen. Feeding the visible view its snapshot is left to render(). */
+/** Show each slot's view in its grid column (the other views hidden; on phones only the active slot), set
+ *  the column widths, label the phone tabs, and lazy-build the 3D scene once its card is on screen.
+ *  Feeding the visible views their snapshot is left to render(). */
 function applyPanelVisibility() {
     const mobile = MOBILE_MQ.matches;
-    const showScoring = !mobile || mobileTab === 'scoring';
-    const showSpiral = !mobile || mobileTab === 'spiral';
-    const showTonnetz = !mobile || mobileTab === 'tonnetz';
-    $('scoring').style.display = showScoring ? '' : 'none';
-    $('wheel').style.display = showSpiral ? '' : 'none';
-    $('live-tonnetz').style.display = showTonnetz && tonnetzView === 'coiled' ? '' : 'none';
-    $('tonnetz').style.display = showTonnetz && tonnetzView === 'lattice' ? 'flex' : 'none';
-    $('spirals').style.display = showTonnetz && tonnetzView === 'spirals' ? 'flex' : 'none';
-    spirals?.setVisible(showTonnetz && tonnetzView === 'spirals');
-    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).classList.toggle('active', mobileTab === t);
-    if (showTonnetz && tonnetz3dOn) ensureTonnetz3d();
+    for (const view of VIEWS) {
+        const el = $(VIEW_PANEL[view]), i = slots.indexOf(view), shown = i >= 0 && (!mobile || i === mobileSlot);
+        el.style.display = !shown ? 'none' : view === 'lattice' || view === 'spirals' ? 'flex' : '';
+        el.style.order = String(i);
+    }
+    $('panels').style.setProperty('--slot-cols', slotColumns(slots));
+    SLOT_TABS.forEach((id, i) => { $(id).textContent = VIEW_LABEL[slots[i]]; $(id).classList.toggle('active', mobileSlot === i); });
+    const visible = (view: View) => slots.includes(view) && (!mobile || slots[mobileSlot] === view);
+    spirals?.setVisible(visible('spirals'));
+    tonnetz3dOn = visible('lattice');
+    if (tonnetz3dOn) ensureTonnetz3d();
+    mountViewPickers();
 }
 
 /** Lazy-load and build the 3D lattice the first time its panel is shown (it pulls in three.js). */
@@ -91,52 +94,53 @@ function ensureTonnetz3d() {
     void import('./panels/tonnetz.js').then(mod => {
         tonnetz3dLoading = false;
         tonnetz3d = mod;
-        if (!(tonnetz3dOn && (!MOBILE_MQ.matches || mobileTab === 'tonnetz'))) return;   // no longer visible
+        if (!tonnetz3dOn) return;   // no longer visible
         mod.initTonnetz($('tonnetz-canvas'));
         render();                              // paint the current onset onto the freshly built lattice
     }).catch(err => {
         tonnetz3dLoading = false;
         console.error('3D tonnetz failed to load', err);
-        setTonnetzView('coiled');
+        const i = slots.indexOf('lattice');
+        if (i >= 0) setSlot(i, 'coiled');
     });
 }
 
-function setTonnetzView(view: TonnetzView) {
-    tonnetzView = view;
-    tonnetz3dOn = view === 'lattice';
-    try { localStorage.setItem(TONNETZ_VIEW_KEY, view); } catch { /* storage blocked */ }
+/** Show `view` in slot `i` (swapping it with the slot that held it), persist, and redraw. */
+function setSlot(i: number, view: View) {
+    slots = assign(slots, i, view);
+    try { localStorage.setItem(SLOTS_KEY, slots.join(',')); } catch { /* storage blocked */ }
     applyPanelVisibility();
     render();
+    syncUrl();
 }
 
-/** Switch the active panel in the narrow (phone) layout. */
-function setMobileTab(tab: PanelTab) {
-    mobileTab = tab;
+/** Switch the active slot in the narrow (phone) layout. */
+function setMobileSlot(i: number) {
+    mobileSlot = i;
     applyPanelVisibility();
     render();   // the newly shown panel needs the current snapshot (staff re-fit, 3D paint, …)
 }
 
-const VIEW_SWITCH: Record<TonnetzView, [label: string, title: string]> = {
-    lattice: ['3D lattice', 'switch to the 3D tonnetz lattice (drag to orbit, scroll to zoom)'],
-    coiled: ['2D coiled', 'switch to the coiled 2D tonnetz'],
-    spirals: ['spirals', 'switch to the pitch-class and letter spirals'],
-};
-
-/** Append the corner overlay buttons that swap this view's panel for each of the other two. A panel hides
- *  when inactive, so the visible one always shows the switches to the others. */
-function addViewSwitches(view: TonnetzView) {
-    const bar = document.createElement('div');
-    bar.className = 'view-switches';
-    for (const other of Object.keys(VIEW_SWITCH) as TonnetzView[]) {
-        if (other === view) continue;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'view-switch';
-        [btn.textContent, btn.title] = VIEW_SWITCH[other];
-        btn.addEventListener('click', () => setTonnetzView(other));
-        bar.appendChild(btn);
-    }
-    $(VIEW_PANEL[view]).appendChild(bar);
+/** The corner menu on each shown card that picks its slot's view (re-added after a panel re-renders and
+ *  wipes it, like the help `i`). */
+function mountViewPickers() {
+    slots.forEach((view, i) => {
+        const host = $(VIEW_PANEL[view]);
+        let pick = host.querySelector<HTMLSelectElement>(':scope > .view-pick');
+        if (!pick) {
+            pick = document.createElement('select');
+            pick.className = 'view-pick';
+            pick.title = 'show another view here (a view shown elsewhere swaps places)';
+            pick.innerHTML = VIEWS.map(v => `<option value="${v}">${VIEW_LABEL[v]}</option>`).join('');
+            pick.addEventListener('change', e => {
+                const sel = e.target as HTMLSelectElement;
+                setSlot(Number(sel.dataset.slot), sel.value as View);
+            });
+            host.appendChild(pick);
+        }
+        pick.dataset.slot = String(i);
+        pick.value = view;
+    });
 }
 
 /** Top-toolbar MIDI button. Web MIDI is requested only on this explicit click (never on load); the
@@ -887,6 +891,7 @@ function render() {
     }
     mountInfoButtons();   // the panels wipe their innerHTML on render, so re-add each panel's help `i`
     mountExpandButtons(); // and its expand button
+    mountViewPickers();   // and its view menu
 }
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked; click to seek. */
@@ -1139,6 +1144,9 @@ function syncUrl() {
     // experimental key lanes are off by default; only record when enabled
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
     else u.searchParams.delete('keys');
+    // the card layout: only when it differs from the default
+    if (slots.join() !== DEFAULT_SLOTS.join()) u.searchParams.set('slots', slots.join(','));
+    else u.searchParams.delete('slots');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
@@ -1230,12 +1238,11 @@ function wire() {
     // The 3D lattice subscribes to the same live model as the 2D panel, so it tracks live input and
     // playback identically; it only paints while it is the visible view and its scene has been built.
     liveTonnetz.model.subscribe(s => { if (tonnetz3dOn && tonnetz3d) tonnetz3d.renderTonnetzLive(s); });
-    // Small overlay on each panel swaps to the other view (each button names the view it opens).
+    // The spirals view reads the same live model.
     spirals = initSpirals($('spirals'), liveTonnetz.model);
-    for (const view of Object.keys(VIEW_PANEL) as TonnetzView[]) addViewSwitches(view);
     wireMidiButton();
     // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
-    for (const t of ['scoring', 'spiral', 'tonnetz'] as PanelTab[]) $(`tab-${t}`).addEventListener('click', () => setMobileTab(t));
+    SLOT_TABS.forEach((id, i) => $(id).addEventListener('click', () => setMobileSlot(i)));
     MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
     $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
     // Import a MusicXML score (button opens the picker; drop works anywhere on the app).
@@ -1368,6 +1375,7 @@ async function boot() {
     if (p.get('rp')) state.repair = p.get('rp') === '1';
     if (p.get('fm')) state.meanFrame = p.get('fm') === '1';
     if (p.get('keys') === '1') state.showKeyLanes = true;
+    slots = parseSlots(p.get('slots')) ?? slots;   // a shared link's layout wins over the stored one
     state.sideOverrides = sideOverridesFromSearch(p);
     $<HTMLSelectElement>('mode').value = state.mode;
     $<HTMLInputElement>('look-ahead').checked = state.lookAhead;
