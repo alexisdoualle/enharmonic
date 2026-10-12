@@ -15,6 +15,7 @@ import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
+import { mountExpandButtons } from './modal.js';
 import { label } from './format.js';
 import { parseMusicXml, readMxl } from './import/musicxml.js';
 import { Metronome, clicksPerBar, clickMs, barMs, COUNT_IN, type Grid } from './metronome.js';
@@ -885,6 +886,7 @@ function render() {
         $(id).classList.toggle('active', active?.comma === comma);
     }
     mountInfoButtons();   // the panels wipe their innerHTML on render, so re-add each panel's help `i`
+    mountExpandButtons(); // and its expand button
 }
 
 /** A thin ribbon of every onset, coloured by tier, with the cursor marked; click to seek. */
@@ -1380,6 +1382,7 @@ async function boot() {
     applyPanelVisibility();
     render();
     initHelp();   // overlay + toolbar button + panel `i`s; opens itself on the first visit
+    mountExpandButtons();
 }
 
 boot().catch(err => { $('status').textContent = 'ERROR: ' + err.message; console.error(err); });

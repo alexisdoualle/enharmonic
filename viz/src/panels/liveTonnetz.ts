@@ -380,7 +380,7 @@ export interface LiveTonnetzController {
 
 export function initLiveTonnetz(host: HTMLElement): LiveTonnetzController {
     const model = new LiveSpeller();
-    host.innerHTML = `<div class="live-header"><div class="panel-title">live coiled Tonnetz</div></div><div class="live-svg-host"></div><div class="live-scale" aria-label="current scale spelling"></div><div class="live-toolbar"><span class="live-status"></span><span class="live-last"></span><label class="live-coords-toggle"><input type="checkbox" checked /> coordinates</label><label class="live-z-slider">z spread <input type="range" min="0" max="1" step="0.01" aria-label="z spread" /></label><label class="live-z-slider">z rotation <input type="range" min="-180" max="180" step="1" aria-label="z rotation" /></label><button type="button" class="live-fullscreen">fullscreen</button><button type="button" class="live-reset">reset surface</button></div>`;
+    host.innerHTML = `<div class="live-header"><div class="panel-title">live coiled Tonnetz</div></div><div class="live-svg-host"></div><div class="live-scale" aria-label="current scale spelling"></div><div class="live-toolbar"><span class="live-status"></span><span class="live-last"></span><label class="live-coords-toggle"><input type="checkbox" checked /> coordinates</label><label class="live-z-slider">z spread <input type="range" min="0" max="1" step="0.01" aria-label="z spread" /></label><label class="live-z-slider">z rotation <input type="range" min="-180" max="180" step="1" aria-label="z rotation" /></label><button type="button" class="live-reset">reset surface</button></div>`;
     const svgHost = host.querySelector('.live-svg-host') as HTMLElement;
     const scale = host.querySelector('.live-scale') as HTMLElement;
     scale.addEventListener('click', event => {
@@ -406,19 +406,7 @@ export function initLiveTonnetz(host: HTMLElement): LiveTonnetzController {
         saveNumber(LIVE_Z_ROTATION_KEY, zRotationDegrees);
         refreshSvg();
     });
-    const fullscreen = host.querySelector('.live-fullscreen') as HTMLButtonElement;
     (host.querySelector('.live-reset') as HTMLButtonElement).addEventListener('click', () => model.reset());
-    const syncFullscreenLabel = () => {
-        const active = document.fullscreenElement === host;
-        fullscreen.textContent = active ? 'exit fullscreen' : 'fullscreen';
-        fullscreen.setAttribute('aria-label', active ? 'exit fullscreen' : 'enter fullscreen');
-    };
-    fullscreen.addEventListener('click', () => {
-        if (document.fullscreenElement === host) void document.exitFullscreen();
-        else void host.requestFullscreen();
-    });
-    document.addEventListener('fullscreenchange', syncFullscreenLabel);
-    syncFullscreenLabel();
     model.subscribe(s => {
         latestState = s;
         scale.innerHTML = scaleBadges(s.scaleSpellings);
