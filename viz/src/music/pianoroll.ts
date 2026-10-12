@@ -352,7 +352,7 @@ function laneText(host: SVGSVGElement, x: number, y: number, str: string, fill: 
 // incoherently spelled = pc-identity colour, muted, red outline, italic, "⚠" (identity by pc, spelling does not stack in thirds).
 // A thin underline marks a span whose chord leans on HELD notes (struck earlier, still ringing).
 function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {
-    const segs = chordSegments(replay.snapshots, replay.durationMs);
+    const segs = chordSegments(replay.snapshots, replay.durationMs, replay.notes);
     host.appendChild(svgEl('rect', { x: PAD, y: laneTop, width: Math.max(0, width - PAD * 2), height: LANE_H, fill: '#1b1f27' }));
     let named = 0;
     for (const seg of segs) {
@@ -363,9 +363,11 @@ function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, lane
         const bad = !r.coherent, full = r.status === 'complete';
         const rect = svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: chordColor(r, seg.surface) ?? '#34506b', 'fill-opacity': bad ? 0.5 : full ? 1 : 0.55, ...(bad ? { stroke: '#c0505e', 'stroke-width': 1 } : {}) });
         const title = document.createElementNS(SVGNS, 'title');
-        title.textContent = chordText(r, p => label(p));
+        title.textContent = chordText(r, p => label(p)) + (seg.arpeggio ? ` (arpeggio, last ${seg.span} notes)` : '');
         rect.appendChild(title);
         host.appendChild(rect);
+        // arpeggio-inferred span: dashed light outline (subtle; solid chord fill kept so colour reads the same)
+        if (seg.arpeggio) host.appendChild(svgEl('rect', { x: x + 0.5, y: laneTop + 0.5, width: Math.max(0, w - 1), height: LANE_H - 1, fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 1, 'stroke-dasharray': '3 2' }));
         if (r.held.length) host.appendChild(svgEl('rect', { x, y: laneTop + LANE_H - 2, width: w, height: 2, fill: '#d0a020', 'fill-opacity': 0.8 }));
         const str = (bad ? '⚠ ' : '') + r.short;
         if (w > str.length * 6 + 6) {

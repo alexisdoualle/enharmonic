@@ -49,10 +49,10 @@ suite('viz chord finder', () => {
         const r = findChord(notes('C#4 E#4 G#4'));
         assertEq([r.type, r.coherent, r.short], ['maj', true, 'C♯']);
     });
-    test('B D F G# is a symmetric diminished 7, named from the lowest note', () => {
+    test('B D F G# is a symmetric diminished 7, named from its spelled root G#', () => {
         const r = findChord(notes('B3 D4 F4 G#4'));
-        assertEq([r.type, r.status, r.symmetric, r.coherent, r.short], ['dim7', 'complete', true, true, 'dim7']);
-        assert(chordText(r, label).includes('B diminished 7 (symmetric: named from lowest note)'), chordText(r, label));
+        assertEq([r.type, r.status, r.symmetric, r.coherent, r.short], ['dim7', 'complete', true, true, 'G♯°7']);
+        assert(chordText(r, label).startsWith('G♯ diminished 7'), chordText(r, label));
     });
     test('Ab C Eb F# is a German sixth; the same pcs with a Gb are a dominant 7', () => {
         const g = findChord(notes('Ab3 C4 Eb4 F#4'));
@@ -97,5 +97,92 @@ suite('viz triadColor (shared with the Tonnetz panel)', () => {
         const col = (spec: string) => chordColor(findChord(notes(spec)), cMaj as never);
         assertEq(col('G3 B3 D4 F4'), triadColor('major', sp(['G', 0], ['B', 0], ['D', 0]), cMaj));
         assertEq(col('B3 D4 F4 Ab4'), triadColor('diminished', undefined, cMaj));
+    });
+});
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { REPO_ROOT, loadExpected } from './eval/fixtures.js';
+import { buildReplay, type RawEvent } from '../viz/src/replay.js';
+import { chordAt, arpeggioChord, chordReading, chordReadingText, chordSegments } from '../viz/src/chord.js';
+
+suite('viz chord arpeggio (longest chord-pure suffix)', () => {
+    const real = (id: string) => buildReplay('rt', JSON.parse(readFileSync(join(REPO_ROOT, 'fixtures', id, 'events.json'), 'utf8')) as RawEvent[], loadExpected(id), {});
+
+    test('mozart_k545 step 11: C major via arpeggio (sounding alone is one note)', () => {
+        const r = real('mozart_k545');
+        assertEq(chordText(chordAt(r.snapshots[10]!), label), 'none (one note)');
+        const c = chordReading(r, 10);
+        assertEq([c.source, c.read.short], ['arpeggio', 'C']);
+        assert(chordReadingText(c, label).startsWith('C major (arpeggio, last '), chordReadingText(c, label));
+    });
+    test('mozart_k545 step 28: F major via arpeggio over A4 F4 A4 A5 C4', () => {
+        const r = real('mozart_k545');
+        const c = chordReading(r, 27);
+        assertEq([c.source, c.read.short, c.span], ['arpeggio', 'F', 5]);
+        assertEq(chordReadingText(c, label), 'F major (arpeggio, last 5 notes)');
+    });
+    test('mozart_k545 step 26: no A minor 7 bleed (time names triads and dominant 7 only)', () => {
+        const r = real('mozart_k545');
+        const c = chordReading(r, 25);
+        assert(c.source === 'sounding' && c.read.type !== 'min7', chordReadingText(c, label));
+    });
+    test('bach wtc1 prelude 1, bar 1: one C box, whether read from held notes or the recent span', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const segs = chordSegments(r.snapshots, 1e9, r.notes).filter(s => s.read.type && s.t0 < 1900);
+        assertEq(segs.map(s => s.read.short), ['C']);
+    });
+    test('bach wtc1 prelude 1 step 24: held C joins the D minor arpeggio, D minor 7', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const c = chordReading(r, 23);
+        assertEq([c.source, c.read.type], ['arpeggio', 'min7']);
+        assert(chordReadingText(c, label).includes('held C'), chordReadingText(c, label));
+    });
+    test('bach wtc1 prelude 1 bar 3: G7 throughout, not G major / B diminished alternating', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const types = [36, 37, 38, 39, 40, 41, 42, 43].map(i => chordReading(r, i).read.type);
+        assert(types.every(x => x === 'dom7'), JSON.stringify(types));
+    });
+    test('bach wtc1 prelude 1 bar 12: one diminished 7 throughout, one lane box', () => {
+        const r = real('bach_wtc1_prelude1_c');
+        const types = [184, 185, 186, 187, 188, 189, 190].map(i => chordReading(r, i).read.type);
+        assert(types.every(x => x === 'dim7'), JSON.stringify(types));
+        const t0 = r.snapshots[184]!.t, t1 = r.snapshots[190]!.t;
+        const segs = chordSegments(r.snapshots, 1e9, r.notes).filter(s => s.t1 > t0 && s.t0 <= t1);
+        assertEq(segs.length, 1);
+    });
+    test('an arpeggiated dominant seventh is named in time', () => {
+        const n = (midi: number, t: number, step: string, alter = 0) => ({ midi, onT: t, committed: { step, alter, octave: 4 } as never });
+        const g7 = [n(55, 0, 'G'), n(59, 250, 'B'), n(62, 500, 'D'), n(65, 750, 'F')];
+        const a = arpeggioChord(g7, 3);
+        assert(a !== null && a.read.type === 'dom7' && a.span === 4, JSON.stringify(a?.read.type));
+    });
+    test('chopin op28 no15 step 401: D-flat major, sounding and complete, unchanged', () => {
+        const r = real('chopin_prelude_op28_no15');
+        const c = chordReading(r, 400);
+        assertEq([c.source, c.read.short, c.read.status], ['sounding', 'D♭', 'complete']);
+        assert(!chordReadingText(c, label).includes('arpeggio'), chordReadingText(c, label));
+    });
+
+    // Synthetic: committed spellings are plain naturals; notes 100 ms apart.
+    const syn = (names: string) => names.split(' ').map((n, k) => {
+        const midi = 60 + BASE[n]!;
+        return { midi, onT: k * 100, committed: { step: n as Letter, alter: 0 as Accidental, octave: 4 } };
+    });
+    test('C E G is named C major from the third note', () => {
+        const a = arpeggioChord(syn('C E G'), 2);
+        assertEq([a?.read.short, a?.span], ['C', 3]);
+    });
+    test('C E G D E G: the D joins the span (Em7 subset) but E G D is not a complete chord, so none', () => {
+        // the rule walks back through D (and G E) until C breaks it: span 5 = {E,G,D}, not equal to a template
+        assertEq(arpeggioChord(syn('C E G D E G'), 5), null);
+    });
+    test('C E G D C: span {C,D} stops at G; none', () => {
+        assertEq(arpeggioChord(syn('C E G D C'), 4), null);
+    });
+    test('a repeated chord tone keeps the span; the cap is 12 notes / 2000 ms', () => {
+        assertEq(arpeggioChord(syn('C E G C E G C E G C E G C'), 12)?.span, 12);
+        const slow = syn('C E G').map((n, k) => ({ ...n, onT: k * 1500 }));
+        assertEq(arpeggioChord(slow, 2), null);   // C is 3000 ms back: span {E,G} only
     });
 });

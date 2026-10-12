@@ -37,7 +37,7 @@ const CHORD_TYPES: ChordType[] = [
     { id: 'maj7', name: 'major 7', short: r => `${r}maj7`, seventh: true, tones: [[0, 0, 'root'], [4, 2, 'third'], [7, 4, 'fifth'], [11, 6, 'seventh']] },
     { id: 'min7', name: 'minor 7', short: r => `${r}m7`, seventh: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [7, 4, 'fifth'], [10, 6, 'seventh']] },
     { id: 'hdim7', name: 'half-diminished 7', short: r => `${r}ø7`, seventh: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [10, 6, 'seventh']] },
-    { id: 'dim7', name: 'diminished 7', short: () => 'dim7', symmetric: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [9, 6, 'seventh']] },
+    { id: 'dim7', name: 'diminished 7', short: r => `${r}°7`, symmetric: true, tones: [[0, 0, 'root'], [3, 2, 'third'], [6, 4, 'fifth'], [9, 6, 'seventh']] },
     // Augmented sixths, rooted on the ♭6: aug6th above it is the ♯4 (here letter +5).
     { id: 'it6', name: 'Italian sixth', short: () => 'It+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [10, 5, '♯4']] },
     { id: 'fr6', name: 'French sixth', short: () => 'Fr+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [6, 3, '2'], [10, 5, '♯4']] },
@@ -150,8 +150,11 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
                 const rots = tonePcs.filter(p => byPc.has(p));
                 coherent = rots.some(tryRoot);
             } else coherent = tryRoot(rootPc);
+            // A symmetric chord is named from the rotation its SPELLING stacks in thirds from (C#-E-G-Bb is
+            // C# diminished 7 whatever the bass); only if no rotation stacks, from the lowest chord note.
+            const spelledRoot = t.symmetric ? tonePcs.filter(p => byPc.has(p)).find(tryRoot) : undefined;
             const nameRootPc = t.symmetric
-                ? mod12(Math.min(...present.map(p => byPc.get(p)!.midi)))   // lowest chord note
+                ? spelledRoot ?? mod12(Math.min(...present.map(p => byPc.get(p)!.midi)))
                 : rootPc;
             const nameRootNote = byPc.get(nameRootPc);
             cands.push({
@@ -204,7 +207,7 @@ export function chordText(r: ChordRead, fmt: (p: PitchClass) => string = uni): s
     const t = CHORD_TYPES.find(x => x.id === r.type)!;
     const seq = (ps: PitchClass[]) => ps.map(fmt).join('–');
     const name = `${fmt(r.root!)} ${t.name}`;
-    const sym = r.symmetric ? ' (symmetric: named from lowest note)' : '';
+    const sym = r.symmetric && !r.coherent ? ' (symmetric: named from lowest note)' : '';
     const bits: string[] = [r.status!];
     if (r.status === 'partial') bits.push(`missing ${r.missing.join(', ')}`);
     if (r.extras.length) bits.push(`extra ${r.extras.map(fmt).join(', ')}`);
@@ -220,7 +223,121 @@ export function chordAt(snap: { t: number; sounding: ReadonlyArray<{ midi: numbe
     return findChord(snap.sounding.map(s => ({ midi: s.midi, pitch: s.pitch, struck: s.onT >= snap.t })));
 }
 
-export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; }
+/** Cap on the arpeggio look-back: at most this many notes, within this many ms of the current onset. */
+export const ARPEGGIO_MAX_NOTES = 12;
+export const ARPEGGIO_MAX_MS = 2000;
+
+/** Chord types that can be named over TIME (an arpeggio): triads, plus the dominant seventh. Other sevenths
+ *  are two triads sharing two notes (A minor 7 = A minor + C major), so a change of triad in time produces
+ *  their notes; they are named only when sounding together. The dominant seventh is the one exception (too
+ *  strong a sonority to ignore even when its seventh is disconnected, Alexis 2026-10-09), and the
+ *  diminished seventh for the same reason (a rootless dominant ninth; its two diminished triads are its own
+ *  parts, so they cannot fake it the way two neighbouring triads fake a minor seventh). */
+const TIME_TYPES: ReadonlySet<TypeId> = new Set<TypeId>(['maj', 'min', 'dim', 'aug', 'dom7', 'dim7']);
+
+/** Pitch-class sets (as 12-bit masks) of every TIME chord type in every transposition. */
+const TEMPLATE_MASKS: number[] = (() => {
+    const out = new Set<number>();
+    for (const t of CHORD_TYPES) if (TIME_TYPES.has(t.id)) for (let r = 0; r < 12; r++) out.add(t.tones.reduce((m, [s]) => m | (1 << mod12(r + s)), 0));
+    return [...out];
+})();
+const subsetOfSomeTemplate = (mask: number) => TEMPLATE_MASKS.some(t => (mask & t) === mask);
+
+export type ChordSource = 'sounding' | 'arpeggio';
+export interface ChordReading {
+    read: ChordRead; source: ChordSource; /** notes in the arpeggio span (arpeggio only) */ span?: number;
+    /** still-sounding notes older than the span: part of the named chord (`heldIn`) or outside it (`heldOut`) */
+    heldIn?: PitchClass[]; heldOut?: PitchClass[];
+}
+
+/**
+ * Chords in time, HIGH CONFIDENCE ONLY ("longest chord-pure suffix"): from note `i` walk back over `notes`,
+ * accumulating pitch classes, until adding the next older note would leave every chord template, or the
+ * cap (ARPEGGIO_MAX_NOTES / ARPEGGIO_MAX_MS from note i's onset) is hit. The span is named only when its
+ * pc-set EQUALS a template's (complete, no extras), via findChord on the committed spellings. No
+ * passing-tone logic: a non-chord tone simply ends the span.
+ */
+/** Length of the longest chord-pure suffix ending at note `i` (0 if note i is unread). */
+function walkSpan(notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number): number {
+    const cur = notes[i];
+    if (!cur?.committed) return 0;
+    let mask = 0, n = 0;
+    for (let k = i; k >= 0 && n < ARPEGGIO_MAX_NOTES; k--) {
+        const nt = notes[k]!;
+        if (!nt.committed || cur.onT - nt.onT > ARPEGGIO_MAX_MS) break;
+        const m = mask | (1 << mod12(nt.midi));
+        if (!subsetOfSomeTemplate(m)) break;
+        mask = m; n++;
+    }
+    return n;
+}
+
+export function arpeggioChord(
+    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>, i: number,
+): { read: ChordRead; span: number } | null {
+    const n = walkSpan(notes, i);
+    if (n < 3) return null;
+    const span: ChordNote[] = [];
+    for (let k = i - n + 1; k <= i; k++) span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true });
+    const read = findChord(span);
+    return read.type && read.status === 'complete' && TIME_TYPES.has(read.type) ? { read, span: n } : null;
+}
+
+/** The sounding reading if it is a COMPLETE chord; else the arpeggio reading if one is named; else the
+ *  sounding reading (none / partial / subset). */
+export function chordReading(
+    replay: { snapshots: ReadonlyArray<Parameters<typeof chordAt>[0]>; notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }> }, i: number,
+): ChordReading {
+    const snap = replay.snapshots[i]!;
+    const read = chordAt(snap);
+    const time = timeReading(replay.notes, snap, i);
+    if (read.type && read.status === 'complete') {
+        // The most complete consistent reading wins: if the chord over time CONTAINS the sounding chord
+        // (G major or B diminished inside G7 when the figuration alternates), the sounding chord is just
+        // the part of it audible at this instant; name the larger one.
+        if (time && time.read.type && contains(time.read, read) && pcsOf(time.read).size > pcsOf(read).size) return time;
+        return { read, source: 'sounding' };
+    }
+    return time ?? { read, source: 'sounding' };
+}
+
+const pcsOf = (r: ChordRead): Set<number> => new Set(r.chordNotes.map(p => spellPc(p as PitchClass)));
+const contains = (big: ChordRead, small: ChordRead): boolean => { const b = pcsOf(big); return [...pcsOf(small)].every(p => b.has(p)); };
+
+/** The chord over time at note i: the longest chord-pure suffix plus the notes still sounding (held notes
+ *  cannot be erased by the walk); null if nothing exact is named. */
+function timeReading(
+    notes: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>,
+    snap: Parameters<typeof chordAt>[0], i: number,
+): ChordReading | null {
+    const n = walkSpan(notes, i);
+    if (n < 1) return null;
+    const inSpan = new Set<string>();
+    const span: ChordNote[] = [];
+    for (let k = i - n + 1; k <= i; k++) { inSpan.add(`${notes[k]!.midi}@${notes[k]!.onT}`); span.push({ midi: notes[k]!.midi, pitch: notes[k]!.committed!, struck: true }); }
+    const held = snap.sounding.filter(s => !inSpan.has(`${s.midi}@${s.onT}`));
+    const spanPcs = new Set(span.map(s => mod12(s.midi)));
+    const heldNew = held.filter(h => !spanPcs.has(mod12(h.midi)));
+    if (heldNew.length) {
+        const u = findChord([...span, ...held.map(h => ({ midi: h.midi, pitch: h.pitch, struck: false }))]);
+        if (u.type && u.status === 'complete') return { read: u, source: 'arpeggio', span: n, heldIn: heldNew.map(h => h.pitch as PitchClass) };
+    }
+    const arp = arpeggioChord(notes, i);
+    if (arp) return { read: arp.read, source: 'arpeggio', span: arp.span, ...(heldNew.length ? { heldOut: heldNew.map(h => h.pitch as PitchClass) } : {}) };
+    return null;
+}
+
+/** `chordText` plus the arpeggio provenance: "F major (arpeggio, last 5 notes)". */
+export function chordReadingText(r: ChordReading, fmt: (p: PitchClass) => string = uni): string {
+    if (r.source !== 'arpeggio') return chordText(r.read, fmt);
+    const t = CHORD_TYPES.find(x => x.id === r.read.type)!;
+    const base = r.read.coherent ? `${fmt(r.read.root!)} ${t.name}` : chordText(r.read, fmt).replace(/ \(complete[^)]*\)$/, '');
+    const list = (ps: PitchClass[]) => [...new Set(ps.map(p => fmt(p)))].join(', ');
+    if (r.heldIn?.length) return `${base} (arpeggio + held ${list(r.heldIn)}, last ${r.span} notes)`;
+    return `${base} (arpeggio, last ${r.span} notes${r.heldOut?.length ? `; ${list(r.heldOut)} held` : ''})`;
+}
+
+export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the 7-letter surface in effect at the span start (null in batch) */ surface: PitchClass[] | null; /** inferred over time from recent notes, not from the sounding set */ arpeggio?: boolean; span?: number; }
 
 /**
  * Contiguous spans over which the identified chord stays the same, for the piano-roll chord lane.
@@ -228,19 +345,38 @@ export interface ChordSegment { read: ChordRead; t0: number; t1: number; /** the
  * chord struck bass-first does not flicker through its partial stacks. Identity = type + name
  * spelling + coherence; a change of status (complete/subset) or of held notes keeps the same span.
  */
+/** An empty reading, for lane spans that show no chord. */
+const NONE_READ: ChordRead = findChord([]);
+
 export function chordSegments(
     snaps: ReadonlyArray<{ t: number; resolvedScale?: PitchClass[] | null; sounding: ReadonlyArray<{ midi: number; pitch: Pitch; onT: number }> }>,
     durationMs: number,
+    notes?: ReadonlyArray<{ midi: number; onT: number; committed: Pitch | null }>,
 ): ChordSegment[] {
     const segs: ChordSegment[] = [];
     let key: string | null = null;
     for (let i = 0; i < snaps.length; i++) {
         if (i + 1 < snaps.length && snaps[i + 1]!.t === snaps[i]!.t) continue;   // wait for the last note at this time
-        const read = chordAt(snaps[i]!);
-        const k = read.type ? `${read.short}${read.coherent ? '' : '!'}` : '';
-        if (k === key && segs.length) continue;
+        const cr: ChordReading = notes ? chordReading({ snapshots: snaps, notes }, i) : { read: chordAt(snaps[i]!), source: 'sounding' };
+        // The LANE shows high-confidence chords only: complete (no partial sevenths, no subset with extra
+        // notes) and coherently spelled (an incoherent reading is a pitch-class coincidence, usually a
+        // melodic note; the chord: text line still reports it as a warning).
+        const read = cr.read.type && cr.read.status === 'complete' && cr.read.coherent ? cr.read : NONE_READ;
+        // One box per CHORD: the source (sounding vs arpeggio) is not part of the key, so a chord whose
+        // reading alternates between held notes and the recent span stays one box. The box is marked as
+        // inferred over time only if no part of it was confirmed by notes sounding together.
+        // Symmetric chords (dim7, augmented) are named after their lowest note, so key them by pitch-class
+        // set: a diminished seventh whose bass moves stays one box.
+        const k = !read.type ? '' : read.symmetric
+            ? `${read.type}:${[...pcsOf(read)].sort((x, y) => x - y).join('.')}${read.coherent ? '' : '!'}`
+            : `${read.short}${read.coherent ? '' : '!'}`;
+        if (k === key && segs.length) {
+            const last = segs[segs.length - 1]!;
+            if (cr.source === 'sounding' && last.arpeggio) { delete last.arpeggio; delete last.span; }
+            continue;
+        }
         if (segs.length) segs[segs.length - 1]!.t1 = snaps[i]!.t;
-        segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null });
+        segs.push({ read, t0: snaps[i]!.t, t1: durationMs, surface: snaps[i]!.resolvedScale ?? null, ...(cr.source === 'arpeggio' ? { arpeggio: true, span: cr.span } : {}) });
         key = k;
     }
     return segs;
