@@ -93,6 +93,7 @@ export function contextReport(s: AppState): string {
         }
         if (snap.frameLofTonic != null) L.push(`spiral:   LoF ${sgn(snap.frameLofTonic)} tonic (${keyPair(snap.frameLofTonic)}; frame mean, what the fold clamps)`);
         if (snap.keyCenterLof != null) L.push(`key ctr:  LoF ${sgn(snap.keyCenterLof)} tonic (${keyPair(snap.keyCenterLof)}; detected collection / diatonic anchor)`);
+        if (snap.twoPass) L.push(`pass:     ${snap.twoPass.source}${snap.twoPass.source === 'backward' ? ' (ran on the reversed piece)' : ''}; forward ${pitch(snap.twoPass.forward)}, backward ${pitch(snap.twoPass.backward)}`);
     } else {
         L.push('(batch two-pass: whole-piece decision, no streaming frame)');
     }
@@ -107,7 +108,7 @@ export function contextReport(s: AppState): string {
     L.push(...recentNotesLines(s.replay, s.step));
 
     L.push('## decision');
-    L.push(...decisionLines(snap, s.mode === 'la' || (s.mode === 'rt' && s.lookAhead)));
+    L.push(...decisionLines(snap, s.mode === 'la' || s.mode === 'tp' || (s.mode === 'rt' && s.lookAhead)));
     return L.join('\n');
 }
 

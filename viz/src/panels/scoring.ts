@@ -196,7 +196,8 @@ function twoPassSummary(trace: NonNullable<Snapshot['twoPass']>): HTMLElement {
     d.className = 'decision-note';
     const name = (p: PitchClass | null) => (p ? label(p) : '—');
     d.innerHTML = `<div><b>two-pass</b> · forward ${name(trace.forward)} · backward ${name(trace.backward)}</div>`
-        + `<div>resolved ${name(trace.selected)}${trace.agrees ? ' (both passes agree)' : ' (reconciled at a change-point)'}</div>`;
+        + `<div>resolved ${name(trace.selected)}${trace.agrees ? ' (both passes agree)' : ' (reconciled at a change-point)'}</div>`
+        + `<div>state below: ${trace.source} pass${trace.source === 'backward' ? ' (ran on the reversed piece)' : ''}</div>`;
     return d;
 }
 

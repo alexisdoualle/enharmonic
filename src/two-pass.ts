@@ -22,7 +22,7 @@
 
 import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
-import { SpellingEngine, TP_PASS_PRESET } from './engine.js';
+import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
 
 export interface TwoPassNote {
@@ -62,12 +62,25 @@ export interface TwoPassOptions {
     onsetTolerance?: number;
 }
 
+/** One pass's engine state right after it committed a note (introspection / visualiser only). */
+export interface TwoPassFrame {
+    /** The 7-letter surface (`SpellingEngine.getResolvedScale`). */
+    readonly surface: PitchClass[];
+    /** The line-of-fifths centre the fold tests (`SpellingEngine.getFoldCentre`). */
+    readonly foldCentre: number;
+    /** The note's scoring trace (`SpellingEngine.decision`). */
+    readonly decision: Decision | null;
+}
 /** One note's per-pass reconciliation trace (introspection / visualiser only). */
 export interface TwoPassNoteTrace {
     readonly forward: PitchClass | null;
     readonly backward: PitchClass | null;
     readonly selected: PitchClass | null;
     readonly agrees: boolean;
+    /** The pass the merge took this note from (forward where the passes agree). */
+    readonly source: 'forward' | 'backward';
+    /** That pass's engine state at this note. The backward pass ran on the time-reversed piece. */
+    readonly frame: TwoPassFrame | null;
 }
 /** Full two-pass trace: the final spellings plus each note's forward/backward/selected reconciliation. */
 export interface TwoPassTrace {
@@ -110,8 +123,9 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
 }
 
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
- *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied. */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0): number[] {
+ *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
+ *  With `frames`, also record the engine state right after each note-on (read-only, no effect on spellings). */
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[]): number[] {
     const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
@@ -121,7 +135,10 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
     const pend = new Map<number, number[]>();   // midi → FIFO of note indices awaiting read-back at note-off
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
-        if (e.on) { s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
+        if (e.on) {
+            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
+            if (frames) frames[e.i] = { surface: s.getResolvedScale(), foldCentre: s.getFoldCentre(), decision: s.decision() };
+        }
         // Read the note's committed spelling (before release); the engine counts note-ons per pitch and drops it only once its LAST overlapping
         // voice ends, so read-back never falls through and the vertical guard's ringing set stays correct.
         else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); } s.noteOff(midi, e.t); }
@@ -148,6 +165,8 @@ interface CoreResult {
     forward: number[];
     backward: number[];
     agrees: boolean[];
+    forwardFrames?: TwoPassFrame[];
+    backwardFrames?: TwoPassFrame[];
     firstStable: number;
     lastStable: number;
 }
@@ -157,7 +176,7 @@ interface CoreResult {
  * Shared by {@link spellTwoPass} and {@link spellTwoPassTraced}; the public functions restore the caller's
  * note order around it.
  */
-function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions): CoreResult {
+function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, traceFrames = false): CoreResult {
     const backwardLA = opts.backwardLookAhead ?? 'forward';
     const centreTiebreak = opts.centreTiebreak ?? true;
     const centreMargin = opts.centreMargin ?? 0;
@@ -167,7 +186,9 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
 
     const dirsF = resolveDirs(N);
     const exactF = resolveDirsExact(N);
-    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0);
+    const fFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
+    const bFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
+    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
@@ -175,9 +196,10 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     // Backward look-ahead uses the note's FORWARD resolveDir: processing in reverse, the resolution target
     // is already committed. bNotes[k] = original n-1-k.
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0);
+    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames);
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
+    if (bFrames) bFrames.reverse();
 
     const out: number[] = new Array(n);
     const agree = (i: number) => fwd[i] === bwd[i];
@@ -279,6 +301,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     for (let t = 0; t < n; t++) agrees[t] = agree(t);
     return {
         spellings: out, forward: fwd, backward: bwd, agrees,
+        ...(fFrames && bFrames ? { forwardFrames: fFrames, backwardFrames: bFrames } : {}),
         firstStable: firstAgree < n ? firstAgree : n,
         lastStable: lastAgree,
     };
@@ -299,12 +322,16 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
 export function spellTwoPassTraced(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): TwoPassTrace {
     if (notes.length === 0) return { spellings: [], notes: [], firstStable: null, lastStable: null };
     const sorted = order(notes);
-    const core = twoPassCore(sorted.notes, opts);
+    const core = twoPassCore(sorted.notes, opts, true);
     const spellings = sorted.restore(core.spellings.map(toPc));
-    const noteTraces: TwoPassNoteTrace[] = core.spellings.map((sp, k) => ({
-        forward: toPc(core.forward[k]), backward: toPc(core.backward[k]),
-        selected: toPc(sp), agrees: core.agrees[k]!,
-    }));
+    const noteTraces: TwoPassNoteTrace[] = core.spellings.map((sp, k) => {
+        const source = sp === core.forward[k] ? 'forward' : 'backward';
+        return {
+            forward: toPc(core.forward[k]), backward: toPc(core.backward[k]),
+            selected: toPc(sp), agrees: core.agrees[k]!, source,
+            frame: (source === 'forward' ? core.forwardFrames : core.backwardFrames)?.[k] ?? null,
+        };
+    });
     return {
         spellings,
         notes: sorted.restore(noteTraces),

@@ -311,9 +311,21 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         let decision: DecisionTrace | null = null;
         const twoPass = mode === 'tp' ? tpTrace!.notes[idx]! : null;
         if (mode === 'tp') {
-            // The offline two-pass has no per-note streaming frame; the forward/backward/selected evidence
-            // is shown by the two-pass summary. Leave the streaming-frame fields empty (rendered as such).
+            // The offline two-pass: show the state of the pass the merge took this note from (forward where
+            // the passes agree). The passes run the mean frame, so there is no separate collection.
             committed = tpOut![idx] ?? null;
+            const pf = twoPass!.frame;
+            if (pf) {
+                resolvedScale = pf.surface;
+                frameLofTonic = Math.round(pf.foldCentre) - 2;
+                frameMeanTonic = pf.foldCentre - 2;
+                const gd = pf.decision;
+                if (gd) decision = {
+                    frame: gd.scale,
+                    candidates: gd.candidates.map(x => ({ c: x.c, base: x.base, laDelta: x.laDelta, nsDelta: 0, guardDelta: x.guardDelta, sideDelta: x.sideDelta, vertDelta: x.vertDelta, daDelta: x.daDelta, leanDelta: x.leanDelta })),
+                    chosen: gd.chosen, override: 'none',
+                };
+            }
         } else if (isCore) {
             const before = core!.getResolvedScale();               // the scale the candidates are scored against
             core!.noteOn(e.midi!, { t: e.t_ms });

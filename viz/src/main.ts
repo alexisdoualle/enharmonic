@@ -856,7 +856,7 @@ function renderStatusText() {
 function render() {
     const snap = current(state);
     $('look-ahead-ctl').style.display = state.mode === 'rt' ? '' : 'none';
-    renderScoring($('scoring'), snap, effMode() === 'la');
+    renderScoring($('scoring'), snap, effMode() === 'la' || effMode() === 'tp');
     renderWheel($('wheel'), snap, {
         range: state.spiralRange, center: state.spiralCenter, even: state.spiralEven,
         streaming: state.mode === 'rt' || state.mode === 'la',
