@@ -185,6 +185,9 @@ export interface EngineOptions {
      *  note ends sooner (a grace note) it never enters the surface; if it still sounds at the window's end or is
      *  held longer, it is kept as usual. Its own spelling is not delayed. Needs `t` at note-off. 0 = off. */
     ornamentMs?: number;
+    /** The vertical guard's triad test on pitch classes, the note's own included: a root struck after its third
+     *  and fifth still counts as inside the triad. A dim7 has no fifth by pitch class either. Default false. */
+    verticalPcTriad?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -217,12 +220,14 @@ export const LA_PRESET: EngineOptions = {
     // E♭→E, a lowered borrowed degree rising to the natural 3rd, is inseparable from a leading tone without
     // harmonic context.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
-    doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
+    doubleAccPenalty: 2, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
     ornamentMs: 80,
+    // The vertical guard reads the triad by pitch class and weighs a misspelled third 2.
+    verticalWeight: 2, verticalPcTriad: true,
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
@@ -323,6 +328,7 @@ export class SpellingEngine {
     private readonly onsetRevise: boolean;
     private readonly guardRaiseLine: boolean;
     private readonly ornamentMs: number;
+    private readonly verticalPcTriad: boolean;
     /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
     private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
@@ -411,6 +417,7 @@ export class SpellingEngine {
         this.onsetRevise = opts.onsetRevise ?? false;
         this.guardRaiseLine = opts.guardRaiseLine ?? false;
         this.ornamentMs = opts.ornamentMs ?? 0;
+        this.verticalPcTriad = opts.verticalPcTriad ?? false;
     }
 
     /**
@@ -537,7 +544,11 @@ export class SpellingEngine {
         // a dim4/aug2 is a valid interval elsewhere. The triad's tell is a P5 (LoF distance 1); a dim7 /
         // aug6 has no P5, so they don't qualify.
         const coSounding = this.verticalWeight > 0 ? [...this.active].filter(([m]) => m !== self).map(([, v]) => v) : [];
-        const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(p - q) === 1));
+        const pcs = this.verticalPcTriad
+            ? [...new Set([...this.active.keys()].filter(m => m !== self).concat([midi]).map(m => ((m % 12) + 12) % 12))] : [];
+        const inPerfectTriad = this.verticalPcTriad
+            ? pcs.some(a => pcs.some(b => (b - a + 12) % 12 === 7))
+            : coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(p - q) === 1));
         // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
         // (higher-LoF) of its single-accidental spellings, the raised leading tone / raised degree.
         let leanTarget: number | null = null;
