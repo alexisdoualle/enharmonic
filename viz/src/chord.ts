@@ -92,6 +92,10 @@ function intervalWords(a: PitchClass, b: PitchClass, midiA: number, midiB: numbe
 }
 
 /** Find the chord the committed spellings amount to. */
+/** Each chord type's pitch classes above its root, as a 12-bit mask. */
+const TONE_MASK = new Map(CHORD_TYPES.map(t => [t, t.tones.reduce((m, [s]) => m | 1 << mod12(s), 0)]));
+const bits = (m: number) => { let n = 0; for (; m; m &= m - 1) n++; return n; };
+
 export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     const notes = [...notesIn].sort((a, b) => a.midi - b.midi);
     const soundingPitches = notes.map(n => pcOf(n.pitch));
@@ -105,6 +109,8 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     for (const n of notes) if (!byPc.has(mod12(n.midi))) byPc.set(mod12(n.midi), n);
     const pcs = [...byPc.keys()];
     const bassPc = mod12(notes[0]!.midi);
+    const noChord = () => none(notes.filter((n, i) => notes.findIndex(m => mod12(m.midi) === mod12(n.midi)) === i));
+    if (pcs.length < 3) return noChord();   // every chord type needs three pitch classes
 
     interface Cand {
         t: ChordType; rootPc: number; present: number[]; missingRoles: string[]; extras: number[];
@@ -112,8 +118,13 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     }
     const cands: Cand[] = [];
     const seenSym = new Set<string>();
+    let mask = 0;
+    for (const pc of pcs) mask |= 1 << pc;
     for (const t of CHORD_TYPES) {
+        const tm = TONE_MASK.get(t)!;
         for (let rootPc = 0; rootPc < 12; rootPc++) {
+            // Every candidate needs at least 3 of its pitch classes sounding: skip the rest before any work.
+            if (bits(mask & (((tm << rootPc) | (tm >>> (12 - rootPc))) & 0xfff)) < 3) continue;
             const tonePcs = t.tones.map(([s]) => mod12(rootPc + s));
             const present = tonePcs.filter(p => byPc.has(p));
             const covered = present.length;
@@ -167,9 +178,7 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     // dominant 7 (and an incoherent dominant 7 is dropped in favour of it).
     const hasGer = cands.some(c => c.t.id === 'ger6');
     const filtered = cands.filter(c => !(hasGer && c.t.id === 'dom7' && c.complete && !c.coherent));
-    if (filtered.length === 0) {
-        return none(notes.filter((n, i) => notes.findIndex(m => mod12(m.midi) === mod12(n.midi)) === i));
-    }
+    if (filtered.length === 0) return noChord();
     const score = (c: Cand) => [
         -c.covered, c.complete ? 0 : 1, c.coherent ? 0 : 1, c.extras.length,
         c.present.includes(bassPc) && (c.t.symmetric || mod12(c.rootPc) === bassPc) ? 0 : 1,

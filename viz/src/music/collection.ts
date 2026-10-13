@@ -37,7 +37,12 @@ const MAJOR_DEGREES = [0, 2, 4, 5, 7, 9, 11];
 
 export class CollectionReader {
     private win: { pc: number; t: number }[] = [];
+    private head = 0;
     private prev: number | null = null;
+    // The decayed histogram as of `lastT`, kept up to date note by note instead of re-summed per read.
+    private hist = new Array<number>(12).fill(0);
+    private count = new Array<number>(12).fill(0);
+    private lastT = 0;
     /** @param halfLifeMs recency half-life; @param hysteresis stickiness bonus for holding the previous
      *  collection; @param altThreshold minimum decayed weight of an OUT-OF-COLLECTION pitch class required
      *  to leave the current collection: the "new alteration" gate (a plain diatonic chord, e.g. the ii7,
@@ -45,16 +50,32 @@ export class CollectionReader {
      *  passes). 0 disables the gate. */
     constructor(private readonly halfLifeMs = 4000, private readonly hysteresis = 1.0, private readonly altThreshold = 1.0) {}
 
+    private decayTo(t: number): void {
+        if (t === this.lastT) return;
+        const k = Math.pow(0.5, (t - this.lastT) / this.halfLifeMs);
+        for (let pc = 0; pc < 12; pc++) this.hist[pc]! *= k;
+        this.lastT = t;
+    }
+
     observe(midi: number, t: number): void {
-        this.win.push({ pc: ((midi % 12) + 12) % 12, t });
+        const pc = ((midi % 12) + 12) % 12;
+        this.decayTo(t);
+        this.win.push({ pc, t });
+        this.hist[pc]! += 1; this.count[pc]!++;
         const cutoff = t - this.halfLifeMs * 8;   // 8 half-lives back is <0.4% weight: drop it
-        while (this.win.length && this.win[0]!.t < cutoff) this.win.shift();
+        while (this.head < this.win.length && this.win[this.head]!.t < cutoff) {
+            const e = this.win[this.head++]!;
+            // A pitch class with nothing left in the window is exactly 0, as a fresh sum would be.
+            if (--this.count[e.pc]! === 0) this.hist[e.pc] = 0;
+            else this.hist[e.pc]! -= Math.pow(0.5, (t - e.t) / this.halfLifeMs);
+        }
+        if (this.head > 1024 && this.head * 2 > this.win.length) { this.win = this.win.slice(this.head); this.head = 0; }
     }
 
     read(now: number): Collection | null {
-        if (!this.win.length) return null;
-        const hist = new Array(12).fill(0);
-        for (const e of this.win) hist[e.pc] += Math.pow(0.5, (now - e.t) / this.halfLifeMs);
+        if (this.head === this.win.length) return null;
+        const k = Math.pow(0.5, (now - this.lastT) / this.halfLifeMs);
+        const hist = this.hist.map(h => h * k);
         let best = 0, bs = -Infinity, second = -Infinity;
         for (let c = 0; c < 12; c++) {
             let s = 0;

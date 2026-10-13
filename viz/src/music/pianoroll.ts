@@ -146,6 +146,20 @@ let svgWidth = 0;
 let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
 let scrollBound = false;
+// The lanes are drawn lazily too: each lane segment is filed under every CHUNK_PX-wide chunk of the roll it
+// touches, and a chunk (clipped to its own width, so a long segment is not drawn twice) is only built and
+// attached while it is near the view.
+const CHUNK_PX = 2000;
+let laneItems: (() => SVGElement)[][] = [];
+let laneChunks: (SVGGElement | null)[] = [];
+let laneShown = new Set<number>();
+let lanesGroup: SVGGElement | null = null;
+let laneBack: SVGGElement | null = null;
+let svgHeight = 0;
+/** File a lane element spanning x0..x1 (built on demand) under the chunks it touches. */
+function laneItem(x0: number, x1: number, make: () => SVGElement): void {
+    for (let c = Math.max(0, Math.floor(x0 / CHUNK_PX)), last = Math.floor(Math.max(x0, x1) / CHUNK_PX); c <= last; c++) (laneItems[c] ??= []).push(make);
+}
 // Autoscroll "follow": the playhead keeps itself in view while stepping, but a manual scroll
 // disengages follow so the user can inspect elsewhere; it re-engages once the playhead drifts back
 // into view on its own. `expectedScrollLeft` is the value WE last wrote, so the scroll listener can
@@ -169,6 +183,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
     rects = []; rendered = new Set(); prevActive = [];
+    laneItems = []; laneChunks = []; laneShown = new Set();
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
     const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
     pxPerMs = (PX_PER_SEC / 1000) * sc;
@@ -189,6 +204,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     svg = document.createElementNS(SVGNS, 'svg') as SVGSVGElement;
     svg.setAttribute('width', String(width));
     svg.setAttribute('height', String(height));
+    svgHeight = height;
     svg.style.display = 'block';
 
     // A live take's bar and beat lines: one per click, brighter on each bar, over the whole visible width.
@@ -226,12 +242,17 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
 
     notesGroup = document.createElementNS(SVGNS, 'g') as SVGGElement;
     svg.appendChild(notesGroup);
+    // Lanes paint in three layers: backgrounds, the lazily drawn segments, then captions on top.
+    laneBack = svgEl('g', {}) as SVGGElement;
+    lanesGroup = svgEl('g', {}) as SVGGElement;
+    const laneFront = svgEl('g', {}) as SVGGElement;
+    svg.append(laneBack, lanesGroup, laneFront);
 
-    buildChordLane(replay, svg, width, chordLaneTop);
-    buildKeyLane(replay, svg, width, laneTop);
+    buildChordLane(replay, laneFront, width, chordLaneTop);
+    buildKeyLane(replay, laneFront, width, laneTop);
     if (showKeyLanes) {
-        buildCollectionLane(replay, svg, width, localLaneTop, 'local');
-        buildCollectionLane(replay, svg, width, stableLaneTop, 'stable');
+        buildCollectionLane(replay, laneFront, width, localLaneTop, 'local');
+        buildCollectionLane(replay, laneFront, width, stableLaneTop, 'stable');
     }
 
     playhead = document.createElementNS(SVGNS, 'line') as SVGLineElement;
@@ -315,12 +336,35 @@ function makeRect(oi: number): void {
 // Materialize exactly the notes in the visible range; drop the rest from the DOM.
 function renderVisible(): void {
     if (!notesGroup) return;
+    renderVisibleLanes();
     const [lo, hi] = visibleRange();
     for (const oi of [...rendered]) {
         if (oi < lo || oi >= hi) { rects[oi]?.remove(); rects[oi] = null; rendered.delete(oi); }
     }
     for (let oi = lo; oi < hi; oi++) {
         if (!rendered.has(oi)) { makeRect(oi); rendered.add(oi); }
+    }
+}
+
+function renderVisibleLanes(): void {
+    if (!lanesGroup) return;
+    const host = document.getElementById('pianoroll')!;
+    const c0 = Math.max(0, Math.floor((host.scrollLeft - MARGIN_PX) / CHUNK_PX));
+    const c1 = Math.floor((host.scrollLeft + host.clientWidth + MARGIN_PX) / CHUNK_PX);
+    for (const c of [...laneShown]) if (c < c0 || c > c1) { laneChunks[c]?.remove(); laneShown.delete(c); }
+    for (let c = c0; c <= c1; c++) {
+        if (laneShown.has(c) || !laneItems[c]) continue;
+        let g = laneChunks[c];
+        if (!g) {
+            g = svgEl('g', { 'clip-path': `url(#lane-clip-${c})` }) as SVGGElement;
+            const clip = svgEl('clipPath', { id: `lane-clip-${c}` });
+            clip.appendChild(svgEl('rect', { x: c * CHUNK_PX, y: 0, width: CHUNK_PX, height: svgHeight }));
+            g.appendChild(clip);
+            for (const make of laneItems[c]!) g.appendChild(make());
+            laneChunks[c] = g;
+        }
+        lanesGroup.appendChild(g);
+        laneShown.add(c);
     }
 }
 
@@ -339,21 +383,33 @@ function frameSegments(replay: Replay): { lof: number; t0: number; t1: number }[
     return segs;
 }
 
-function laneText(host: SVGSVGElement, x: number, y: number, str: string, fill: string, anchor = 'start', size = 10): void {
-    const t = document.createElementNS(SVGNS, 'text');
-    t.setAttribute('x', String(x)); t.setAttribute('y', String(y));
-    t.setAttribute('fill', fill); t.setAttribute('font-size', String(size)); t.setAttribute('text-anchor', anchor);
+function textEl(x: number, y: number, str: string, fill: string, anchor = 'start', size = 10): SVGElement {
+    const t = svgEl('text', { x, y, fill, 'font-size': size, 'text-anchor': anchor });
     t.textContent = str;
-    host.appendChild(t);
+    return t;
+}
+function laneText(host: SVGElement, x: number, y: number, str: string, fill: string, anchor = 'start', size = 10): void {
+    host.appendChild(textEl(x, y, str, fill, anchor, size));
+}
+/** A lane segment's label, centred on x. */
+function segText(x: number, y: number, str: string, fill: string): void {
+    const half = str.length * 4;
+    laneItem(x - half, x + half, () => textEl(x, y, str, fill, 'middle'));
+}
+function withTitle(el: SVGElement, title: string): SVGElement {
+    const t = document.createElementNS(SVGNS, 'title');
+    t.textContent = title;
+    el.appendChild(t);
+    return el;
 }
 
 // The chord the speller's committed spellings amount to, as contiguous spans (display-only; see ../chord.ts).
 // Complete = solid; subset/partial = dimmer fill (the chord sits inside or short of the sounding set);
 // incoherently spelled = pc-identity colour, muted, red outline, italic, "⚠" (identity by pc, spelling does not stack in thirds).
 // A thin underline marks a span whose chord leans on HELD notes (struck earlier, still ringing).
-function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {
+function buildChordLane(replay: Replay, host: SVGElement, width: number, laneTop: number): void {
     const segs = chordSegments(replay.snapshots, replay.durationMs, replay.notes);
-    host.appendChild(svgEl('rect', { x: PAD, y: laneTop, width: Math.max(0, width - PAD * 2), height: LANE_H, fill: '#1b1f27' }));
+    laneBack!.appendChild(svgEl('rect', { x: PAD, y: laneTop, width: Math.max(0, width - PAD * 2), height: LANE_H, fill: '#1b1f27' }));
     let named = 0;
     for (const seg of segs) {
         const r = seg.read;
@@ -361,29 +417,26 @@ function buildChordLane(replay: Replay, host: SVGSVGElement, width: number, lane
         named++;
         const x = PAD + seg.t0 * pxPerMs, w = Math.max(0, (seg.t1 - seg.t0) * pxPerMs);
         const bad = !r.coherent, full = r.status === 'complete';
-        const rect = svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: chordColor(r, seg.surface) ?? '#34506b', 'fill-opacity': bad ? 0.5 : full ? 1 : 0.55, ...(bad ? { stroke: '#c0505e', 'stroke-width': 1 } : {}) });
-        const title = document.createElementNS(SVGNS, 'title');
-        title.textContent = chordText(r, p => label(p)) + (seg.arpeggio ? ` (arpeggio, last ${seg.span} notes)` : '');
-        rect.appendChild(title);
-        host.appendChild(rect);
+        laneItem(x, x + w, () => withTitle(
+            svgEl('rect', { x, y: laneTop, width: w, height: LANE_H, fill: chordColor(r, seg.surface) ?? '#34506b', 'fill-opacity': bad ? 0.5 : full ? 1 : 0.55, ...(bad ? { stroke: '#c0505e', 'stroke-width': 1 } : {}) }),
+            chordText(r, p => label(p)) + (seg.arpeggio ? ` (arpeggio, last ${seg.span} notes)` : '')));
         // arpeggio-inferred span: dashed light outline (subtle; solid chord fill kept so colour reads the same)
-        if (seg.arpeggio) host.appendChild(svgEl('rect', { x: x + 0.5, y: laneTop + 0.5, width: Math.max(0, w - 1), height: LANE_H - 1, fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 1, 'stroke-dasharray': '3 2' }));
-        if (r.held.length) host.appendChild(svgEl('rect', { x, y: laneTop + LANE_H - 2, width: w, height: 2, fill: '#d0a020', 'fill-opacity': 0.8 }));
+        if (seg.arpeggio) laneItem(x, x + w, () => svgEl('rect', { x: x + 0.5, y: laneTop + 0.5, width: Math.max(0, w - 1), height: LANE_H - 1, fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.55, 'stroke-width': 1, 'stroke-dasharray': '3 2' }));
+        if (r.held.length) laneItem(x, x + w, () => svgEl('rect', { x, y: laneTop + LANE_H - 2, width: w, height: 2, fill: '#d0a020', 'fill-opacity': 0.8 }));
         const str = (bad ? '⚠ ' : '') + r.short;
         if (w > str.length * 6 + 6) {
-            const t = document.createElementNS(SVGNS, 'text');
-            t.setAttribute('x', String(x + w / 2)); t.setAttribute('y', String(laneTop + LANE_H / 2 + 4));
-            t.setAttribute('fill', bad ? '#7a1f2b' : '#1b1f27'); t.setAttribute('font-size', '10'); t.setAttribute('text-anchor', 'middle');
-            if (bad) t.setAttribute('font-style', 'italic');
-            t.textContent = str;
-            host.appendChild(t);
+            laneItem(x, x + w, () => {
+                const t = textEl(x + w / 2, laneTop + LANE_H / 2 + 4, str, bad ? '#7a1f2b' : '#1b1f27', 'middle');
+                if (bad) t.setAttribute('font-style', 'italic');
+                return t;
+            });
         }
     }
     laneText(host, PAD + 2, laneTop + 8, 'chord (committed spellings)', '#8b93a1', 'start', 8);
     laneText(host, PAD, laneTop + LANE_H + 12, `chord: ${named} named span${named === 1 ? '' : 's'} · ⚠ = incoherent spelling · amber underline = leans on held notes · dim = subset/partial`, '#9aa4b2', 'start', 9);
 }
 
-function buildKeyLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number): void {
+function buildKeyLane(replay: Replay, host: SVGElement, width: number, laneTop: number): void {
     const text = (x: number, y: number, str: string, fill: string, anchor = 'start', size = 10) =>
         laneText(host, x, y, str, fill, anchor, size);
     const segs = frameSegments(replay);
@@ -394,12 +447,12 @@ function buildKeyLane(replay: Replay, host: SVGSVGElement, width: number, laneTo
     }
     for (const seg of segs) {
         const x = PAD + seg.t0 * pxPerMs, w = (seg.t1 - seg.t0) * pxPerMs;
-        host.appendChild(svgEl('rect', { x, y: laneTop, width: Math.max(0, w), height: LANE_H, fill: colorForFifth(seg.lof) }));
-        if (w > 60) text(x + w / 2, laneTop + LANE_H / 2 + 4, keyLabel(seg.lof), '#e6e8ec', 'middle');
+        laneItem(x, x + w, () => svgEl('rect', { x, y: laneTop, width: Math.max(0, w), height: LANE_H, fill: colorForFifth(seg.lof) }));
+        if (w > 60) segText(x + w / 2, laneTop + LANE_H / 2 + 4, keyLabel(seg.lof), '#e6e8ec');
     }
     for (let i = 1; i < segs.length; i++) {
         const x = PAD + segs[i]!.t0 * pxPerMs;
-        host.appendChild(svgEl('line', {
+        laneItem(x, x, () => svgEl('line', {
             x1: x, x2: x, y1: laneTop, y2: laneTop + LANE_H,
             stroke: '#d0a020', 'stroke-width': 1, 'stroke-dasharray': '2 2',
         }));
@@ -439,7 +492,7 @@ function collectionColor(relMajorPc: number, margin: number, stable: boolean): s
     return `hsl(${cof * 30}, ${sat}%, ${light}%)`;
 }
 
-function buildCollectionLane(replay: Replay, host: SVGSVGElement, width: number, laneTop: number, which: 'local' | 'stable'): void {
+function buildCollectionLane(replay: Replay, host: SVGElement, width: number, laneTop: number, which: 'local' | 'stable'): void {
     const text = (x: number, y: number, str: string, fill: string, anchor = 'start', size = 10) =>
         laneText(host, x, y, str, fill, anchor, size);
     const stable = which === 'stable';
@@ -452,16 +505,14 @@ function buildCollectionLane(replay: Replay, host: SVGSVGElement, width: number,
     }
     for (const seg of segs) {
         const x = PAD + seg.t0 * pxPerMs, w = (seg.t1 - seg.t0) * pxPerMs;
-        const rect = svgEl('rect', { x, y: laneTop, width: Math.max(0, w), height: LANE_H, fill: collectionColor(seg.relMajorPc, seg.margin, stable) });
-        const title = document.createElementNS(SVGNS, 'title');
-        title.textContent = `${seg.name} · margin ${seg.margin.toFixed(1)} (higher = more certain)`;
-        rect.appendChild(title);
-        host.appendChild(rect);
-        if (w > 42) text(x + w / 2, laneTop + LANE_H / 2 + 4, seg.name, '#e6e8ec', 'middle');
+        laneItem(x, x + w, () => withTitle(
+            svgEl('rect', { x, y: laneTop, width: Math.max(0, w), height: LANE_H, fill: collectionColor(seg.relMajorPc, seg.margin, stable) }),
+            `${seg.name} · margin ${seg.margin.toFixed(1)} (higher = more certain)`));
+        if (w > 42) segText(x + w / 2, laneTop + LANE_H / 2 + 4, seg.name, '#e6e8ec');
     }
     for (let i = 1; i < segs.length; i++) {
         const x = PAD + segs[i]!.t0 * pxPerMs;
-        host.appendChild(svgEl('line', { x1: x, x2: x, y1: laneTop, y2: laneTop + LANE_H, stroke: '#8a6bd0', 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
+        laneItem(x, x, () => svgEl('line', { x1: x, x2: x, y1: laneTop, y2: laneTop + LANE_H, stroke: '#8a6bd0', 'stroke-width': 1, 'stroke-dasharray': '2 2' }));
     }
     text(PAD + 2, laneTop + 8, laneName, '#8b93a1', 'start', 8);
     const changes = Math.max(0, segs.length - 1);

@@ -70,12 +70,16 @@ function keyAtTime(respells: RespellEvent[], t_ms: number): string {
     return keySpecFromScale(sectionScale(respells, t_ms));
 }
 
-// Rebuild only when the piece slice, the measure window, or the sounding set actually change: a
-// mere playhead move within the same window (e.g. stepping to the next note in the same measure)
-// is a cheap no-op. `builtForReplay` covers the "different fixture/mode" case (a new Replay object);
-// `builtToken` covers "same replay, different window/sounding".
+// Rebuild only when the piece slice or the measure window change. A new sounding set on the same page
+// only recolours the drawn note heads. `builtForReplay` covers the "different fixture/mode" case (a new
+// Replay object); `builtToken` covers "same replay, different window".
 let builtForReplay: Replay | null = null;
 let builtToken = '';
+let builtSounding = '';
+let builtZoom = 1;
+// Every drawn note head with its note, so a new sounding set can recolour it without engraving again.
+let heads: { sn: StaveNote; i: number; note: ReplayNote }[] = [];
+let headEls: { el: Element; note: ReplayNote }[] = [];
 
 export function renderStaff(replay: Replay, step: number): void {
     const host = document.getElementById('staff')!;
@@ -98,12 +102,40 @@ export function renderStaff(replay: Replay, step: number): void {
     // resize that crosses a bucket busts the cache and re-fits (main wires a resize → render).
     const avail = host.clientWidth || 0;
     const [start, count] = pageOf(replay, pcLo, pcNotes, curMeasure, avail);
-    const token = `${pcLo}|${start}|${count}|${soundSig}|${Math.round(avail / 40)}`;
-    if (replay === builtForReplay && token === builtToken) return;
-    builtForReplay = replay; builtToken = token;
+    const token = `${pcLo}|${start}|${count}|${Math.round(avail / 40)}`;
+    if (replay === builtForReplay && token === builtToken) {
+        if (soundSig !== builtSounding) { builtSounding = soundSig; recolour(host, sounding); }
+        return;
+    }
+    builtForReplay = replay; builtToken = token; builtSounding = soundSig;
 
     try { build(host, start, count, sounding, pcNotes, avail, replay.respells); }
     catch (err) { host.innerHTML = emptyMsg(`staff render failed: ${String(err)}`); }
+}
+
+/** Notehead colour: sounding+wrong (or unread) purple, sounding blue; silent wrong/unread red, silent
+ *  correct green, silent flipped amber (the tier palette of the rest of the app). */
+function headColour(n: ReplayNote, sounding: Set<number>): string {
+    const bad = n.tier === 'wrong' || n.tier === 'unread';
+    return sounding.has(n.onIndex)
+        ? (bad ? '#8957e5' : '#1f6feb')
+        : (bad ? '#b00' : n.tier === 'flipped' ? '#b8860b' : '#1a7f37');
+}
+
+/** Recolour the drawn note heads (and the accidentals drawn with them) for a new sounding set, then
+ *  centre the sounding notes again. */
+function recolour(host: HTMLElement, sounding: Set<number>): void {
+    for (const { el, note } of headEls) {
+        const c = headColour(note, sounding);
+        for (const part of [el, ...el.querySelectorAll('*')]) {
+            const f = part.getAttribute('fill'), st = part.getAttribute('stroke');
+            if (f && f !== 'none') part.setAttribute('fill', c);
+            if (st && st !== 'none') part.setAttribute('stroke', c);
+        }
+    }
+    const svg = host.querySelector('svg');
+    const cx = svg instanceof SVGSVGElement ? soundingCentreX(svg) : null;
+    if (cx != null) host.scrollLeft = Math.max(0, cx * builtZoom - host.clientWidth / 2);
 }
 
 const EST_ONSET_W = 42;   // rough engraved width of one onset, to size pages before engraving them
@@ -260,14 +292,21 @@ function firstMeasure(notes: ReplayNote[]): number | null {
 // onIndexes of every note sounding at note `step`'s onset (onT ≤ headT < offT), the same rule the
 // piano roll's active-outline pass uses, so both panels agree on "what's ringing right now."
 function soundingSet(replay: Replay, step: number): Set<number> {
-    const t = replay.notes[step]!.onT;
+    const notes = replay.notes, t = notes[step]!.onT;
+    // Notes are in onset order: look back from the step only as far as the longest note can ring.
+    let longest = LONGEST.get(replay);
+    if (longest === undefined) { longest = 0; for (const n of notes) longest = Math.max(longest, n.offT - n.onT); LONGEST.set(replay, longest); }
+    let i = step;
+    while (i + 1 < notes.length && notes[i + 1]!.onT <= t) i++;
     const out = new Set<number>();
-    for (const n of replay.notes) if (n.onT <= t && t < n.offT) out.add(n.onIndex);
+    for (; i >= 0 && notes[i]!.onT >= t - longest; i--) { const n = notes[i]!; if (n.onT <= t && t < n.offT) out.add(n.onIndex); }
     return out;
 }
+const LONGEST = new WeakMap<Replay, number>();
 
 function build(host: HTMLElement, start: number, count: number, sounding: Set<number>, notes: ReplayNote[], avail: number, respells: RespellEvent[]): void {
     host.innerHTML = '';
+    heads = []; headEls = [];
     const measures: number[] = [];
     for (let m = start; m < start + count; m++) if (notes.some(n => n.expected?.measure === m)) measures.push(m);
     if (!measures.length) { host.innerHTML = emptyMsg('no notated measures here'); return; }
@@ -360,6 +399,8 @@ function build(host: HTMLElement, start: number, count: number, sounding: Set<nu
         } catch { /* leave this one measure blank rather than blanking the whole staff */ }
         x += b.staveW;
     }
+    headEls = heads.flatMap(h => { const el = h.sn.noteHeads[h.i]?.getSVGElement(); return el ? [{ el, note: h.note }] : []; });
+    builtZoom = zoom;
 
     fitToBand(host, firstStave, zoom, totalW);
 }
@@ -511,17 +552,10 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
         if (dots) Dot.buildAndAttach([sn], { all: true });
         // No manual accidental adding: applyAccidentals in the caller handles it per the key sig.
 
-        // Colour per notehead (four-tier, mirroring the lab): sounding+wrong(or unread) = purple,
-        // sounding+correct/flipped = blue; silent wrong/unread = red, silent correct = green, silent
-        // flipped = amber (same tier palette as the rest of the app, so a wrong-side flip reads the
-        // same colour everywhere you look).
         g.forEach((n, i) => {
-            const isSounding = sounding.has(n.onIndex);
-            const bad = n.tier === 'wrong' || n.tier === 'unread';
-            const color = isSounding
-                ? (bad ? '#8957e5' : '#1f6feb')
-                : (bad ? '#b00' : n.tier === 'flipped' ? '#b8860b' : '#1a7f37');
+            const color = headColour(n, sounding);
             sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });
+            heads.push({ sn, i, note: n });
         });
         out.push(sn);
     }
