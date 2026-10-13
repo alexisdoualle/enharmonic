@@ -1,12 +1,12 @@
 {
-  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from an external source. These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here. Regenerate only if the corpus or a baseline tool changes. cambouropoulos (2003, cam-03-a) and longuet_higgins (lhpitchspell1) added 2026-10-03 from enharmonic-lab test/parity/results/meredith_baselines{,_noisy}.json (Meredith's Lisp via SBCL); in that same lab run the five earlier baselines reproduce this file exactly. Both consume only the pitch sequence in (onset, pitch) order, so the lab's tatum scale does not affect them.",
+  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from an external source. These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here. Regenerate only if the corpus or a baseline tool changes. cambouropoulos (2003, cam-03-a) and longuet_higgins (lhpitchspell1) added 2026-10-03 from enharmonic-lab test/parity/results/meredith_baselines{,_noisy}.json (Meredith's Lisp via SBCL); in that same lab run the five earlier baselines reproduce this file exactly. Both consume only the pitch sequence in (onset, pitch) order, so the lab's tatum scale does not affect them. Flipped/wrong rescored 2026-10-13 with prod test/eval/score.ts (segment flip scorer, 6cf8956) from the lab's stored predictions; the tools were not rerun.",
   "corpus": "meredith-8x25000",
   "variants": {
     "clean": {
       "cambouropoulos": {
-        "correct": 193730,
-        "flipped": 350,
-        "wrong": 1892,
+        "correct": 193723,
+        "flipped": 467,
+        "wrong": 1782,
         "committed": 195972,
         "total": 195972
       },
@@ -18,16 +18,16 @@
         "total": 195972
       },
       "fixed_lof": {
-        "correct": 187213,
-        "flipped": 211,
-        "wrong": 8548,
+        "correct": 187210,
+        "flipped": 227,
+        "wrong": 8535,
         "committed": 195972,
         "total": 195972
       },
       "longuet_higgins": {
-        "correct": 182192,
-        "flipped": 12321,
-        "wrong": 1459,
+        "correct": 182176,
+        "flipped": 12576,
+        "wrong": 1220,
         "committed": 195972,
         "total": 195972
       },
@@ -39,9 +39,9 @@
         "total": 195972
       },
       "ps13": {
-        "correct": 194564,
-        "flipped": 577,
-        "wrong": 831,
+        "correct": 194568,
+        "flipped": 629,
+        "wrong": 775,
         "committed": 195972,
         "total": 195972
       },
@@ -55,9 +55,9 @@
     },
     "noisy": {
       "cambouropoulos": {
-        "correct": 193664,
-        "flipped": 577,
-        "wrong": 1731,
+        "correct": 193663,
+        "flipped": 595,
+        "wrong": 1714,
         "committed": 195972,
         "total": 195972
       },
@@ -70,8 +70,8 @@
       },
       "fixed_lof": {
         "correct": 187101,
-        "flipped": 436,
-        "wrong": 8435,
+        "flipped": 440,
+        "wrong": 8431,
         "committed": 195972,
         "total": 195972
       },
@@ -91,15 +91,15 @@
       },
       "ps13": {
         "correct": 194505,
-        "flipped": 655,
-        "wrong": 812,
+        "flipped": 666,
+        "wrong": 801,
         "committed": 195972,
         "total": 195972
       },
       "temperley": {
         "correct": 10434,
-        "flipped": 1856,
-        "wrong": 418,
+        "flipped": 1865,
+        "wrong": 409,
         "committed": 12708,
         "total": 195972
       }
