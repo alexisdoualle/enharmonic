@@ -100,14 +100,9 @@ export function classifyOnsets(
     const byOnset: number[][] = Array.from({ length: nOnsets }, () => []);
     for (let i = 0; i < n; i++) byOnset[onsetIdx[i]!]!.push(i);
 
-    return pred.map((_p, i) => {
-        const e = expected[i];
-        if (e == null) return 'correct';            // unscored onset, neutral
-        if (pred[i] == null) return 'unread';        // no read-back
-        const off = offsets[i];
-        if (off == null) return 'wrong';             // committed but a genuinely different pitch
-        // Vote over every note whose onset is within ±radius onsets of this one.
-        const oi = onsetIdx[i]!;
+    // The local consensus: the dominant offset over every note within ±radius onsets, per onset.
+    const consensusAt: number[] = [];
+    for (let oi = 0; oi < nOnsets; oi++) {
         const votes = new Map<number, number>();
         for (let o = Math.max(0, oi - radius); o <= Math.min(nOnsets - 1, oi + radius); o++) {
             for (const j of byOnset[o]!) {
@@ -122,7 +117,51 @@ export function classifyOnsets(
                 best = v; bestCnt = c;
             }
         }
-        const consensus = bestCnt < 0 ? 0 : best;
+        consensusAt.push(bestCnt < 0 ? 0 : best);
+    }
+
+    // A SHORT FLIP the consensus outvotes: anchored by a whole chord (3+ pitch classes) shifted by one offset,
+    // with no common tone respelled against the onset before or after (that would be a lag). It extends over
+    // the neighbouring onsets whose notes all sit at that offset or at the consensus, with at least one at the
+    // offset. Inside it, notes at the offset take its tier (flipped, or correct for a run back at offset 0
+    // inside a longer flip); a note left at the consensus did not move with the flip and is wrong.
+    const pcOf = (q: { step: string; alter: number }) => ((fifths(q.step, q.alter) * 7) % 12 + 12) % 12;
+    const scored = (o: number) => byOnset[o]!.filter(j => expected[j] != null && offsets[j] != null);
+    const segOff: (number | undefined)[] = new Array(nOnsets);
+    // A lag tell: the speller respells a common tone against the onset before or after.
+    const lagAt = (oi: number) => {
+        const nb = [oi - 1, oi + 1].filter(o => o >= 0 && o < nOnsets).flatMap(o => byOnset[o]!);
+        return byOnset[oi]!.some(j => pred[j] && nb.some(k => pred[k] && pcOf(pred[k]!) === pcOf(pred[j]!)
+            && fifths(pred[k]!.step, pred[k]!.alter) !== fifths(pred[j]!.step, pred[j]!.alter)));
+    };
+    // A mixed onset (some notes moved, some not) belongs to the flip; its unmoved notes are wrong.
+    const fits = (o: number, a: number) => {
+        const js = scored(o);
+        if (!js.length || !js.some(j => offsets[j] === a) || !js.every(j => offsets[j] === a || offsets[j] === consensusAt[o])) return false;
+        return !lagAt(o);
+    };
+    for (let oi = 0; oi < nOnsets; oi++) {
+        const js = scored(oi);
+        if (!js.length) continue;
+        const a = offsets[js[0]!]!;
+        if (a === consensusAt[oi] || !js.every(j => offsets[j] === a)) continue;
+        const pcs = new Set(js.map(j => pcOf(expected[j]!)));
+        if (pcs.size < 3) continue;
+        if (lagAt(oi)) continue;
+        segOff[oi] = a;
+        for (let o = oi - 1; o >= 0 && segOff[o] === undefined && fits(o, a); o--) segOff[o] = a;
+        for (let o = oi + 1; o < nOnsets && segOff[o] === undefined && fits(o, a); o++) segOff[o] = a;
+    }
+
+    return pred.map((_p, i) => {
+        const e = expected[i];
+        if (e == null) return 'correct';            // unscored onset, neutral
+        if (pred[i] == null) return 'unread';        // no read-back
+        const off = offsets[i];
+        if (off == null) return 'wrong';             // committed but a genuinely different pitch
+        const oi = onsetIdx[i]!, consensus = consensusAt[oi]!;
+        // Inside a flip every note must move with it: one left behind (even matching the composer) is wrong.
+        if (segOff[oi] !== undefined) return off !== segOff[oi] ? 'wrong' : off === 0 ? 'correct' : 'flipped';
         if (off !== consensus) return 'wrong';
         return consensus === 0 ? 'correct' : 'flipped';
     });

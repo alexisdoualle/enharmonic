@@ -158,26 +158,26 @@
   "debussy_clair_de_lune": {
     "core": {
       "correct": 182,
-      "flipped": 1421,
-      "wrong": 20,
+      "flipped": 1425,
+      "wrong": 16,
       "total": 1623
     },
     "rt": {
       "correct": 981,
-      "flipped": 626,
-      "wrong": 16,
+      "flipped": 630,
+      "wrong": 12,
       "total": 1623
     },
     "la": {
       "correct": 981,
-      "flipped": 624,
-      "wrong": 18,
+      "flipped": 628,
+      "wrong": 14,
       "total": 1623
     },
     "tp": {
       "correct": 1319,
-      "flipped": 275,
-      "wrong": 29,
+      "flipped": 279,
+      "wrong": 25,
       "total": 1623
     }
   }
