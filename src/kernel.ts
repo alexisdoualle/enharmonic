@@ -9,6 +9,9 @@ export interface NoteContext {
     /** Look-ahead resolution direction (+1 up, −1 down, 0 none), supplied from a small forward buffer.
      *  Used only in look-ahead mode; the real-time and two-pass paths ignore it. */
     readonly resolveDir?: number;
+    /** The same at the exact pitch (+1 if the note's semitone above in the same octave comes first, −1 for
+     *  the semitone below, 0 neither): the note's own line, not another voice. Look-ahead mode only. */
+    readonly resolveExact?: number;
     /** Event timestamp. Notes sharing a `t` are one onset (a chord); a new `t` starts a new onset. */
     readonly t?: number;
 }
@@ -24,4 +27,9 @@ export interface NoteContext {
 export function resolveStep(from: number, to: number): number {
     const iv = (((to - from) % 12) + 12) % 12;
     return iv === 1 ? 1 : iv === 11 ? -1 : 0;
+}
+
+/** Semitone step from `from` to `to` at the exact pitch: +1, −1, or 0. Fills {@link NoteContext.resolveExact}. */
+export function resolveExactStep(from: number, to: number): number {
+    return to === from + 1 ? 1 : to === from - 1 ? -1 : 0;
 }

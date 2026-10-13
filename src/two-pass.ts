@@ -111,7 +111,7 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
 
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied. */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, onsetTolerance = 0): number[] {
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0): number[] {
     const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
@@ -121,7 +121,7 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, onsetTo
     const pend = new Map<number, number[]>();   // midi → FIFO of note indices awaiting read-back at note-off
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
-        if (e.on) { s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
+        if (e.on) { s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i); }
         // Read the note's committed spelling (before release); the engine counts note-ons per pitch and drops it only once its LAST overlapping
         // voice ends, so read-back never falls through and the vertical guard's ringing set stays correct.
         else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); } s.noteOff(midi); }
@@ -166,7 +166,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     if (n === 0) return { spellings: [], forward: [], backward: [], agrees: [], firstStable: 0, lastStable: -1 };
 
     const dirsF = resolveDirs(N);
-    const fwd = drivePass(N, dirsF, opts.onsetTolerance ?? 0);
+    const exactF = resolveDirsExact(N);
+    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
@@ -174,7 +175,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     // Backward look-ahead uses the note's FORWARD resolveDir: processing in reverse, the resolution target
     // is already committed. bNotes[k] = original n-1-k.
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, opts.onsetTolerance ?? 0);
+    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0);
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
 

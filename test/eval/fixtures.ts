@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
 import { Speller, spellTwoPass } from '../../src/index.js';
-import { resolveStep, type NoteContext } from '../../src/kernel.js';
+import { resolveStep, resolveExactStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
 /** The streaming surface `drive` needs: satisfied by both the shipped `Speller` and the
@@ -66,17 +66,18 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
     for (let i = 0; i < events.length; i++) {
         const e = events[i]!;
         if (e.type === 'on') {
-            let dir = 0, seen = 0;
+            let dir = 0, exact = 0, seen = 0;
             if (s.lookAhead) {
                 for (let j = i + 1; j < events.length && seen < horizon; j++) {
                     const fwd = events[j]!;
                     if (fwd.type !== 'on') continue;
                     seen++;
-                    dir = resolveStep(e.midi, fwd.midi);
-                    if (dir !== 0) break;
+                    if (dir === 0) dir = resolveStep(e.midi, fwd.midi);
+                    if (exact === 0) exact = resolveExactStep(e.midi, fwd.midi);
+                    if (dir !== 0 && exact !== 0) break;
                 }
             }
-            s.noteOn(e.midi, { t: e.t, resolveDir: dir });
+            s.noteOn(e.midi, { t: e.t, resolveDir: dir, resolveExact: exact });
             const idx = out.length; out.push(null);
             (pending.get(e.midi) ?? pending.set(e.midi, []).get(e.midi)!).push(idx);
         } else {

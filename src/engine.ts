@@ -177,6 +177,10 @@ export interface EngineOptions {
      *  it ringing, so a bass struck first can follow the chord above it. Read-back sees the revised spelling;
      *  live output waits for the onset to complete. Diatonic frame only. Default false. */
     onsetRevise?: boolean;
+    /** The recency guard does not dock a note one chromatic step above its letter's last spelling when the
+     *  note resolves up a semitone at the exact pitch (B → B♯ → C♯ in one voice): a rising chromatic line, not
+     *  a reclaimed letter. Needs `resolveExact`. Default false. */
+    guardRaiseLine?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -209,7 +213,7 @@ export const LA_PRESET: EngineOptions = {
     // harmonic context.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
-    frameMode: 'diatonic', onsetRevise: true,
+    frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
@@ -226,7 +230,7 @@ export const TP_PASS_PRESET: EngineOptions = {
     // Same reason the passes use the economy fold, not the clamp: the two-pass's own reconciliation is the
     // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
-    doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
+    doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
     // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
     // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
@@ -311,8 +315,11 @@ export class SpellingEngine {
     private readonly chromaticSharpLean: number;
     private readonly onsetTolerance: number;
     private readonly onsetRevise: boolean;
+    private readonly guardRaiseLine: boolean;
     /** The current onset's look-ahead direction per midi, for the onset buffer's re-decisions. */
     private curOnsetDirs = new Map<number, number>();
+    /** The current onset's exact-pitch resolution per midi, for the same. */
+    private curOnsetExact = new Map<number, number>();
     /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
      *  own first spelling is not exempt from the guard. */
     private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
@@ -391,6 +398,7 @@ export class SpellingEngine {
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         this.onsetTolerance = opts.onsetTolerance ?? 0;
         this.onsetRevise = opts.onsetRevise ?? false;
+        this.guardRaiseLine = opts.guardRaiseLine ?? false;
     }
 
     /**
@@ -399,7 +407,7 @@ export class SpellingEngine {
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
      * feeds the look-ahead when enabled.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER is a re-strike (a same-instant unison stays).
@@ -408,6 +416,7 @@ export class SpellingEngine {
         if (newOnset) {
             this.curOnsetMidis.clear();
             this.curOnsetDirs.clear();
+            this.curOnsetExact.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -423,6 +432,7 @@ export class SpellingEngine {
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
         this.curOnsetMidis.add(midi);
         this.curOnsetDirs.set(midi, resolveDir);
+        this.curOnsetExact.set(midi, resolveExact);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -450,7 +460,7 @@ export class SpellingEngine {
         // diatonic frame (the collection IS the frame; nothing to leash toward).
         if (this.sideWeight > 0 && this.frameMode !== 'diatonic') this.anchor = this.diatonicAnchor();
 
-        const { best, scale, cands } = this.decide(midi, resolveDir);
+        const { best, scale, cands } = this.decide(midi, resolveDir, resolveExact);
         if (best === null) return;
         this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
         this.active.set(midi, best);
@@ -483,7 +493,7 @@ export class SpellingEngine {
 
     /** Score every spelling of `midi` against the current frame and the notes ringing (less `self`, the note
      *  being re-decided), and return the best with its per-candidate trace. */
-    private decide(midi: number, resolveDir: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
+    private decide(midi: number, resolveDir: number, resolveExact: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
         const laOn = this.lookAheadOn && resolveDir !== 0;
@@ -524,7 +534,8 @@ export class SpellingEngine {
         for (const n of candidates(midi)) {
             const base = intervalScore(n, this.scale);
             const last = (this.guardMemo ?? this.lastByLetter)[letter(n)];
-            const guarded = this.recencyGuard && last && last.n !== n && this.onset - last.onset <= this.guardWindow;
+            const raiseLine = this.guardRaiseLine && resolveExact === 1 && last !== undefined && n - last.n === 7;
+            const guarded = this.recencyGuard && last && last.n !== n && this.onset - last.onset <= this.guardWindow && !raiseLine;
             const guardDelta = guarded ? -this.recencyGuard : 0;
             const laDelta = laOn ? (letter(n) === laStep ? laWeight : letter(n) === laTarget ? -laWeight : 0) : 0;
             const daDelta = Math.abs(acc(n)) >= 2 ? -this.doubleAccPenalty : 0;
@@ -551,7 +562,7 @@ export class SpellingEngine {
             if (m === just || !this.active.has(m)) continue;
             const old = this.active.get(m)!;
             this.guardMemo = this.guardBefore;
-            const { best } = this.decide(m, this.curOnsetDirs.get(m) ?? 0, m);
+            const { best } = this.decide(m, this.curOnsetDirs.get(m) ?? 0, this.curOnsetExact.get(m) ?? 0, m);
             this.guardMemo = null;
             if (best === null || best === old) continue;
             this.active.set(m, best);
@@ -760,6 +771,7 @@ export class SpellingEngine {
         this.curOnsetPcs = [];
         this.curOnsetMidis.clear();
         this.curOnsetDirs.clear();
+        this.curOnsetExact.clear();
         this.pendingDir = 0;
         this.pendingCount = 0;
         this.committedLof = [];

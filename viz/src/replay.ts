@@ -12,7 +12,7 @@
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
-import { resolveStep } from '../../src/kernel.js';
+import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -180,15 +180,17 @@ export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitc
 }
 
 /** Onsets in event order, each with a resolution direction for look-ahead (next onset a semitone away
- *  in any octave, within `horizon` upcoming onsets): the forward buffer a near-real-time caller feeds. */
-function onsetDirs(events: RawEvent[], horizon = 16): Map<number, number> {
+ *  in any octave, within `horizon` upcoming onsets; with `exact`, at the exact pitch): the forward buffer a
+ *  near-real-time caller feeds. */
+function onsetDirs(events: RawEvent[], horizon = 16, exact = false): Map<number, number> {
+    const step = exact ? resolveExactStep : resolveStep;
     const dir = new Map<number, number>();
     const ons = events.map((e, i) => ({ e, i })).filter(x => x.e.type === 'on');
     for (let k = 0; k < ons.length; k++) {
         const midi = ons[k]!.e.midi!;
         let d = 0;
         for (let j = k + 1; j < ons.length && j - k <= horizon; j++) {
-            d = resolveStep(midi, ons[j]!.e.midi!);
+            d = step(midi, ons[j]!.e.midi!);
             if (d !== 0) break;
         }
         dir.set(ons[k]!.i, d);
@@ -258,6 +260,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         })
         : null;
     const dirs = onsetDirs(events);
+    const exactDirs = onsetDirs(events, 16, true);
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -326,7 +329,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         } else {
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0);
+            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0);
             committed = engine!.getSpelling(e.midi!);
             resolvedScale = engine!.getResolvedScale();
             // Read the frame side off the resolved scale's MEAN, the quantity the spiral fold actually

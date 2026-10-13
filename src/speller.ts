@@ -66,7 +66,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
-        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0);
+        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0);
     }
 
     noteOff(midi: number): void {

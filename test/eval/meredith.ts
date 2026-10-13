@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Speller, spellTwoPass, type Pitch } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
-import { resolveStep } from '../../src/kernel.js';
+import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import type { StreamingSpeller } from './fixtures.js';
 import { scoreTiers } from './score.js';
 
@@ -56,14 +56,16 @@ function parseOpndv(text: string): Note[] {
     return notes;
 }
 
-/** Look-ahead resolveDir per note index: nearest onset a semitone away (any octave) within horizon 16. */
-function resolveDirs(notes: Note[]): number[] {
+/** Look-ahead resolveDir per note index: nearest onset a semitone away (any octave) within horizon 16;
+ *  with `exact`, the nearest at the exact pitch (resolveExact). */
+function resolveDirs(notes: Note[], exact = false): number[] {
+    const step = exact ? resolveExactStep : resolveStep;
     const d = new Array<number>(notes.length).fill(0);
     for (let a = 0; a < notes.length; a++) {
         let seen = 0;
         for (let b = a + 1; b < notes.length && seen < 16; b++) {
             seen++;
-            d[a] = resolveStep(notes[a]!.midi, notes[b]!.midi);
+            d[a] = step(notes[a]!.midi, notes[b]!.midi);
             if (d[a] !== 0) break;
         }
     }
@@ -103,11 +105,12 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     const s: StreamingSpeller = mode.startsWith('core') ? core(mode)
         : new Speller({ lookAhead: mode === 'la' });
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
+    const exact = mode === 'la' ? resolveDirs(notes, true) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
     for (const e of events(notes)) {
         if (e.on) {
-            s.noteOn(e.midi, { t: e.t, resolveDir: dirs ? dirs[e.i]! : 0 });
+            s.noteOn(e.midi, { t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0 });
             (pend.get(e.midi) ?? pend.set(e.midi, []).get(e.midi)!).push(e.i);
         } else {
             const q = pend.get(e.midi);
