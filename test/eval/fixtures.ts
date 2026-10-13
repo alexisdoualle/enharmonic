@@ -20,7 +20,7 @@ import { CoreSpeller } from '../../src/core.js';
 export interface StreamingSpeller {
     readonly lookAhead?: boolean;
     noteOn(midi: number, ctx?: NoteContext): void;
-    noteOff(midi: number): void;
+    noteOff(midi: number, ctx?: { t?: number }): void;
     getSpelling(midi: number): Pitch | null;
 }
 
@@ -83,7 +83,7 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
         } else {
             const q = pending.get(e.midi);
             if (q && q.length) out[q.shift()!] = s.getSpelling(e.midi);
-            s.noteOff(e.midi);
+            s.noteOff(e.midi, { t: e.t });
         }
     }
     return out;

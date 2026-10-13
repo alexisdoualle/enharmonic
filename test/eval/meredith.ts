@@ -115,7 +115,7 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
         } else {
             const q = pend.get(e.midi);
             if (q && q.length) pred[q.shift()!] = s.getSpelling(e.midi);
-            s.noteOff(e.midi);
+            s.noteOff(e.midi, { t: e.t });
         }
     }
     return pred;

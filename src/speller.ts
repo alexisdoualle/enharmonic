@@ -69,8 +69,8 @@ export class Speller {
         this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0);
     }
 
-    noteOff(midi: number): void {
-        this.engine.noteOff(midi);
+    noteOff(midi: number, ctx: { t?: number } = {}): void {
+        this.engine.noteOff(midi, ctx.t);
     }
 
     getSpelling(midi: number): Pitch | null {

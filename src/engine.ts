@@ -181,6 +181,10 @@ export interface EngineOptions {
      *  note resolves up a semitone at the exact pitch (B → B♯ → C♯ in one voice): a rising chromatic line, not
      *  a reclaimed letter. Needs `resolveExact`. Default false. */
     guardRaiseLine?: boolean;
+    /** ORNAMENT WINDOW (in `t` units, ms for live input): a chromatic's keep-alive slot waits this long. If the
+     *  note ends sooner (a grace note) it never enters the surface; if it still sounds at the window's end or is
+     *  held longer, it is kept as usual. Its own spelling is not delayed. Needs `t` at note-off. 0 = off. */
+    ornamentMs?: number;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -197,6 +201,7 @@ export const RT_PRESET: EngineOptions = {
     // co-sounding P5), leaning a chromatic to its raise. Not used in look-ahead, which resolves these by
     // direction, so the lean would fight it. onsetRevise lets a bass struck first follow the chord above it.
     frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1, onsetRevise: true,
+    ornamentMs: 80,
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
@@ -217,6 +222,7 @@ export const LA_PRESET: EngineOptions = {
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
+    ornamentMs: 80,
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
@@ -316,6 +322,9 @@ export class SpellingEngine {
     private readonly onsetTolerance: number;
     private readonly onsetRevise: boolean;
     private readonly guardRaiseLine: boolean;
+    private readonly ornamentMs: number;
+    /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
+    private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
     private curOnsetT = new Map<number, number>();
     /** The current onset's look-ahead direction per midi, for the onset buffer's re-decisions. */
@@ -401,6 +410,7 @@ export class SpellingEngine {
         this.onsetTolerance = opts.onsetTolerance ?? 0;
         this.onsetRevise = opts.onsetRevise ?? false;
         this.guardRaiseLine = opts.guardRaiseLine ?? false;
+        this.ornamentMs = opts.ornamentMs ?? 0;
     }
 
     /**
@@ -442,6 +452,9 @@ export class SpellingEngine {
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
         // window moves it. This replaces the mean drift-and-fold AND the committed anchor.
+        if (this.pending.size && t !== undefined) {
+            for (const [m, p] of this.pending) if (this.lastT - p.t >= this.ornamentMs) { this.pending.delete(m); this.keep(p.n); }
+        }
         if (this.frameMode === 'diatonic') {
             const prevCentre = this.frameCentre;
             this.frameCentre = this.computeFrameCentre();
@@ -449,7 +462,7 @@ export class SpellingEngine {
             this.collectionCentre = this.frameCentre;
             this.anchor = this.frameCentre;
             // The collection moving PULLS BACK the held alterations (they belonged to the old collection).
-            if (this.frameKeepAlive && this.frameCentre !== prevCentre) this.kept.clear();
+            if (this.frameKeepAlive && this.frameCentre !== prevCentre) { this.kept.clear(); this.pending.clear(); }
             for (let s = 0; s < 7; s++) this.scale[s] = letterAt(s, this.frameCentre);
             // KEEP-ALIVE overlay: a committed chromatic rides its slot until the collection pulls it back.
             if (this.frameKeepAlive) {
@@ -457,6 +470,8 @@ export class SpellingEngine {
                     if (this.scale[s] !== n) this.scale[s] = n;
                     else this.kept.delete(s);   // the collection now spells this letter the same way; drop it
                 }
+                // A pending chromatic counts in its own onset: the chord around it hears it.
+                for (const [m, p] of this.pending) if (this.curOnsetMidis.has(m)) this.scale[letter(p.n)] = p.n;
             }
         }
 
@@ -478,8 +493,10 @@ export class SpellingEngine {
             this.committedLof.push(best);
             if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
             if (this.frameKeepAlive) {
-                if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
-                else this.kept.delete(letter(best));
+                if (best === letterAt(letter(best), this.frameCentre)) this.kept.delete(letter(best));
+                // Timed from the onset's first note, so a spread chord does not shorten its notes.
+                else if (this.ornamentMs > 0 && t !== undefined) this.pending.set(midi, { n: best, t: this.lastT });
+                else this.kept.set(letter(best), best);
             }
             if (this.onsetRevise) this.reviseOnset(midi);
             return;
@@ -563,6 +580,17 @@ export class SpellingEngine {
 
     /** ONSET BUFFER: re-decide each earlier note of the current onset with the whole onset so far ringing. */
     private reviseOnset(just: number): void {
+        // Re-decisions do not hear a pending chromatic, struck after the note they re-decide (it may be a grace
+        // note): its slot reads as before it.
+        const live = this.scale;
+        if (this.pending.size) {
+            this.scale = [...this.scale];
+            for (const p of this.pending.values()) this.scale[letter(p.n)] = this.kept.get(letter(p.n)) ?? letterAt(letter(p.n), this.frameCentre);
+        }
+        try { this.reviseOnsetNotes(just); } finally { this.scale = live; }
+    }
+
+    private reviseOnsetNotes(just: number): void {
         for (const m of this.curOnsetMidis) {
             if (m === just || !this.active.has(m)) continue;
             const old = this.active.get(m)!;
@@ -576,7 +604,9 @@ export class SpellingEngine {
             if (i >= 0) this.committedLof[i] = best;
             if (this.frameKeepAlive) {
                 if (this.kept.get(letter(old)) === old) this.kept.delete(letter(old));
-                if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
+                const pend = this.pending.get(m);
+                if (pend) pend.n = best;
+                else if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
             }
         }
     }
@@ -752,7 +782,18 @@ export class SpellingEngine {
         return n === undefined ? null : { ...spellingOf(n), octave };
     }
 
-    noteOff(midi: number): void {
+    /** Keep a chromatic alive in its letter's slot, unless a later commit has since respelled that letter. */
+    private keep(n: number): void {
+        const last = this.lastByLetter[letter(n)];
+        if (!last || last.n === n) this.kept.set(letter(n), n);
+    }
+
+    noteOff(midi: number, t?: number): void {
+        const p = this.pending.get(midi);
+        if (p) {
+            this.pending.delete(midi);
+            if (t === undefined || t - p.t >= this.ornamentMs) this.keep(p.n);
+        }
         const c = (this.held.get(midi) ?? 1) - 1;
         if (c > 0) this.held.set(midi, c);
         else { this.held.delete(midi); this.active.delete(midi); }
@@ -778,6 +819,7 @@ export class SpellingEngine {
         this.curOnsetT.clear();
         this.curOnsetDirs.clear();
         this.curOnsetExact.clear();
+        this.pending.clear();
         this.pendingDir = 0;
         this.pendingCount = 0;
         this.committedLof = [];

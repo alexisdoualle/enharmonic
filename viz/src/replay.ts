@@ -288,7 +288,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 : isControl ? controlSpell(e.midi!, ctrlTable)
                 : engine ? engine.getSpelling(e.midi!) : null;
             if (isCore) core!.noteOff(e.midi!);
-            else if (engine) engine.noteOff(e.midi!);
+            else if (engine) engine.noteOff(e.midi!, e.t_ms);
             { const c = (soundingN.get(e.midi!) ?? 1) - 1; if (c > 0) soundingN.set(e.midi!, c); else { soundingN.delete(e.midi!); sounding.delete(e.midi!); soundingOnT.delete(e.midi!); } }
             const q = open.get(e.midi!);
             if (q && q.length) {

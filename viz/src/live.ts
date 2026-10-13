@@ -351,7 +351,7 @@ export class LiveSpeller {
     noteOff(midi: number, t = performance.now()): void {
         if (this.sink) { this.sink('off', midi, false, t); return; }
         if (!this.held.has(midi)) return;
-        this.speller.noteOff(midi);
+        this.speller.noteOff(midi, { t });
         this.held.delete(midi);
         this.syncSurface();
         this.emit();
