@@ -149,6 +149,8 @@ the library.</li>
 <b>Record &amp; export</b>.</li>
 <li><b>tempo</b>: playback speed (centre is 1&times;). <b>sync</b>: delays the playhead to match audio
 latency; raise it for Bluetooth headphones.</li>
+<li><b>zoom</b> and <b>time</b>: the piano roll's scale. Pinch on the roll (or &#8984;/Ctrl + scroll) zooms;
+&#8997;/Alt + scroll stretches or compresses time. Click a value to reset it.</li>
 <li><b>&#128266;</b>: plays each onset on a small synth. <b>&#127929; MIDI</b>: connects a MIDI keyboard
 (see <b>Play live</b>).</li>
 <li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
@@ -253,6 +255,9 @@ score. A message after import lists what was skipped or converted.</p>
 (<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
 <span class="k wrong">wrong</span>). The playhead marks the current onset.</li>
 </ul>
+<p>Zoom the roll with a pinch (or &#8984;/Ctrl + scroll); the point under the pointer stays put.
+&#8997;/Alt + scroll changes only the time scale, to fit more of the piece or spread a dense passage.
+The <b>zoom</b> and <b>time</b> buttons in the transport bar do the same; click a value to reset it.</p>
 <p>A wrong note stands out on the roll: one off-colour bar in a run. <code>&#127919;</code> adds an
 experimental, display-only read of the local and home key under the roll.</p>
 `,

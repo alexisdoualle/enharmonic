@@ -383,3 +383,4 @@ footer code, footer b { color: var(--ink); }
 .help-content .help-keys { border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
 .help-content .help-keys td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .help-content .help-keys td:first-child { white-space: nowrap; color: var(--ink); }
+#transport .ctl-val { cursor: pointer; }   /* click resets the roll scale to its default */

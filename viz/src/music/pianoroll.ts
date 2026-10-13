@@ -172,6 +172,84 @@ let builtGrid: Grid | null = null;
 let builtMobile = false;
 // Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
 const isMobile = () => window.matchMedia('(max-width: 720px)').matches;
+
+// The user's view scale: `zoom` scales both axes, `stretch` the time axis only. Kept per viewer in
+// localStorage (a convenience: the roll works without it).
+const ZOOM_MIN = 0.25, ZOOM_MAX = 4, STRETCH_MIN = 0.1, STRETCH_MAX = 10, STEP = 1.25;
+const ZOOM_DEFAULT = 0.8;   // a little zoomed out, so more of the piece fits
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const readScale = (key: string, lo: number, hi: number, dflt: number): number => {
+    try { const v = Number(localStorage.getItem(key)); return v > 0 ? clamp(v, lo, hi) : dflt; } catch { return dflt; }
+};
+let zoom = readScale('viz.rollZoom', ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT);
+let stretch = readScale('viz.rollStretch', STRETCH_MIN, STRETCH_MAX, 1);
+let pendingScale: { zoom: number; stretch: number; ax: number; ay: number } | null = null;
+
+const fmtScale = (v: number) => `${v < 1 ? v.toFixed(2).replace(/0$/, '') : v.toFixed(1).replace(/\.0$/, '')}×`;
+function showScale(): void {
+    const z = document.getElementById('roll-zoom-val'), t = document.getElementById('roll-stretch-val');
+    if (z) z.textContent = fmtScale(zoom);
+    if (t) t.textContent = fmtScale(stretch);
+}
+
+/** Set the view scale, keeping the point at (ax, ay) (px inside the roll's box) where it is. Several calls in
+ *  one frame (a pinch) rebuild once. */
+function setScale(z: number, st: number, ax?: number, ay?: number): void {
+    const host = document.getElementById('pianoroll')!;
+    pendingScale = {
+        zoom: clamp(z, ZOOM_MIN, ZOOM_MAX), stretch: clamp(st, STRETCH_MIN, STRETCH_MAX),
+        ax: ax ?? host.clientWidth / 2, ay: ay ?? host.clientHeight / 2,
+    };
+    requestAnimationFrame(applyScale);
+}
+function applyScale(): void {
+    const p = pendingScale; pendingScale = null;
+    if (!p || (p.zoom === zoom && p.stretch === stretch)) return;
+    const host = document.getElementById('pianoroll')!;
+    // The time and pitch under the anchor, before the rebuild.
+    const t = (host.scrollLeft + p.ax - PAD) / pxPerMs;
+    const row = (host.scrollTop + p.ay - PAD) / rowH;
+    zoom = p.zoom; stretch = p.stretch;
+    try { localStorage.setItem('viz.rollZoom', String(zoom)); localStorage.setItem('viz.rollStretch', String(stretch)); } catch { /* not kept */ }
+    showScale();
+    if (!builtForReplay) return;
+    build(builtForReplay, builtWithKeyLanes, builtGrid);
+    host.scrollLeft = Math.max(0, PAD + t * pxPerMs - p.ax);
+    host.scrollTop = Math.max(0, PAD + row * rowH - p.ay);
+    // Leave the view where the user put it; following resumes once the playhead is back in view.
+    follow = false; expectedScrollLeft = host.scrollLeft;
+    updatePlayhead(builtForReplay, lastStep);
+}
+
+/** Wire the zoom and stretch buttons, and the gestures on the roll: pinch (or Ctrl/Cmd + wheel) zooms,
+ *  Alt + wheel stretches time. A value's label resets it to its default. */
+export function initRollScale(): void {
+    const host = document.getElementById('pianoroll')!;
+    const on = (id: string, f: () => void) => document.getElementById(id)?.addEventListener('click', f);
+    on('roll-zoom-in', () => setScale(zoom * STEP, stretch));
+    on('roll-zoom-out', () => setScale(zoom / STEP, stretch));
+    on('roll-zoom-val', () => setScale(ZOOM_DEFAULT, stretch));
+    on('roll-stretch-in', () => setScale(zoom, stretch * STEP));
+    on('roll-stretch-out', () => setScale(zoom, stretch / STEP));
+    on('roll-stretch-val', () => setScale(zoom, 1));
+    host.addEventListener('wheel', e => {
+        const pinch = e.ctrlKey || e.metaKey;
+        if (!pinch && !e.altKey) return;
+        e.preventDefault();   // keep the browser from zooming the page
+        // Map the pointer through the box's on-screen size: the page's CSS zoom skews client px.
+        const r = host.getBoundingClientRect();
+        const ax = (e.clientX - r.left) * (host.clientWidth / r.width);
+        const ay = (e.clientY - r.top) * (host.clientHeight / r.height);
+        // A pinch sends many small deltas, a mouse wheel one large delta per notch: cap it at about ×1.28.
+        const d = Math.max(-25, Math.min(25, (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 20 : 1)));
+        const f = Math.exp(-d * 0.01);
+        const base = pendingScale ?? { zoom, stretch };
+        if (pinch) setScale(base.zoom * f, base.stretch, ax, ay);
+        else setScale(base.zoom, base.stretch * f, ax, ay);
+    }, { passive: false });
+    showScale();
+}
+
 export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null): void {
     if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid) {
         build(replay, showKeyLanes, grid); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile(); builtGrid = grid;
@@ -185,8 +263,8 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     rects = []; rendered = new Set(); prevActive = [];
     laneItems = []; laneChunks = []; laneShown = new Set();
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
-    const sc = isMobile() ? 0.6 : 1;           // zoom the whole roll out on phones (time + pitch axes together)
-    pxPerMs = (PX_PER_SEC / 1000) * sc;
+    const sc = (isMobile() ? 0.6 : 1) * zoom;  // phones start zoomed out (time + pitch axes together)
+    pxPerMs = (PX_PER_SEC / 1000) * sc * stretch;
     rowH = ROW_H * sc;
     // A time line gets a view's width of room ahead, so it can sit mid-view and never runs off the roll.
     const lineEnd = timeLineAt !== null && timeLineAt >= 0 ? PAD + timeLineAt * pxPerMs + host.clientWidth : 0;

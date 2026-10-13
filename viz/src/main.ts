@@ -7,7 +7,7 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
+import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
@@ -1353,6 +1353,7 @@ function wire() {
 
 async function boot() {
     wire();
+    initRollScale();
     setTempo(1);
     updatePlayBtn();
     const ids = await listFixtures();
