@@ -196,8 +196,8 @@ export const RT_PRESET: EngineOptions = {
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
- *  + the double-accidental leash + the vertical guard + collision repair + the onset buffer, over the
- *  diatonic frame. */
+ *  + the double-accidental leash + the vertical guard + collision repair + the onset buffer + the
+ *  diatonic-anchor leash, over the diatonic frame. */
 export const LA_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
@@ -210,6 +210,9 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true,
+    // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
+    // one end of a dim7 or the aug6's sharp is pulled across.
+    sideWeight: 1, sideRadius: 8, anchorWindow: 32,
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
