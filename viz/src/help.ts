@@ -324,7 +324,14 @@ rings (C&flat;, C, C&sharp;).</li>
 <p>The letter and the pitch class together fix the spelling. The blue band is the speller's seven-letter
 surface. A diatonic key is one unbroken turn. An altered note breaks it: on the left it jumps to another
 ring, on the right it sits one ring out on its own spoke, and the fifths it bends are coloured, pink for
-diminished and green for augmented. B to F, the diminished fifth of every major key, is always pink.</p>
+diminished and green for augmented. Every diatonic key has one diminished fifth, from the leading note up to
+the fourth degree (B to F in C major, F&sharp; to C in G major), so one pink arc is always there.
+Like notation, the spirals model x (fifths) and z (accidentals) but not y (major thirds): a major third
+is folded into the line of fifths as four fifths.</p>
+<p><b>The coiled Tonnetz.</b> The 2D coiled card puts the Tonnetz on the same spiral as the left one, 12
+fifths a turn. x runs along the spiral, 30&deg; per fifth. y, a major third, moves half a spoke on and one
+ring out, so triads are triangles between neighbouring rings. z, an accidental, is a short offset off the
+ring. Unlike the spirals, it keeps y.</p>
 `,
     },
     {

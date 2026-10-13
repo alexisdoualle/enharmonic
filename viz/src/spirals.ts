@@ -62,24 +62,39 @@ export function lofRuns(surface: readonly number[]): [number, number][] {
 /** Surface notes off the turn: outside the seven-fifth window that holds the most of them (ties go to the
  *  window nearest the surface's mean). A diatonic key has none; A harmonic minor has G♯. */
 export function offTurn(surface: readonly number[]): Set<number> {
-    if (!surface.length) return new Set();
+    const lo = turnStart(surface);
+    return new Set(surface.filter(n => n < lo || n > lo + 6));
+}
+
+/** The lowest fifth of that seven-fifth window. */
+function turnStart(surface: readonly number[]): number {
+    if (!surface.length) return 0;
     const mean = surface.reduce((a, b) => a + b, 0) / surface.length;
     let best = 0, bestCount = -1, bestDist = Infinity;
     for (let lo = Math.min(...surface) - 6; lo <= Math.max(...surface); lo++) {
         const count = surface.filter(n => n >= lo && n <= lo + 6).length, dist = Math.abs(lo + 3 - mean);
         if (count > bestCount || (count === bestCount && dist < bestDist)) [best, bestCount, bestDist] = [lo, count, dist];
     }
-    return new Set(surface.filter(n => n < best || n > best + 6));
+    return best;
 }
 
 /** Where the band breaks on the pitch spiral: each altered fifth that reaches an off-turn note stands in for
  *  one perfect fifth of the turn. A harmonic minor: the A5 C–G♯ replaces C–G, the d5 G♯–D replaces G–D.
- *  `from`/`to` are that perfect fifth's ends (to = from + 1); `k` is the replacing fifth's alteration. */
+ *  A perfect fifth with both ends off the turn stands in for the same fifth on the turn, k = 0: in
+ *  B–C♯–D–E♯–F♯–G–A♯, A♯–E♯ replaces A–E (G–E♯ is the augmented sixth).
+ *  `from`/`to` are the replaced perfect fifth's ends (to = from + 1); `k` is the replacing fifth's alteration. */
 export function bandBridges(surface: readonly number[]): FifthStep[] {
-    const off = offTurn(surface);
+    const lo = turnStart(surface), off = offTurn(surface);
+    const onTurn = (n: number) => n - 7 * Math.floor((n - lo) / 7);
     const bridges: FifthStep[] = [];
-    for (const s of alteredFifths(surface)) {
-        if (off.has(s.from) === off.has(s.to)) continue;   // the turn's own wrap (B–F), or both off
+    for (const s of fifthSteps(surface)) {
+        if (s.k === 0) {
+            if (!off.has(s.from) || !off.has(s.to)) continue;
+            const from = onTurn(s.from);
+            if (onTurn(s.to) === from + 1) bridges.push({ from, to: from + 1, k: 0 });
+            continue;
+        }
+        if (off.has(s.from) === off.has(s.to)) continue;   // the turn's own wrap (its diatonic d5), or both off
         const from = off.has(s.from) ? s.to - 1 : s.from;
         bridges.push({ from, to: from + 1, k: s.k });
     }

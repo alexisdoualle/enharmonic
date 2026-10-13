@@ -39,4 +39,7 @@ suite('spirals: dashed bridges where the band breaks', () => {
     test('E harmonic minor: A5 over G–D, d5 over D–A', () => {
         assertEq(bridges('E', 'F#', 'G', 'A', 'B', 'C', 'D#'), ['A5 1>2', 'd5 2>3']);
     });
+    test('A♯ and E♯ raised together: A5 over D–A, P5 over A–E, d5 over E–B', () => {
+        assertEq(bridges('B', 'C#', 'D', 'E#', 'F#', 'G', 'A#'), ['A5 2>3', 'P5 3>4', 'd5 4>5']);
+    });
 });
