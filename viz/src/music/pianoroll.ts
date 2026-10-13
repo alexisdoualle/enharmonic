@@ -168,6 +168,7 @@ let follow = true;
 let expectedScrollLeft = -1;
 
 let builtWithKeyLanes = false;
+let builtWithChords = true;
 let builtGrid: Grid | null = null;
 let builtMobile = false;
 // Phones get a zoomed-out roll (more time and pitch range on a small screen); wide screens use full size.
@@ -250,8 +251,9 @@ export function initRollScale(): void {
     showScale();
 }
 
-export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null): void {
-    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid) {
+export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null, showChords = true): void {
+    if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid || showChords !== builtWithChords) {
+        builtWithChords = showChords;
         build(replay, showKeyLanes, grid); builtForReplay = replay; builtWithKeyLanes = showKeyLanes; builtMobile = isMobile(); builtGrid = grid;
     }
     updatePlayhead(replay, step);
@@ -272,7 +274,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     svgWidth = width;
     const noteH = (hi - lo + 1) * rowH;
     const chordLaneTop = PAD + noteH + LANE_GAP;                         // chord lane (display-only), just above the key lane
-    const laneTop = chordLaneTop + LANE_H + CAPTION_H + LANE_GAP2;       // frame-key lane (spelling frame)
+    const laneTop = builtWithChords ? chordLaneTop + LANE_H + CAPTION_H + LANE_GAP2 : chordLaneTop;   // frame-key lane (spelling frame)
     // EXPERIMENTAL collection lanes (local + stable) render only when enabled.
     const localLaneTop = laneTop + LANE_H + CAPTION_H + LANE_GAP2;       // LOCAL collection (tonicizations)
     const stableLaneTop = localLaneTop + LANE_H + CAPTION_H + LANE_GAP2; // STABLE collection (home key)
@@ -326,7 +328,7 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const laneFront = svgEl('g', {}) as SVGGElement;
     svg.append(laneBack, lanesGroup, laneFront);
 
-    buildChordLane(replay, laneFront, width, chordLaneTop);
+    if (builtWithChords) buildChordLane(replay, laneFront, width, chordLaneTop);
     buildKeyLane(replay, laneFront, width, laneTop);
     if (showKeyLanes) {
         buildCollectionLane(replay, laneFront, width, localLaneTop, 'local');

@@ -258,6 +258,8 @@ score. A message after import lists what was skipped or converted.</p>
 <p>Zoom the roll with a pinch (or &#8984;/Ctrl + scroll); the point under the pointer stays put.
 &#8997;/Alt + scroll changes only the time scale, to fit more of the piece or spread a dense passage.
 The <b>zoom</b> and <b>time</b> buttons in the transport bar do the same; click a value to reset it.</p>
+<p>Under the roll, the <b>chord</b> lane names the chord the committed spellings make, and the <b>frame
+key</b> lane shows the speller's frame. The <b>chords</b> toggle in the toolbar hides the chord lane.</p>
 <p>A wrong note stands out on the roll: one off-colour bar in a run. <code>&#127919;</code> adds an
 experimental, display-only read of the local and home key under the roll.</p>
 `,

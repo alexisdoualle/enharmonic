@@ -60,6 +60,15 @@ function setStaffVisible(v: boolean) {
     if (v) render();   // re-fit the staff to the (now-restored) band
 }
 
+// Chord lane visibility: a toolbar toggle to hide the chord lane under the piano roll, persisted per-browser.
+const SHOW_CHORDS_KEY = 'viz.showChords';
+let chordsVisible = (() => { try { return localStorage.getItem(SHOW_CHORDS_KEY) !== '0'; } catch { return true; } })();
+function setChordsVisible(v: boolean) {
+    chordsVisible = v;
+    try { localStorage.setItem(SHOW_CHORDS_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
+    render();
+}
+
 // The three cards under the music are slots, each showing one of five views (scoring, spiral of fifths,
 // coiled Tonnetz, spirals, 3D lattice), picked from the small menu in each card's corner. A view is in at
 // most one slot: picking one already shown elsewhere swaps the two. On phones one slot shows at a time and
@@ -871,7 +880,7 @@ function render() {
     if (state.replay) {
         if (isLive()) renderLiveStaff(state.replay, state.step);
         else renderStaff(state.replay, state.step);
-        renderPianoRoll(state.replay, state.step, state.showKeyLanes, rollGrid());
+        renderPianoRoll(state.replay, state.step, state.showKeyLanes, rollGrid(), chordsVisible);
         syncTimeLine();
     }
     renderStrip();
@@ -1294,6 +1303,8 @@ function wire() {
         try { localStorage.setItem(VOLUME_KEY, volEl.value); } catch { /* storage blocked */ }
     });
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('show-chords').checked = chordsVisible;
+    $<HTMLInputElement>('show-chords').addEventListener('change', e => setChordsVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('look-ahead').addEventListener('change', e => {
         state.lookAhead = (e.target as HTMLInputElement).checked;
         recompute(); syncUrl();   // changes the speller preset, so rebuild
