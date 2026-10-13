@@ -218,7 +218,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const centre = agreedLofs.length ? agreedLofs[agreedLofs.length >> 1]! : 0;
 
     // A diminished seventh has a wolf in every spelling, so its pairs say nothing about the side. Skip a
-    // neighbour pair when both notes sit in a full dim7 of the pitch classes sounding during either note.
+    // neighbour pair when both notes sit in a full dim7 of the pitch classes sounding during either note,
+    // or in three of its four when nothing else sounds (an arpeggiated dim7 between its bass notes).
     const sounding: Set<number>[] = N.map((x, k) => {
         const s = new Set<number>([x.midi % 12]);
         for (let m = k - 1; m >= Math.max(0, k - 64); m--) if (N[m]!.tOff > x.tOn) s.add(N[m]!.midi % 12);
@@ -229,7 +230,12 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         const pa = N[a]!.midi % 12, pb = N[b]!.midi % 12;
         if (pa === pb || (pb - pa + 12) % 3 !== 0) return false;
         const has = (pc: number) => sounding[a]!.has(pc) || sounding[b]!.has(pc);
-        return has((pa + 3) % 12) && has((pa + 6) % 12) && has((pa + 9) % 12);
+        const held = [3, 6, 9].filter(d => has((pa + d) % 12)).length;
+        if (held === 3) return true;
+        if (held < 2) return false;
+        for (const q of sounding[a]!) if ((q - pa + 12) % 3 !== 0) return false;
+        for (const q of sounding[b]!) if ((q - pa + 12) % 3 !== 0) return false;
+        return true;
     };
 
     let i = Math.max(0, firstAgree);
