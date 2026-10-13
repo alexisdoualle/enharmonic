@@ -98,10 +98,10 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 
 | Mode | clean exact | clean coherent | noisy exact | noisy coherent |
 |---|--:|--:|--:|--:|
-| [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.29% | 99.47% |
-| Real-time | 99.53% | 99.58% | 99.55% | 99.58% |
-| + look-ahead | 99.67% | 99.72% | 99.61% | 99.72% |
-| + two-pass | 99.86% | 99.86% | 99.79% | 99.80% |
+| [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
+| Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
+| + look-ahead | 99.75% | 99.79% | 99.72% | 99.75% |
+| + two-pass | 99.87% | 99.87% | 99.82% | 99.84% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
@@ -123,8 +123,8 @@ The smallest form of the model is [`examples/core-speller.ts`](examples/core-spe
    F, B♯ becomes C).
 
 The first three all but solve *coherence* (intervals right, flicker-free). The fold keeps the scale on the
-conventional side of the spiral: **99.46% coherent** and **99.37% exact** on Meredith, **97.99%** coherent
-and **91.29%** exact on the harder, less-overfit curated corpus. The remaining gap between coherent and
+conventional side of the spiral: **99.46% coherent** and **99.37% exact** on Meredith, **98.16%** coherent
+and **91.34%** exact on the harder, less-overfit curated corpus. The remaining gap between coherent and
 exact is the *side* of single passages, which the fold only catches on a large drift. The shipped
 `Speller` tracks the side more closely.
 
