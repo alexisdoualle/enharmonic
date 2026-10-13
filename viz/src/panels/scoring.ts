@@ -51,7 +51,7 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
     head.className = `note-line tier-${snap.tier}`;
     head.innerHTML = `<span class="note-big">${label(snap.committed)}</span>`
         + (snap.expected ? `<span class="note-exp">expected ${label(snap.expected)}</span>` : '')
-        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex} · ${snap.durMs} ms</span>`;
+        + `<span class="note-meta">midi ${snap.midi} · onset ${snap.onIndex} · ${Math.round(snap.durMs)} ms</span>`;
     host.appendChild(head);
 
     // The speller's surface, compact: the bare diatonic frame (collection) and the resolved surface it

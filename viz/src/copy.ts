@@ -71,7 +71,7 @@ export function contextReport(s: AppState): string {
     L.push(...header(s), '');
 
     L.push('## note');
-    L.push(`committed: ${pitch(snap.committed)}   (midi ${snap.midi}, t ${snap.t} ms, dur ${snap.durMs} ms)`);
+    L.push(`committed: ${pitch(snap.committed)}   (midi ${snap.midi}, t ${Math.round(snap.t)} ms, dur ${Math.round(snap.durMs)} ms)`);
     L.push(`expected:  ${pitch(snap.expected)}${at ? `   (${at})` : ''}`);
     L.push(`tier:      ${snap.expected ? snap.tier : 'not graded'}`);
     L.push('');
