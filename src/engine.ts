@@ -173,6 +173,10 @@ export interface EngineOptions {
      *  chords arrive spread over a few tens of ms; exact-`t` grouping splits them into several onsets.
      *  Causal (no waiting). 0 = exact `t` equality (default). */
     onsetTolerance?: number;
+    /** ONSET BUFFER: when a later note of the same onset commits, re-decide the onset's earlier notes with
+     *  it ringing, so a bass struck first can follow the chord above it. Read-back sees the revised spelling;
+     *  live output waits for the onset to complete. Diatonic frame only. Default false. */
+    onsetRevise?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -187,12 +191,13 @@ export const RT_PRESET: EngineOptions = {
     // the mean drift-and-fold. verticalWeight breaks the F♯/G♭ side ties by chord consonance;
     // chromaticSharpLean handles the melodic/isolated leading tones the vertical guard cannot (no
     // co-sounding P5), leaning a chromatic to its raise. Not used in look-ahead, which resolves these by
-    // direction, so the lean would fight it.
-    frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1,
+    // direction, so the lean would fight it. onsetRevise lets a bass struck first follow the chord above it.
+    frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1, onsetRevise: true,
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
- *  + the double-accidental leash + the vertical guard + collision repair, over the spiral-CLAMP fold. */
+ *  + the double-accidental leash + the vertical guard + collision repair + the onset buffer, over the
+ *  diatonic frame. */
 export const LA_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
     fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
@@ -204,7 +209,7 @@ export const LA_PRESET: EngineOptions = {
     // harmonic context.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true,
-    frameMode: 'diatonic',
+    frameMode: 'diatonic', onsetRevise: true,
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
@@ -302,6 +307,13 @@ export class SpellingEngine {
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
     private readonly onsetTolerance: number;
+    private readonly onsetRevise: boolean;
+    /** The current onset's look-ahead direction per midi, for the onset buffer's re-decisions. */
+    private curOnsetDirs = new Map<number, number>();
+    /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
+     *  own first spelling is not exempt from the guard. */
+    private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
+    private guardMemo: ({ onset: number; n: number } | undefined)[] | null = null;
     /** 'diatonic' keep-alive: letter slot → the committed chromatic alteration it holds over the collection. */
     private kept = new Map<number, number>();
     /** The latest committed spelling, for `getResolvedScale` (the diatonic frame's slots lag it by a note). */
@@ -375,6 +387,7 @@ export class SpellingEngine {
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         this.onsetTolerance = opts.onsetTolerance ?? 0;
+        this.onsetRevise = opts.onsetRevise ?? false;
     }
 
     /**
@@ -391,6 +404,8 @@ export class SpellingEngine {
             : t !== this.lastT);
         if (newOnset) {
             this.curOnsetMidis.clear();
+            this.curOnsetDirs.clear();
+            if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
                 // Keep enough onsets for whichever consumer needs the most: the economy fold (foldWindow) or
@@ -404,6 +419,7 @@ export class SpellingEngine {
         }
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
         this.curOnsetMidis.add(midi);
+        this.curOnsetDirs.set(midi, resolveDir);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -431,6 +447,40 @@ export class SpellingEngine {
         // diatonic frame (the collection IS the frame; nothing to leash toward).
         if (this.sideWeight > 0 && this.frameMode !== 'diatonic') this.anchor = this.diatonicAnchor();
 
+        const { best, scale, cands } = this.decide(midi, resolveDir);
+        if (best === null) return;
+        this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
+        this.active.set(midi, best);
+        this.held.set(midi, (this.held.get(midi) ?? 0) + 1);
+        this.lastCommit = best;
+        this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
+        if (this.frameMode === 'diatonic') {
+            // The frame is the collection; a commit never drifts the SLOTS. But it does record the committed
+            // line-of-fifths (the 'drift' side anchor reads its recent median) and keeps a chromatic alive.
+            this.committedLof.push(best);
+            if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
+            if (this.frameKeepAlive) {
+                if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
+                else this.kept.delete(letter(best));
+            }
+            if (this.onsetRevise) this.reviseOnset(midi);
+            return;
+        }
+
+        this.scale[letter(best)] = best;
+        if (this.sideWeight > 0) {
+            this.committedLof.push(best);
+            if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
+            this.updateCollection();
+        }
+        if (this.collisionRepair) this.repairCollision(best);
+
+        if (this.fold !== 'off') this.maybeFold();
+    }
+
+    /** Score every spelling of `midi` against the current frame and the notes ringing (less `self`, the note
+     *  being re-decided), and return the best with its per-candidate trace. */
+    private decide(midi: number, resolveDir: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
         const laOn = this.lookAheadOn && resolveDir !== 0;
@@ -451,7 +501,7 @@ export class SpellingEngine {
         // VERTICAL GUARD context: the notes still ringing. The guard only fires inside a PERFECT triad:
         // a dim4/aug2 is a valid interval elsewhere. The triad's tell is a P5 (LoF distance 1); a dim7 /
         // aug6 has no P5, so they don't qualify.
-        const coSounding = this.verticalWeight > 0 ? [...this.active.values()] : [];
+        const coSounding = this.verticalWeight > 0 ? [...this.active].filter(([m]) => m !== self).map(([, v]) => v) : [];
         const inPerfectTriad = coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(p - q) === 1));
         // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
         // (higher-LoF) of its single-accidental spellings, the raised leading tone / raised degree.
@@ -470,7 +520,7 @@ export class SpellingEngine {
         let bestScore = Number.NEGATIVE_INFINITY;
         for (const n of candidates(midi)) {
             const base = intervalScore(n, this.scale);
-            const last = this.lastByLetter[letter(n)];
+            const last = (this.guardMemo ?? this.lastByLetter)[letter(n)];
             const guarded = this.recencyGuard && last && last.n !== n && this.onset - last.onset <= this.guardWindow;
             const guardDelta = guarded ? -this.recencyGuard : 0;
             const laDelta = laOn ? (letter(n) === laStep ? laWeight : letter(n) === laTarget ? -laWeight : 0) : 0;
@@ -489,33 +539,27 @@ export class SpellingEngine {
             cands.push({ c: spellingOf(n), base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
             if (s > bestScore) { bestScore = s; best = n; }
         }
-        if (best === null) return;
-        this.lastDecision = { scale, candidates: cands, chosen: spellingOf(best) };
-        this.active.set(midi, best);
-        this.held.set(midi, (this.held.get(midi) ?? 0) + 1);
-        this.lastCommit = best;
-        this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
-        if (this.frameMode === 'diatonic') {
-            // The frame is the collection; a commit never drifts the SLOTS. But it does record the committed
-            // line-of-fifths (the 'drift' side anchor reads its recent median) and keeps a chromatic alive.
-            this.committedLof.push(best);
-            if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
+        return { best, scale, cands };
+    }
+
+    /** ONSET BUFFER: re-decide each earlier note of the current onset with the whole onset so far ringing. */
+    private reviseOnset(just: number): void {
+        for (const m of this.curOnsetMidis) {
+            if (m === just || !this.active.has(m)) continue;
+            const old = this.active.get(m)!;
+            this.guardMemo = this.guardBefore;
+            const { best } = this.decide(m, this.curOnsetDirs.get(m) ?? 0, m);
+            this.guardMemo = null;
+            if (best === null || best === old) continue;
+            this.active.set(m, best);
+            this.lastByLetter[letter(best)] = { onset: this.onset, n: best };
+            const i = this.committedLof.lastIndexOf(old);
+            if (i >= 0) this.committedLof[i] = best;
             if (this.frameKeepAlive) {
+                if (this.kept.get(letter(old)) === old) this.kept.delete(letter(old));
                 if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
-                else this.kept.delete(letter(best));
             }
-            return;
         }
-
-        this.scale[letter(best)] = best;
-        if (this.sideWeight > 0) {
-            this.committedLof.push(best);
-            if (this.committedLof.length > this.anchorWindow) this.committedLof.shift();
-            this.updateCollection();
-        }
-        if (this.collisionRepair) this.repairCollision(best);
-
-        if (this.fold !== 'off') this.maybeFold();
     }
 
     /**
@@ -712,6 +756,7 @@ export class SpellingEngine {
         this.pcWindow = [];
         this.curOnsetPcs = [];
         this.curOnsetMidis.clear();
+        this.curOnsetDirs.clear();
         this.pendingDir = 0;
         this.pendingCount = 0;
         this.committedLof = [];
