@@ -316,6 +316,8 @@ export class SpellingEngine {
     private readonly onsetTolerance: number;
     private readonly onsetRevise: boolean;
     private readonly guardRaiseLine: boolean;
+    /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
+    private curOnsetT = new Map<number, number>();
     /** The current onset's look-ahead direction per midi, for the onset buffer's re-decisions. */
     private curOnsetDirs = new Map<number, number>();
     /** The current onset's exact-pitch resolution per midi, for the same. */
@@ -410,11 +412,13 @@ export class SpellingEngine {
     noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
-            // NaN lastT: new onset. A repeated pitch arriving LATER is a re-strike (a same-instant unison stays).
-            ? !(t - this.lastT <= this.onsetTolerance) || (t !== this.lastT && this.curOnsetMidis.has(midi))
+            // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison
+            // struck at the same instant stays, wherever it falls in a spread chord).
+            ? !(t - this.lastT <= this.onsetTolerance) || (this.curOnsetT.has(midi) && t !== this.curOnsetT.get(midi))
             : t !== this.lastT);
         if (newOnset) {
             this.curOnsetMidis.clear();
+            this.curOnsetT.clear();
             this.curOnsetDirs.clear();
             this.curOnsetExact.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
@@ -431,6 +435,7 @@ export class SpellingEngine {
         }
         this.curOnsetPcs.push(((midi % 12) + 12) % 12);
         this.curOnsetMidis.add(midi);
+        if (t !== undefined && !this.curOnsetT.has(midi)) this.curOnsetT.set(midi, t);
         this.curOnsetDirs.set(midi, resolveDir);
         this.curOnsetExact.set(midi, resolveExact);
 
@@ -770,6 +775,7 @@ export class SpellingEngine {
         this.pcWindow = [];
         this.curOnsetPcs = [];
         this.curOnsetMidis.clear();
+        this.curOnsetT.clear();
         this.curOnsetDirs.clear();
         this.curOnsetExact.clear();
         this.pendingDir = 0;

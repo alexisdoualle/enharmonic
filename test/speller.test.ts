@@ -112,7 +112,8 @@ suite('onset tolerance', () => {
     for (const id of FIXTURES) {
         test(`${id}: spread chords with onsetTolerance spell as exact-t chords`, () => {
             const ev = loadEvents(id);
-            const exact = drive(new Speller(), ev);
+            // Same tolerance on both sides: a fixture's own near-simultaneous notes (rolled chords) group the same way.
+            const exact = drive(new Speller({ onsetTolerance: 50 }), ev);
             const spreadOut = drive(new Speller({ onsetTolerance: 50 }), spread(ev));
             const diff = exact.findIndex((t, i) => t !== spreadOut[i]);
             assert(diff < 0, `${id}: onset ${diff}: ${exact[diff]} vs ${spreadOut[diff]}`);
