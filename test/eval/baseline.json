@@ -19,9 +19,9 @@
       "total": 535
     },
     "tp": {
-      "correct": 534,
+      "correct": 535,
       "flipped": 0,
-      "wrong": 1,
+      "wrong": 0,
       "total": 535
     }
   },
@@ -45,9 +45,9 @@
       "total": 1282
     },
     "tp": {
-      "correct": 1279,
+      "correct": 1278,
       "flipped": 0,
-      "wrong": 3,
+      "wrong": 4,
       "total": 1282
     }
   },
@@ -71,9 +71,9 @@
       "total": 604
     },
     "tp": {
-      "correct": 588,
+      "correct": 586,
       "flipped": 0,
-      "wrong": 16,
+      "wrong": 18,
       "total": 604
     }
   },

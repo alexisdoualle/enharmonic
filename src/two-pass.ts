@@ -11,8 +11,9 @@
  *     agreement trust the backward (warm) pass, after the last trust the forward;
  *   - each contiguous DISAGREEMENT run is one boundary lag → place a single change-point (forward before
  *     it, backward after) minimising local WOLF-cost (|ΔLoF| ≥ 6 intervals, a dim4/aug2 misspelling
- *     tell). A COHERENT flip makes no wolves, so every change-point ties at 0; break that tie toward the
- *     side nearer the piece's committed line-of-fifths CENTRE (an emergent statistic, never a detected key).
+ *     tell; pairs inside a diminished seventh are skipped). A COHERENT flip makes no wolves, so every
+ *     change-point ties at 0; break that tie toward the side nearer the piece's committed line-of-fifths
+ *     CENTRE (an emergent statistic, never a detected key).
  *
  * Both passes are the shipped engine at its two-pass preset (letter look-ahead plus vertical guard, over
  * the accidental-economy fold). The reconciliation is pure array logic. This is the highest-accuracy tier;
@@ -193,6 +194,21 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
     agreedLofs.sort((a, b) => a - b);
     const centre = agreedLofs.length ? agreedLofs[agreedLofs.length >> 1]! : 0;
 
+    // A diminished seventh has a wolf in every spelling, so its pairs say nothing about the side. Skip a
+    // neighbour pair when both notes sit in a full dim7 of the pitch classes sounding during either note.
+    const sounding: Set<number>[] = N.map((x, k) => {
+        const s = new Set<number>([x.midi % 12]);
+        for (let m = k - 1; m >= Math.max(0, k - 64); m--) if (N[m]!.tOff > x.tOn) s.add(N[m]!.midi % 12);
+        for (let m = k + 1; m < Math.min(n, k + 64) && N[m]!.tOn < x.tOff; m++) s.add(N[m]!.midi % 12);
+        return s;
+    });
+    const inDim7 = (a: number, b: number): boolean => {
+        const pa = N[a]!.midi % 12, pb = N[b]!.midi % 12;
+        if (pa === pb || (pb - pa + 12) % 3 !== 0) return false;
+        const has = (pc: number) => sounding[a]!.has(pc) || sounding[b]!.has(pc);
+        return has((pa + 3) % 12) && has((pa + 6) % 12) && has((pa + 9) % 12);
+    };
+
     let i = Math.max(0, firstAgree);
     while (i <= lastAgree) {
         if (agree(i)) { out[i] = fwd[i]!; i++; continue; }
@@ -205,6 +221,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions):
         const costOf = (k: number): number => {
             const pick = pickFor(k); let cost = 0;
             for (let t = Math.max(1, i); t <= Math.min(n - 1, j); t++) {
+                if (inDim7(t - 1, t)) continue;
                 const a = pick(t - 1), b = pick(t);
                 if (a !== undefined && b !== undefined && Math.abs(a - b) >= 6) cost++;
             }
