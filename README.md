@@ -22,11 +22,11 @@ s.noteOn(60, { t: 0 });
 s.noteOn(64, { t: 0 });
 s.noteOn(67, { t: 0 });
 console.log(s.getSpelling(64)); // { step: 'E', alter: 0, octave: 4 }
-s.noteOff(60); s.noteOff(64); s.noteOff(67);
+s.noteOff(60, { t: 500 }); s.noteOff(64, { t: 500 }); s.noteOff(67, { t: 500 });
 
-// Near-real-time: feed resolveDir from a small forward buffer
+// Near-real-time: feed resolveDir (and resolveExact) from a small forward buffer
 const nrt = new Speller({ lookAhead: true });
-nrt.noteOn(61, { t: 0, resolveDir: 1 }); // e.g. resolves up → prefer C♯ over D♭
+nrt.noteOn(61, { t: 0, resolveDir: 1, resolveExact: 1 }); // resolves up to 62 → prefer C♯ over D♭
 
 // Offline ceiling (whole piece in hand)
 const spelled = spellTwoPass([
@@ -58,6 +58,20 @@ s.noteOn(69, { t: 500 });                                               // next 
 ```
 
 For live input pass real timestamps; for batch replay pass an increasing `t` per onset.
+
+Within an onset, notes arrive one by one (bass first in a score). When a later note of the same onset
+arrives, the earlier ones are decided again with it sounding, so a bass can follow the chord above it.
+A note's spelling can therefore change until its onset is complete.
+
+Pass `t` to `noteOff` too. A chromatic note that ends within 80 ms of its onset (a grace note) does not
+shape how later notes are spelled; without `t` every note counts.
+
+### Look-ahead context
+
+`resolveDir` is the first semitone step from the note to an upcoming note in any octave (+1 up, −1 down,
+0 none); `resolveExact` is the same at the exact pitch, the note's own line. `resolveStep` and
+`resolveExactStep` compute each from a pair of midi numbers. The exact one lets a rising chromatic line
+(B, B♯, C♯) through the recency guard.
 
 ### Optional key hint (experimental)
 
