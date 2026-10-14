@@ -151,7 +151,8 @@ the library.</li>
 latency; raise it for Bluetooth headphones.</li>
 <li><b>zoom</b> and <b>time</b>: the piano roll's scale. Pinch on the roll (or &#8984;/Ctrl + scroll) zooms;
 &#8997;/Alt + scroll stretches or compresses time. Click a value to reset it.</li>
-<li><b>&#128266;</b>: plays each onset on a small synth. <b>&#127929; MIDI</b>: connects a MIDI keyboard
+<li><b>&#128266;</b>: plays each onset on a sampled grand piano (Salamander Grand Piano by Alexander Holm,
+CC BY 3.0). <b>&#127929; MIDI</b>: connects a MIDI keyboard
 (see <b>Play live</b>).</li>
 <li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
 agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
@@ -175,7 +176,7 @@ shortcuts still work. Space, the arrows, Home and End stay transport keys.</li>
 
 <p><b>MIDI keyboard.</b> <b>&#127929; MIDI</b> connects every MIDI input. The browser asks for permission on
 the first click; after that it connects on its own. The button turns green while a keyboard is connected.
-Notes play on the synth as loud as you play them (turn off &#128266; if your instrument has its own sound).
+Notes play on the piano as loud as you play them (turn off &#128266; if your instrument has its own sound).
 The sustain pedal works. The button is hidden if the browser has no Web MIDI.</p>
 
 <p><b>Play.</b> Just play: the fixture menu switches to <b>&#127929; free</b>, and every panel follows on the

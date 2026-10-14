@@ -1,7 +1,8 @@
 # Third-Party Licenses
 
 `enharmonic` is licensed under Apache-2.0 (see [LICENSE](LICENSE)). It incorporates
-one algorithm adapted from an MIT-licensed project, attributed below.
+one algorithm adapted from an MIT-licensed project, and the viz ships piano samples
+under CC BY 3.0, both attributed below.
 
 ## meantonal (Brian Bowman)
 
@@ -36,3 +37,14 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Salamander Grand Piano (Alexander Holm)
+
+The viz plays notes on samples from the Salamander Grand Piano V3, a Yamaha C5
+recorded by Alexander Holm (`viz/public/samples/piano/`). They are not part of the
+library package.
+
+- Source: https://archive.org/details/SalamanderGrandPianoV3
+- License: CC BY 3.0, https://creativecommons.org/licenses/by/3.0/
+- Changes: one velocity layer, one sample every minor third (A0 to C8), transcoded
+  to 128 kbps MP3. Taken from the Tone.js copy at https://tonejs.github.io/audio/salamander/.

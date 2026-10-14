@@ -1,6 +1,11 @@
 /**
- * Tiny zero-dependency Web Audio synth so a passage can be audited by ear. The voice is a warm FM
- * electric piano (Rhodes-ish): a sine CARRIER frequency-modulated by two sine operators: a 1:1 "body"
+ * Zero-dependency Web Audio playback so a passage can be audited by ear. The default voice is a sampled
+ * grand piano (Salamander Grand Piano, CC-BY 3.0, `viz/public/samples/piano/`): one sample every minor
+ * third, each note played from the nearest one at a shifted rate. The samples load and decode as the page
+ * opens (an offline context needs no gesture), and the first play waits for them; if they fail, the FM
+ * voice below plays instead.
+ *
+ * The FM voice is a warm electric piano (Rhodes-ish): a sine CARRIER frequency-modulated by two sine operators: a 1:1 "body"
  * modulator for the round, slightly-hollow EP warmth, and a fast-decaying high-ratio "tine" modulator
  * for the bell-like attack bark before it settles. The modulation index is largest at onset and decays
  * quickly, so each note barks then mellows the way a struck tine does. An attack/decay/SUSTAIN/release
@@ -14,8 +19,40 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
-export interface Voice { oscs: OscillatorNode[]; gain: GainNode; }
+export type Instrument = 'piano' | 'epiano';
+export interface Voice { sources: AudioScheduledSourceNode[]; gain: GainNode; kind: Instrument; }
 const voices = new Set<Voice>();
+
+let instrument: Instrument = 'piano';
+/** Pick the voice for notes played from now on: the sampled piano or the FM electric piano. */
+export function setInstrument(i: Instrument): void {
+    instrument = i;
+    if (i === 'piano') loadPiano();
+}
+
+// Salamander sample names, one every minor third from A0 (midi 21) to C8 (midi 108).
+const SAMPLE_NAMES = ['C', 'Ds', 'Fs', 'A'];
+const SAMPLE_MIDIS = Array.from({ length: 30 }, (_, i) => 21 + 3 * i);
+const sampleFile = (midi: number) => `samples/piano/${SAMPLE_NAMES[(midi % 12) / 3]}${Math.floor(midi / 12) - 1}.mp3`;
+const pianoBuffers = new Map<number, AudioBuffer>();
+let pianoLoad: Promise<void> | null = null;
+
+/** Fetch and decode every sample once. A failed file is skipped; its notes borrow the next nearest. The
+ *  decode runs on an offline context, so it needs no user gesture; the buffers play in the live one. */
+function loadPiano(): void {
+    if (pianoLoad || typeof OfflineAudioContext === 'undefined') return;
+    const c = new OfflineAudioContext(2, 1, 44100);   // the samples' own rate, so decoding does not resample
+    pianoLoad = Promise.all(SAMPLE_MIDIS.map(async m => {
+        try {
+            const res = await fetch(sampleFile(m));
+            if (res.ok) pianoBuffers.set(m, await c.decodeAudioData(await res.arrayBuffer()));
+        } catch { /* missing or undecodable: fall back */ }
+    })).then(() => undefined);
+}
+loadPiano();
+
+// The longest the first play waits for the samples before starting on the FM voice.
+const PIANO_WAIT_MS = 4000;
 
 /** Set the master output volume (0..1). Works before or after the AudioContext exists. */
 export function setVolume(v: number): void {
@@ -56,12 +93,16 @@ export function enable(): Promise<void> {
     return c.state === 'running' ? Promise.resolve() : c.resume();
 }
 
-/** Resolves once the audio clock is actually PRODUCING OUTPUT. resume() can resolve while the render
- *  thread is still spinning up (currentTime / getOutputTimestamp not yet advancing), which on the
- *  first play let the playhead start before any sound. Polls until the output clock moves (or a short
- *  safety cap), so callers can anchor the visual clock against a clock that has truly started. */
-export function whenPlaying(): Promise<void> {
+/** Resolves once the audio clock is actually PRODUCING OUTPUT and the piano samples are in. resume() can
+ *  resolve while the render thread is still spinning up (currentTime / getOutputTimestamp not yet
+ *  advancing), which on the first play let the playhead start before any sound. Polls until the output
+ *  clock moves (or a short safety cap), so callers can anchor the visual clock against a clock that has
+ *  truly started. The sample wait is capped too, so a slow network starts on the FM voice instead. */
+export async function whenPlaying(): Promise<void> {
     const c = ensure();
+    if (instrument === 'piano' && pianoLoad) {
+        await Promise.race([pianoLoad, new Promise(r => setTimeout(r, PIANO_WAIT_MS))]);
+    }
     const clock = () => c.getOutputTimestamp?.().contextTime || c.currentTime;
     return new Promise(resolve => {
         const started = performance.now();
@@ -101,6 +142,45 @@ const freqOf = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12);
 export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number): Voice {
     const c = ensure();
     const t0 = when != null ? Math.max(when, c.currentTime) : c.currentTime;
+    const sample = instrument === 'piano' ? nearestSample(midi) : null;
+    const voice = sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
+    voices.add(voice);
+    voice.sources[0]!.onended = () => voices.delete(voice);
+    return voice;
+}
+
+/** The loaded sample closest in pitch to `midi`, or null before any has loaded. */
+function nearestSample(midi: number): number | null {
+    let best: number | null = null;
+    for (const m of pianoBuffers.keys()) if (best == null || Math.abs(m - midi) < Math.abs(best - midi)) best = m;
+    return best;
+}
+
+// The samples peak near −8 dB; this brings a note to about the FM voice's attack level.
+const PIANO_GAIN = 2.2;
+// Each MP3 starts with ~12 ms of encoder silence; skip it so the strike lands on the scheduled time.
+const SAMPLE_LEAD = 0.012;
+// Damper fade after the key comes up (time constant of the exponential approach to silence).
+const DAMPER = 0.08;
+
+/** A piano note: the sample rings with its own decay until the key comes up, then the damper fades it. */
+function pianoVoice(c: AudioContext, midi: number, sample: number, durSec: number, gain: number, t0: number): Voice {
+    const src = c.createBufferSource();
+    src.buffer = pianoBuffers.get(sample)!;
+    src.playbackRate.value = Math.pow(2, (midi - sample) / 12);
+    const g = c.createGain();
+    const off = t0 + Math.max(0.05, durSec);
+    g.gain.setValueAtTime(gain * PIANO_GAIN, t0);
+    g.gain.setValueAtTime(gain * PIANO_GAIN, off);
+    g.gain.setTargetAtTime(0, off, DAMPER);
+    src.connect(g).connect(master!);
+    src.start(t0, SAMPLE_LEAD);
+    src.stop(off + DAMPER * 8);
+    return { sources: [src], gain: g, kind: 'piano' };
+}
+
+/** An FM electric-piano note. */
+function fmVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0: number): Voice {
     const f = freqOf(midi);
 
     // Soft lowpass that tracks the note (brighter up high) so FM sidebands don't get glassy at the top.
@@ -155,22 +235,26 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     carrier.start(t0); modBody.start(t0); modTine.start(t0);
     carrier.stop(end + 0.03); modBody.stop(end + 0.03); modTine.stop(end + 0.03);
 
-    const voice = { oscs: [carrier, modBody, modTine], gain: g };
-    voices.add(voice);
-    carrier.onended = () => voices.delete(voice);
-    return voice;
+    return { sources: [carrier, modBody, modTine], gain: g, kind: 'epiano' };
 }
 
-/** Release one voice now (a key coming up): the same click-free release tail a timed note ends on. */
+/** Release one voice now (a key coming up): the same click-free release tail a timed note ends on
+ *  (the damper fade for the piano). */
 export function releaseVoice(v: Voice): void {
     if (!ctx || !voices.has(v)) return;
-    const t = ctx.currentTime, release = 0.18;
+    const t = ctx.currentTime;
     try {
         v.gain.gain.cancelScheduledValues(t);
         v.gain.gain.setValueAtTime(v.gain.gain.value, t);
-        v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
-        v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
-        for (const o of v.oscs) o.stop(t + release + 0.03);
+        if (v.kind === 'piano') {
+            v.gain.gain.setTargetAtTime(0, t, DAMPER);
+            for (const o of v.sources) o.stop(t + DAMPER * 8);
+        } else {
+            const release = 0.18;
+            v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
+            v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
+            for (const o of v.sources) o.stop(t + release + 0.03);
+        }
     } catch { /* voice already stopped */ }
 }
 
@@ -184,7 +268,7 @@ export function allNotesOff(): void {
         try {
             v.gain.gain.cancelScheduledValues(t);
             v.gain.gain.setTargetAtTime(0.0001, t, REL / 3);
-            for (const o of v.oscs) o.stop(t + REL + 0.02);
+            for (const o of v.sources) o.stop(t + REL + 0.02);
         } catch { /* voice already stopped */ }
     }
     voices.clear();
