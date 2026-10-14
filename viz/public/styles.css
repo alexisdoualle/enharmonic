@@ -167,10 +167,11 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 .live-coord-label-bg { fill: #fff; fill-opacity: .9; pointer-events: none; }
 .live-coord-label { font-size: 4.2px; fill: #596273; pointer-events: none; }
 /* Expanded panel: a large card centred over the dimmed page (modal.ts). */
-.panel-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(8, 10, 14, 0.62); backdrop-filter: blur(2px); }
-#panels > .panel.panel-modal { position: fixed !important;   /* the help `i` sets an inline position: relative */ inset: 5% 7%; z-index: 51; min-height: 0; padding: 16px 22px 20px; border-radius: 14px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
+.panel-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(8, 10, 14, 0.35); }
+#panels > .panel.panel-modal { position: fixed !important;   /* the help `i` sets an inline position: relative */ inset: 10% 15%; z-index: 51; min-height: 0; padding: 16px 22px 20px; border-radius: 14px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
 .panel-modal .live-header, .panel-modal .live-svg-host, .panel-modal .live-scale, .panel-modal .live-toolbar { max-width: none; }
 .panel-modal .view-pick { display: none; }
+@media (max-width: 720px) { #panels > .panel.panel-modal { inset: 5% 4%; } }   /* phones keep the room */
 body.live-only { background: #fff; }
 #live-page { height: 100vh; padding: 18px; }
 .live-only .live-tonnetz { width: 100%; height: 100%; min-height: 0; }
