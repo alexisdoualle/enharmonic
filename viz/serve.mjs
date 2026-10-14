@@ -21,6 +21,7 @@ const MIME = {
     '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
     '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
     '.map': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg',
+    '.png': 'image/png', '.ico': 'image/x-icon',
 };
 
 // Fail LOUDLY on a port collision instead of crashing with a raw stack (or, worse, leaving a stale
