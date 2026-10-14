@@ -39,7 +39,7 @@ const OVERRIDE_TEXT: Record<string, string> = {
     'lookahead-coherence-gate': '↔ look-ahead coherence gate: reverted a look-ahead pick that broke the passage side',
 };
 
-export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive = false): void {
+export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive = false, frameOnly = false): void {
     clearPanel(host);
     const title = document.createElement('div');
     title.className = 'panel-title';
@@ -57,14 +57,15 @@ export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive
 
     // The speller's surface, compact: the bare diatonic frame (collection) and the resolved surface it
     // feeds (the collection plus its live alterations). A resolved cell changed from the frame is
-    // marked. Two 7-cell rows: the state that the scoring below reasons against.
+    // marked. Two 7-cell rows: the state that the scoring below reasons against. Core has no separate
+    // frame (its surface is the frame), so it shows the frame row only.
     if (snap.frame || snap.resolvedScale) {
         const frameByLetter = new Map(snap.frame?.map(p => [p.step, p]) ?? []);
         const surfByLetter = new Map(snap.resolvedScale?.map(p => [p.step, p]) ?? []);
         const surf = document.createElement('div');
         surf.className = 'surface-block';
         if (snap.frame) surf.appendChild(surfaceRow('frame', frameByLetter));
-        if (snap.resolvedScale) surf.appendChild(surfaceRow('surface', surfByLetter, frameByLetter));
+        if (snap.resolvedScale && !frameOnly) surf.appendChild(surfaceRow('surface', surfByLetter, frameByLetter));
         host.appendChild(surf);
     }
 
