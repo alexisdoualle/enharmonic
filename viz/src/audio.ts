@@ -158,8 +158,9 @@ function nearestSample(midi: number): number | null {
 
 // The samples peak near −8 dB; this brings a note to about the FM voice's attack level.
 const PIANO_GAIN = 2.2;
-// Each MP3 starts with ~12 ms of encoder silence; skip it so the strike lands on the scheduled time.
-const SAMPLE_LEAD = 0.012;
+// Fade-in over the first samples: playing from the file start is already silent, this guards any file
+// whose sound starts at once (skipping into a sample starts it mid-wave, heard as a tap).
+const FADE_IN = 0.002;
 // Damper fade after the key comes up (time constant of the exponential approach to silence).
 const DAMPER = 0.08;
 
@@ -170,11 +171,12 @@ function pianoVoice(c: AudioContext, midi: number, sample: number, durSec: numbe
     src.playbackRate.value = Math.pow(2, (midi - sample) / 12);
     const g = c.createGain();
     const off = t0 + Math.max(0.05, durSec);
-    g.gain.setValueAtTime(gain * PIANO_GAIN, t0);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain * PIANO_GAIN, t0 + FADE_IN);
     g.gain.setValueAtTime(gain * PIANO_GAIN, off);
     g.gain.setTargetAtTime(0, off, DAMPER);
     src.connect(g).connect(master!);
-    src.start(t0, SAMPLE_LEAD);
+    src.start(t0);
     src.stop(off + DAMPER * 8);
     return { sources: [src], gain: g, kind: 'piano' };
 }
