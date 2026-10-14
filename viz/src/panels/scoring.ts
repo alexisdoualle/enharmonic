@@ -11,6 +11,7 @@ import { candidateTotal, deltaColumns, otherDelta } from '../decision.js';
 import type { PitchClass } from '../../../src/index.js';
 import { rawIntervalBetween, intervalBetween, intervalLabel } from '../../../src/interval.js';
 import { label } from '../format.js';
+import { clearPanel } from './clear.js';
 
 const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
 
@@ -39,7 +40,7 @@ const OVERRIDE_TEXT: Record<string, string> = {
 };
 
 export function renderScoring(host: HTMLElement, snap: Snapshot | null, laActive = false): void {
-    host.innerHTML = '';
+    clearPanel(host);
     const title = document.createElement('div');
     title.className = 'panel-title';
     title.textContent = 'scoring: why this spelling';

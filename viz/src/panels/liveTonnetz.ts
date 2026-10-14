@@ -398,6 +398,7 @@ export function initLiveTonnetz(host: HTMLElement): LiveTonnetzController {
     zRotation.value = String(loadNumber(LIVE_Z_ROTATION_KEY, 0, -180, 180));
     zRotationDegrees = Number(zRotation.value);
     let latestState: LiveState | null = null;
+    let scaleHtml = '';
     const refreshSvg = () => { if (latestState) svgHost.innerHTML = renderSvg(latestState, coords.checked, Number(zHome.value)); };
     coords.addEventListener('change', () => { saveToggle(LIVE_COORDS_KEY, coords.checked); refreshSvg(); });
     zHome.addEventListener('input', () => { saveSlider(LIVE_COLLAPSE_Z_KEY, Number(zHome.value)); refreshSvg(); });
@@ -409,7 +410,9 @@ export function initLiveTonnetz(host: HTMLElement): LiveTonnetzController {
     (host.querySelector('.live-reset') as HTMLButtonElement).addEventListener('click', () => model.reset());
     model.subscribe(s => {
         latestState = s;
-        scale.innerHTML = scaleBadges(s.scaleSpellings);
+        // Only on change: replacing the badges under a press would drop the click.
+        const badges = scaleBadges(s.scaleSpellings);
+        if (badges !== scaleHtml) scale.innerHTML = scaleHtml = badges;
         svgHost.innerHTML = renderSvg(s, coords.checked, Number(zHome.value));
         status.textContent = s.midiStatus;
         last.textContent = s.lastSpelling ? `last: ${s.lastSpelling.step}${glyph(s.lastSpelling.alter)} · pc ${pcOf(s.lastMidi!)}` : 'strike a note';

@@ -15,6 +15,7 @@
  */
 import type { Snapshot } from '../replay.js';
 import { fifths, controlWindowLo } from '../replay.js';
+import { clearPanel } from './clear.js';
 import {
     SPIRAL_RANGE_DEFAULT, SPIRAL_CENTER_DEFAULT, SPIRAL_EVEN_DEFAULT, SPIRAL_RANGE_MIN, SPIRAL_RANGE_MAX,
     SPIRAL_CENTER_MIN, SPIRAL_CENTER_MAX,
@@ -57,12 +58,24 @@ function svgEl(name: string, attrs: Record<string, string | number>, text?: stri
 }
 
 export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: WheelOpts): void {
-    host.innerHTML = '';
-    const title = document.createElement('div');
-    title.className = 'panel-title';
-    title.textContent = 'spiral of fifths';
-    host.appendChild(title);
-    host.appendChild(renderControls(opts));
+    // The title and steppers survive a re-render; the steppers are rebuilt only when their values change,
+    // so a click that lands while a note is drawn still reaches its button.
+    let title = host.querySelector<HTMLElement>(':scope > .panel-title');
+    let ctl = host.querySelector<HTMLElement>(':scope > .spiral-ctl');
+    const key = controlsKey(opts);
+    if (ctl?.dataset.key !== key) ctl = null;
+    clearPanel(host, title, ctl);
+    if (!title) {
+        title = document.createElement('div');
+        title.className = 'panel-title';
+        title.textContent = 'spiral of fifths';
+        host.prepend(title);
+    }
+    if (!ctl) {
+        ctl = renderControls(opts);
+        ctl.dataset.key = key;
+        title.after(ctl);
+    }
 
     const DEPTH = opts.range;    // effective spiralRange the replay ran with (floor 6)
     const CENTER = opts.center;  // effective spiralCenter (+1 = mild sharp nudge)
@@ -167,6 +180,11 @@ export function renderWheel(host: HTMLElement, snap: Snapshot | null, opts: Whee
             host.appendChild(ck);
         }
     }
+}
+
+/** The control values the steppers show; the callbacks are stable across renders. */
+function controlsKey(o: WheelOpts): string {
+    return [o.range, o.center, o.even, o.streaming, o.control, o.meanFrame].join(',');
 }
 
 /** Which stepper button was last pressed, so focus survives the panel rebuild each change triggers
