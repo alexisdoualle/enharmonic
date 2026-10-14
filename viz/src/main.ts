@@ -60,9 +60,9 @@ function setStaffVisible(v: boolean) {
     if (v) render();   // re-fit the staff to the (now-restored) band
 }
 
-// Chord lane visibility: a toolbar toggle to hide the chord lane under the piano roll, persisted per-browser.
+// Chord lane visibility: a toolbar toggle for the chord lane under the piano roll, off by default, persisted per-browser.
 const SHOW_CHORDS_KEY = 'viz.showChords';
-let chordsVisible = (() => { try { return localStorage.getItem(SHOW_CHORDS_KEY) !== '0'; } catch { return true; } })();
+let chordsVisible = (() => { try { return localStorage.getItem(SHOW_CHORDS_KEY) === '1'; } catch { return false; } })();
 function setChordsVisible(v: boolean) {
     chordsVisible = v;
     try { localStorage.setItem(SHOW_CHORDS_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
