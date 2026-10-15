@@ -179,10 +179,14 @@ export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitc
     return { step: sp.step, alter: sp.alter, octave: Math.floor(midi / 12) - 1 };
 }
 
+/** How many upcoming notes the look-ahead reads to find a note's resolution: the forward buffer a
+ *  near-real-time caller holds. */
+export const LA_HORIZON = 16;
+
 /** Onsets in event order, each with a resolution direction for look-ahead (next onset a semitone away
  *  in any octave, within `horizon` upcoming onsets; with `exact`, at the exact pitch): the forward buffer a
  *  near-real-time caller feeds. */
-function onsetDirs(events: RawEvent[], horizon = 16, exact = false): Map<number, number> {
+function onsetDirs(events: RawEvent[], horizon = LA_HORIZON, exact = false): Map<number, number> {
     const step = exact ? resolveExactStep : resolveStep;
     const dir = new Map<number, number>();
     const ons = events.map((e, i) => ({ e, i })).filter(x => x.e.type === 'on');
@@ -260,7 +264,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         })
         : null;
     const dirs = onsetDirs(events);
-    const exactDirs = onsetDirs(events, 16, true);
+    const exactDirs = onsetDirs(events, LA_HORIZON, true);
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0

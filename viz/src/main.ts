@@ -7,7 +7,7 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime } from './music/pianoroll.js';
+import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
@@ -67,6 +67,15 @@ function setChordsVisible(v: boolean) {
     chordsVisible = v;
     try { localStorage.setItem(SHOW_CHORDS_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
     render();
+}
+
+// Heard colouring on the piano roll (unheard notes grey, the look-ahead buffer light blue): on by default.
+const SHOW_HEARD_KEY = 'viz.showHeard';
+let heardVisible = (() => { try { return localStorage.getItem(SHOW_HEARD_KEY) !== '0'; } catch { return true; } })();
+function setHeardVisible(v: boolean) {
+    heardVisible = v;
+    try { localStorage.setItem(SHOW_HEARD_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
+    setShowHeard(v);
 }
 
 // The three cards under the music are slots, each showing one of five views (scoring, spiral of fifths,
@@ -1021,7 +1030,10 @@ function stopPlay(silence = true, keepPlayhead = false) {
     if (silence && soundOn) allNotesOff();
     updatePlayBtn();
 }
-function updatePlayBtn() { $('play').textContent = (raf || pending) ? '⏸' : '▶'; }
+function updatePlayBtn() {
+    $('play').textContent = (raf || pending) ? '⏸' : '▶';
+    setRollPlaying(!!(raf || pending));
+}
 
 function play() {
     if (!state.replay || !state.replay.notes.length) return;
@@ -1051,8 +1063,8 @@ function startClocks() {
     } else {
         t0Perf = performance.now();
     }
-    updatePlayBtn();
     frame();
+    updatePlayBtn();   // after frame() has set raf: before it, pending and raf are both off and it reads as stopped
 }
 
 function frame() {
@@ -1305,6 +1317,9 @@ function wire() {
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('show-chords').checked = chordsVisible;
     $<HTMLInputElement>('show-chords').addEventListener('change', e => setChordsVisible((e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('show-heard').checked = heardVisible;
+    setShowHeard(heardVisible);
+    $<HTMLInputElement>('show-heard').addEventListener('change', e => setHeardVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('look-ahead').addEventListener('change', e => {
         state.lookAhead = (e.target as HTMLInputElement).checked;
         recompute(); syncUrl();   // changes the speller preset, so rebuild

@@ -254,7 +254,10 @@ score. A message after import lists what was skipped or converted.</p>
 <li><b>Staff</b>: the passage on a grand staff, as the engine spelled it.</li>
 <li><b>Piano roll</b>: each note as a bar, pitch going up and time going across, coloured by tier
 (<span class="k correct">correct</span> / <span class="k flipped">flipped</span> /
-<span class="k wrong">wrong</span>). The playhead marks the current onset.</li>
+<span class="k wrong">wrong</span>). The playhead marks the current onset. While playing, notes past it are
+grey: the speller has not heard them yet. With look-ahead, the next 16 notes are light blue, the buffer it reads
+before it spells the current note. Two-pass reads the whole piece, so nothing is grey. The <b>heard</b>
+toggle in the toolbar turns this off.</li>
 </ul>
 <p>Zoom the roll with a pinch (or &#8984;/Ctrl + scroll); the point under the pointer stays put.
 &#8997;/Alt + scroll changes only the time scale, to fit more of the piece or spread a dense passage.

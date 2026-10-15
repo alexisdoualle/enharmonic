@@ -13,7 +13,7 @@
  * music21 / portal / frame-override badges): this viz has exactly one engine (the shipped spiral)
  * so there is exactly one key lane.
  */
-import type { Replay, ReplayNote, Tier } from '../replay.js';
+import { LA_HORIZON, type Replay, type ReplayNote, type Tier } from '../replay.js';
 import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
@@ -45,6 +45,9 @@ function keyLabel(lof: number): string {
 const colorForFifth = (fifth: number, light = 40) => `hsl(${(((fifth % 12) + 12) % 12) * 30}, 42%, ${light}%)`;
 
 const TIER_COLOR: Record<Tier, string> = { correct: '#57caa0', flipped: '#d8b35a', wrong: '#e06c75', unread: '#9aa3b2' };
+// Notes past the playhead: the look-ahead's buffer (read, not yet committed) and notes not heard yet.
+const BUFFER_FILL = '#8cc4f0';
+const UNHEARD_FILL = '#454c59';
 
 interface Layout {
     x: number; w: number; y: number;
@@ -145,6 +148,11 @@ let pxPerMs = PX_PER_SEC / 1000;
 let svgWidth = 0;
 let rowH = ROW_H;                             // per-semitone height; scaled down on phones (see build)
 let prevActive: number[] = [];
+let lastHeard = Infinity;    // notes up to this onIndex are committed; through lastRead the speller has read them
+let lastRead = Infinity;
+let shownFill: string[] = [];   // the fill each materialized rect has, so a step only rewrites the changed ones
+let showHeard = true;
+let playing = false;   // the heard colouring shows only during playback; paused, the whole piece reads
 let scrollBound = false;
 // The lanes are drawn lazily too: each lane segment is filed under every CHUNK_PX-wide chunk of the roll it
 // touches, and a chunk (clipped to its own width, so a long segment is not drawn twice) is only built and
@@ -262,7 +270,7 @@ export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = fal
 function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
-    rects = []; rendered = new Set(); prevActive = [];
+    rects = []; rendered = new Set(); prevActive = []; shownFill = [];
     laneItems = []; laneChunks = []; laneShown = new Set();
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
     const sc = (isMobile() ? 0.6 : 1) * zoom;  // phones start zoomed out (time + pitch axes together)
@@ -403,7 +411,8 @@ function makeRect(oi: number): void {
     rect.setAttribute('x', String(L.x)); rect.setAttribute('y', String(L.y));
     rect.setAttribute('width', String(L.w)); rect.setAttribute('height', String(rowH - 1));
     rect.setAttribute('rx', '1.5');
-    rect.setAttribute('fill', L.fill);
+    shownFill[oi] = fillFor(oi);
+    rect.setAttribute('fill', shownFill[oi]!);
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
     title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);
@@ -411,6 +420,37 @@ function makeRect(oi: number): void {
     rect.addEventListener('click', e => { e.stopPropagation(); onSeek(L.onIndex); });
     notesGroup!.appendChild(rect);
     rects[oi] = rect;
+}
+
+/** A note's fill: its own colour once committed, the buffer blue while the look-ahead has read it, grey
+ *  before the speller has heard it. */
+function fillFor(oi: number): string {
+    return oi <= lastHeard ? layouts[oi]!.fill : oi <= lastRead ? BUFFER_FILL : UNHEARD_FILL;
+}
+
+/** How far the speller has heard at `step`: real-time commits as it hears, look-ahead reads LA_HORIZON
+ *  notes ahead, two-pass knows the whole piece. Recolours the materialized notes that changed. */
+function applyHeard(replay: Replay, step: number): void {
+    const all = !showHeard || !playing || replay.mode === 'tp';
+    lastHeard = all ? Infinity : step;
+    lastRead = all ? Infinity : replay.mode === 'la' ? step + LA_HORIZON : step;
+    for (const oi of rendered) {
+        const f = fillFor(oi);
+        if (f !== shownFill[oi]) { rects[oi]?.setAttribute('fill', f); shownFill[oi] = f; }
+    }
+}
+
+/** Turn the heard / buffer / unheard colouring on or off (off: every note in its own colour). */
+export function setShowHeard(v: boolean): void {
+    showHeard = v;
+    if (builtForReplay) applyHeard(builtForReplay, lastStep);
+}
+
+/** Playback started or stopped: the heard colouring follows it. */
+export function setRollPlaying(v: boolean): void {
+    if (v === playing) return;
+    playing = v;
+    if (builtForReplay) applyHeard(builtForReplay, lastStep);
 }
 
 // Materialize exactly the notes in the visible range; drop the rest from the DOM.
@@ -635,6 +675,7 @@ function updatePlayhead(replay: Replay, step: number): void {
         host.scrollLeft = Math.max(0, x - host.clientWidth * 0.4);
         expectedScrollLeft = host.scrollLeft;   // record what WE set, so the scroll listener knows it wasn't the user
     }
+    applyHeard(replay, step);
     renderVisible();
     applyActiveStrokes(replay, step);
 }
