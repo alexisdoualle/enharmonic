@@ -9,7 +9,7 @@ export const VIEW_PANEL: Record<View, string> = {
     scoring: 'scoring', wheel: 'wheel', coiled: 'live-tonnetz', spirals: 'spirals', lattice: 'tonnetz',
 };
 export const VIEW_LABEL: Record<View, string> = {
-    scoring: 'scoring', wheel: 'spiral of fifths', coiled: '2D coiled', spirals: 'cipher/key spirals', lattice: '3D lattice',
+    scoring: 'scoring', wheel: 'spiral of fifths', coiled: '2D coiled', spirals: '12 / 7 spirals', lattice: '3D lattice',
 };
 export const DEFAULT_SLOTS: Slots = ['scoring', 'wheel', 'lattice'];
 

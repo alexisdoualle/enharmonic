@@ -322,7 +322,7 @@ read separately, so it no longer lines up with the frame. Try it on Op. 28 No. 1
 `,
     },
     {
-        id: 'spirals', nav: 'Cipher/key spirals', title: 'Pitch class and letter',
+        id: 'spirals', nav: '12 / 7 spirals', title: 'Pitch class and letter',
         body: `
 <p>The 35 spellings (F&#x1D12B; to B&#x1D12A;) are one line of fifths, wound two ways.</p>
 <ul>
