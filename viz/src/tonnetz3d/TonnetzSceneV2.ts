@@ -204,6 +204,30 @@ class LabelAtlas {
 
 // ── TonnetzSceneV2 ────────────────────────────────────────────────
 
+/** Thinnest the squash gets: a zero z scale breaks the normal matrix of the lit node beads. */
+export const FLATTEN_MIN = 0.03;
+
+/** What TonnetzSceneV2.foldLookSource returns (see there). Triangle and edge handles point into the
+ *  lattice's live buffers. */
+export interface FoldLookTri { mesh: THREE.Mesh; tri: number; order: number[] }
+export interface FoldLookEdge { wire: THREE.LineSegments; seg: number; flip: boolean }
+export interface FoldLookSource {
+    node(col: number, row: number): number;
+    nodeWorld(i: number, out: THREE.Vector3): THREE.Vector3;
+    readNode(i: number, color: THREE.Color): { scale: number; glow: number };
+    nodeMaterial(): THREE.Material | null;
+    sphereGeo: THREE.BufferGeometry;
+    label(i: number): { uvs: number[]; offsets: number[]; opacity: number; lift: number; material: THREE.ShaderMaterial } | null;
+    triangle(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): FoldLookTri | null;
+    readTri(h: FoldLookTri, k: number, color: THREE.Color): THREE.Color;
+    triUv(h: FoldLookTri, k: number): [number, number];
+    edge(a: THREE.Vector3, b: THREE.Vector3): FoldLookEdge | null;
+    readEdge(h: FoldLookEdge, k: number, color: THREE.Color): THREE.Color;
+    ambient: THREE.AmbientLight;
+    directional: THREE.DirectionalLight;
+    squash(): number;
+}
+
 export class TonnetzSceneV2 {
     private renderer: THREE.WebGLRenderer;
     private scene: THREE.Scene;
@@ -238,6 +262,8 @@ export class TonnetzSceneV2 {
     private nodeOpacityAttr: THREE.InstancedBufferAttribute | null = null;
     // Per-instance glow (0..1): held nodes self-illuminate past scene lighting + get a fresnel rim
     private nodeGlowAttr: THREE.InstancedBufferAttribute | null = null;
+    private labelMesh: THREE.Mesh | null = null;          // batched node labels (see buildLabelMesh)
+    private nodeLabel = new Map<number, number>();        // node instance -> its quad in labelMesh
     private nodeData: { pc: PitchClass; layer: number; isScaleNote: boolean; isEnharmonicNote: boolean; x: number; y: number; z: number; midiPC: number; nodeKey: string }[] = [];
     private nodeIndexMap = new Map<string, number>(); // "gridRow:layer:gridCol" → instanced mesh index
     private sphereGeo: THREE.SphereGeometry;
@@ -401,9 +427,9 @@ export class TonnetzSceneV2 {
         this.camera.position.set(-3, -5, 9);
 
         // Lights
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambient = this.ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambient);
-        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        const dir = this.dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dir.position.set(5, 10, 7);
         this.scene.add(dir);
 
@@ -429,6 +455,8 @@ export class TonnetzSceneV2 {
     }
 
     private _resizeObserver: ResizeObserver;
+    private ambientLight!: THREE.AmbientLight;
+    private dirLight!: THREE.DirectionalLight;
 
     // ── Public API ─────────────────────────────────────────────────
 
@@ -923,6 +951,105 @@ export class TonnetzSceneV2 {
         this.render();
     }
 
+    /** What the torus fold needs to start on this exact picture: grid anchor, cell layout and camera. */
+    getFoldView(): { startFifths: number; cellWorld: (col: number, row: number) => { x: number; y: number }; position: THREE.Vector3; target: THREE.Vector3; up: THREE.Vector3; fov: number } {
+        // Cell -> world xy exactly as rebuild() lays the nodes out, mirrors included.
+        const flipX = !(this.config.getFifthsForward?.() ?? true), gridMaxX = this.gridMaxX;
+        const flipY = !(this.config.getYInverted?.() ?? false), gridMaxY = this.config.rows() * Y_SPACING;
+        return {
+            startFifths: this.currentStartFifths,
+            cellWorld: (col, row) => {
+                const x = col * X_SPACING + row * X_SPACING / 2, y = row * Y_SPACING;
+                return { x: flipX ? gridMaxX - x : x, y: flipY ? gridMaxY - y : y };
+            },
+            position: this.camera.position.clone(),
+            target: this.controls.target.clone(),
+            up: this.camera.up.clone(),
+            fov: this.camera.fov,
+        };
+    }
+
+    /** Read-only access to what the lattice draws, so the torus fold can start from the identical
+     *  picture: the scale node at a cell, the triangle and wire between scale nodes, and their live
+     *  colours, sizes and labels. Look-ups are by world position, so they survive rebuilds. */
+    foldLookSource(): FoldLookSource {
+        const eps = 1e-3;
+        const at = (arr: ArrayLike<number>, i: number, p: THREE.Vector3): boolean =>
+            Math.abs(arr[i * 3]! - p.x) < eps && Math.abs(arr[i * 3 + 1]! - p.y) < eps && Math.abs(arr[i * 3 + 2]! - p.z) < eps;
+        const m4 = new THREE.Matrix4(), sc = new THREE.Vector3();
+        return {
+            node: (col, row) => {
+                for (const [key, i] of this.nodeIndexMap) {
+                    const [r, , c] = key.split(':').map(Number);
+                    if (r === row && c === col && this.nodeData[i]?.isScaleNote) return i;
+                }
+                return -1;
+            },
+            nodeWorld: (i, out) => { const d = this.nodeData[i]!; return out.set(d.x, d.y, d.z); },
+            readNode: (i, color) => {
+                const inst = this.nodeInstanced;
+                if (!inst || i >= inst.count) return { scale: 0, glow: 0 };
+                inst.getColorAt(i, color);
+                inst.getMatrixAt(i, m4);
+                sc.setFromMatrixScale(m4);
+                return { scale: sc.x, glow: this.nodeGlowAttr ? this.nodeGlowAttr.getX(i) : 0 };
+            },
+            nodeMaterial: () => this._nodeMaterial,
+            sphereGeo: this.sphereGeo,
+            label: (i) => {
+                const q = this.nodeLabel.get(i);
+                const mesh = this.labelMesh;
+                if (q === undefined || !mesh) return null;
+                const g = mesh.geometry;
+                const uv = g.getAttribute('uv'), off = g.getAttribute('labelOffset'), op = g.getAttribute('labelOpacity');
+                const uvs: number[] = [], offsets: number[] = [];
+                for (let v = 0; v < 4; v++) {
+                    uvs.push(uv.getX(q * 4 + v), uv.getY(q * 4 + v));
+                    offsets.push(off.getX(q * 4 + v), off.getY(q * 4 + v));
+                }
+                return { uvs, offsets, opacity: op.getX(q * 4), lift: 0.35, material: mesh.material as THREE.ShaderMaterial };
+            },
+            triangle: (a, b, c) => {
+                for (const mesh of [this.triMesh, this.triMeshTiltedPerfect, this.triMeshTiltedNonPerfect]) {
+                    if (!mesh) continue;
+                    const pos = mesh.geometry.getAttribute('position').array;
+                    for (let t = 0; t < pos.length / 9; t++) {
+                        const order = [a, b, c].map(p => [0, 1, 2].find(k => at(pos, t * 3 + k, p)) ?? -1);
+                        if (order.every(k => k >= 0)) return { mesh, tri: t, order };
+                    }
+                }
+                return null;
+            },
+            readTri: (h, k, color) => {
+                const col = h.mesh.geometry.getAttribute('color');
+                return color.fromBufferAttribute(col as THREE.BufferAttribute, h.tri * 3 + h.order[k]!);
+            },
+            triUv: (h, k) => {
+                const uv = h.mesh.geometry.getAttribute('uv');
+                const i = h.tri * 3 + h.order[k]!;
+                return [uv.getX(i), uv.getY(i)];
+            },
+            edge: (a, b) => {
+                for (const wire of this.intervalWires.values()) {
+                    if (!wire.visible) continue;
+                    const pos = wire.geometry.getAttribute('position').array;
+                    for (let sgm = 0; sgm < pos.length / 6; sgm++) {
+                        if (at(pos, sgm * 2, a) && at(pos, sgm * 2 + 1, b)) return { wire, seg: sgm, flip: false };
+                        if (at(pos, sgm * 2, b) && at(pos, sgm * 2 + 1, a)) return { wire, seg: sgm, flip: true };
+                    }
+                }
+                return null;
+            },
+            readEdge: (h, k, color) => {
+                const col = h.wire.geometry.getAttribute('color');
+                return color.fromBufferAttribute(col as THREE.BufferAttribute, h.seg * 2 + (h.flip ? 1 - k : k));
+            },
+            ambient: this.ambientLight,
+            directional: this.dirLight,
+            squash: () => Math.max(this.flatK, FLATTEN_MIN),
+        };
+    }
+
     setNoteDisplayMode(mode: NoteDisplayMode): void {
         if (mode === this.displayMode) return;
         this.displayMode = mode;
@@ -1243,7 +1370,37 @@ export class TonnetzSceneV2 {
 
     private render(): void {
         if (!this.visible) return;
+        if (this.flatK !== 1 || this.flatDirty) this.applyFlatten();
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // ── Squash (the first step of the torus fold) ──────────────────
+
+    private flatK = 1;
+    private flatDirty = false;
+    private readonly flatOrig = new WeakMap<THREE.Object3D, { z: number; sz: number }>();
+
+    /** Squash the accidental axis: k = 1 is the full lattice, k = 0 flattens every layer onto z = 0.
+     *  Re-applied on each render, so a rebuild mid-squash stays squashed. Spheres flatten into dots;
+     *  sprites keep their size. */
+    setFlatten(k: number): void {
+        this.flatDirty = this.flatDirty || k !== this.flatK;
+        this.flatK = k;
+        this.render();
+    }
+
+    private applyFlatten(): void {
+        const k = this.flatK, ks = Math.max(k, FLATTEN_MIN);
+        const groups = [this.nodeGroup, this.triangleGroup, this.pathGroup, this.labelGroup, this.arrowGroup, this.axisGroup];
+        for (const g of groups) {
+            for (const o of g.children) {
+                let orig = this.flatOrig.get(o);
+                if (!orig) { orig = { z: o.position.z, sz: o.scale.z }; this.flatOrig.set(o, orig); }
+                o.position.z = orig.z * k;
+                if (!(o instanceof THREE.Sprite)) o.scale.z = orig.sz * (k === 1 ? 1 : ks);
+            }
+        }
+        this.flatDirty = false;
     }
 
     /** Schedule a render for the next animation frame (coalesces multiple calls). */
@@ -1502,6 +1659,8 @@ export class TonnetzSceneV2 {
         const color = new THREE.Color();
         this.nodeData = [];
         this.nodeIndexMap.clear();
+        this.nodeLabel.clear();
+        this.labelMesh = null;
         const labelEntries: { x: number; y: number; z: number; entry: AtlasEntry; opacity: number }[] = [];
 
         for (let i = 0; i < count; i++) {
@@ -1562,6 +1721,7 @@ export class TonnetzSceneV2 {
                         : ((node.isEnharmonicNote || isArrowTarget) ? 0.45 : 0.25);
                 const atlasEntry = this.labelAtlas.getEntry(label);
                 if (atlasEntry) {
+                    this.nodeLabel.set(i, labelEntries.length);
                     labelEntries.push({ x: node.x, y: node.y, z: node.z + 0.35, entry: atlasEntry, opacity });
                 } else {
                     const sprite = this.createLabel(label, opacity);
@@ -1665,6 +1825,7 @@ export class TonnetzSceneV2 {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.frustumCulled = false;
         this.labelGroup.add(mesh);
+        this.labelMesh = mesh;
     }
 
     private updateNodeActivations(): void {

@@ -123,6 +123,31 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 #tonnetz { display: flex; flex-direction: column; min-height: 0; }
 .tonnetz-canvas { position: relative; flex: 1 1 0; min-height: 0; border-radius: 8px; overflow: hidden; background: #1a1a2e; }
 .tonnetz-canvas canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
+/* torus view: its own canvas over the lattice's, plus the lattice / torus toggle */
+.torus-host { position: absolute; inset: 0; }
+.tonnetz-mode { position: absolute; top: 8px; right: 8px; z-index: 2; padding: 3px 10px; font: inherit; font-size: 11px;
+  color: #dbe9ff; background: rgba(12, 12, 20, .7); border: 1px solid #3a3f5c; border-radius: 5px; cursor: pointer; }
+.tonnetz-mode:hover { background: rgba(40, 44, 70, .85); }
+.torus-controls { position: absolute; left: 10px; bottom: 8px; z-index: 2; display: flex; flex-direction: column; gap: 4px;
+  max-width: calc(100% - 20px); font-size: 10px; letter-spacing: .3px; color: #9aa3c4;
+  opacity: .35; transition: opacity .25s ease; }
+/* quiet until the pointer is over the view */
+.torus-host:hover .torus-controls, .torus-controls:focus-within { opacity: .9; }
+/* hidden while the lattice folds or unfolds; fades in once the torus is closed */
+.torus-controls.waiting { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: none; }
+.torus-controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; }
+.torus-controls label { display: flex; align-items: center; gap: 6px; }
+.torus-controls button { padding: 1px 0; font: inherit; letter-spacing: inherit; color: #6b7394; background: none; border: 0; cursor: pointer; transition: color .15s; }
+.torus-controls button:hover { color: #b9c2e2; }
+.torus-controls button.active { color: #dbe4ff; }
+.torus-controls button[hidden] { display: none; }
+.torus-controls input[type=range] { -webkit-appearance: none; appearance: none; width: 64px; height: 12px; margin: 0; background: none; cursor: pointer; }
+.torus-controls input[type=range]::-webkit-slider-runnable-track { height: 2px; border-radius: 1px; background: rgba(154, 163, 196, .3); }
+.torus-controls input[type=range]::-moz-range-track { height: 2px; border-radius: 1px; background: rgba(154, 163, 196, .3); }
+.torus-controls input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 8px; margin-top: -3px; border-radius: 50%; background: #c8d2f2; border: 0; }
+.torus-controls input[type=range]::-moz-range-thumb { width: 8px; height: 8px; border-radius: 50%; background: #c8d2f2; border: 0; }
+.torus-controls button { padding: 2px 8px; font: inherit; color: #8d93ad; background: transparent; border: 1px solid #3a3f5c; border-radius: 4px; cursor: pointer; }
+.torus-controls button.active { color: #dbe9ff; background: rgba(143, 176, 255, .18); border-color: #8fb0ff; }
 
 /* live coiled Tonnetz: MIDI pc spokes plus persistent speller-selected spellings */
 .live-tonnetz { display: flex; flex-direction: column; min-height: 0; background: #fff; color: #222; border-color: #d6d6d6; }
