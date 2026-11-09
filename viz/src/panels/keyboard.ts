@@ -1,16 +1,16 @@
 /**
- * Piano keyboard strip: the notes sounding at the current onset, each key lit and labelled with OUR
- * spelling (D♭ vs C♯ is the whole point), big enough to read from across a room. Ported in idea and look
- * from the older tonnetz app's keyboard (`PianoKeyboardController.ts`, `_piano.css`), rebuilt on this
- * viz's replay data. Display only: it reads the replay and never feeds anything back, except that a
- * clicked key is handed to `onKey` (main.ts plays it when sound is on).
+ * Piano keyboard strip: the notes sounding at the current onset, lit on a compact full-range keyboard
+ * (A0..C8, fixed, so keys never jump between pieces). Look taken from the tonnetz app's read-only
+ * keyboard (`PianoKeyboardController.ts`, `_piano.css`): dark rounded case, small gradient keys, lit keys
+ * glow. No labels on the keys: the spelling is in the tooltip and the screen-reader line, and the roll /
+ * lattice carry it on screen. Display only, except that a clicked key is handed to `onKey` (main.ts
+ * plays it when sound is on).
  *
- * - A lit key is filled with its note's tier colour, the same palette as the piano roll; a wrong note
- *   also carries a ✗ so the tier is not told by colour alone.
+ * - A lit key is filled with its note's tier colour, the same palette as the piano roll.
  * - Struck-now notes are solid; notes still held from an earlier onset are paler; the current step's
  *   own note gets a ring.
  * - LOCAL compare (viz/src/compare.ts): where the other speller spelled a sounding note differently,
- *   its spelling hangs under ours in the compare cyan (✗ when theirs is wrong), as on the roll.
+ *   the key gets a compare-cyan underline bar (tooltip names both spellings).
  * - The enharmonic guide (optional row under the keys): every candidate spelling of each sounding key,
  *   sharps on top, with ours filled and theirs outlined.
  */
@@ -23,8 +23,7 @@ import { label, LETTER_COLOR } from '../format.js';
 
 const WHITE_PCS = new Set([0, 2, 4, 5, 7, 9, 11]);
 const isWhite = (midi: number) => WHITE_PCS.has(((midi % 12) + 12) % 12);
-const MIN_KEYS = 36;          // never fewer than three octaves, so a one-line melody still reads as a keyboard
-const FULL_LO = 21, FULL_HI = 108;   // A0..C8
+const FULL_LO = 21, FULL_HI = 108;   // A0..C8, the whole piano
 
 /** One lit key: the note that decides its label (the current step's note, else the latest struck). */
 interface Lit { note: ReplayNote; struck: boolean; current: boolean }
@@ -51,7 +50,7 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
     let litMidis: number[] = [];
     let last: { replay: Replay | null; step: number; cmp: Comparison | null } = { replay: null, step: 0, cmp: null };
 
-    /** White-key width in px, for the CSS font sizes (labels scale with the keys, poster-readable). */
+    /** White-key width in px, for the guide row's font size. */
     const fit = () => {
         const nWhite = [...keyEls.keys()].filter(isWhite).length || 1;
         host.style.setProperty('--pk-w', `${keysEl.clientWidth / nWhite}px`);
@@ -73,7 +72,6 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
                 k.className = 'pk-key pk-white';
                 k.style.left = `${whites.indexOf(m) * w}%`;
                 k.style.width = `${w}%`;
-                if (m % 12 === 0) k.dataset.c = `C${m / 12 - 1}`;   // octave landmark, as in the tonnetz app
             } else {
                 k.className = 'pk-key pk-black';
                 k.style.left = `${(whites.indexOf(m + 1)) * w}%`;   // centred on the line between its two whites
@@ -86,16 +84,8 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
         fit();
     }
 
-    /** The range: the piece's own span widened to whole octaves (C..B), at least three octaves. */
-    function rangeFor(replay: Replay | null): [number, number] {
-        let a = replay && replay.notes.length ? replay.minMidi : 48, b = replay && replay.notes.length ? replay.maxMidi : 83;
-        a = Math.max(FULL_LO, a); b = Math.min(FULL_HI, b);
-        let nlo = a - (a % 12), nhi = b - (b % 12) + 11;
-        for (let down = true; nhi - nlo + 1 < MIN_KEYS; down = !down) {   // widen alternately, below then above
-            if (down && nlo > 24) nlo -= 12; else nhi += 12;
-        }
-        return [nlo, nhi];
-    }
+    /** The range: always the full keyboard. */
+    function rangeFor(_replay: Replay | null): [number, number] { return [FULL_LO, FULL_HI]; }
 
     /** Every note ringing at the current onset's time (the whole struck chord, plus held notes), one per key. */
     function litAt(replay: Replay, step: number): Map<number, Lit> {
@@ -121,9 +111,8 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
         for (const m of litMidis) {
             const k = keyEls.get(m);
             if (!k) continue;
-            k.classList.remove('pk-on', 'pk-held', 'pk-cur', 'pk-wrong');
+            k.classList.remove('pk-on', 'pk-held', 'pk-cur', 'pk-wrong', 'pk-diff');
             k.style.removeProperty('--pk-fill');
-            k.textContent = '';
             k.removeAttribute('title');
         }
         litMidis = [];
@@ -147,16 +136,7 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
             if (wrong) k.classList.add('pk-wrong');
             const theirs = cmp?.differ[n.onIndex] ? cmp.theirs[n.onIndex] ?? null : null;
             const theirsWrong = !!theirs && cmp!.tiers[n.onIndex] === 'wrong';
-            const lab = document.createElement('span');
-            lab.className = 'pk-lab';
-            lab.textContent = pc(ours) + (wrong ? ' ✗' : '');
-            k.appendChild(lab);
-            if (theirs) {
-                const th = document.createElement('span');
-                th.className = 'pk-theirs';
-                th.textContent = pc(theirs) + (theirsWrong ? ' ✗' : '');
-                k.appendChild(th);
-            }
+            if (theirs) k.classList.add('pk-diff');
             const tierWord = ungraded ? 'not graded' : tier === 'correct' ? 'exact' : tier;
             k.title = `ours ${label(ours)} (${tierWord})`
                 + (n.expected ? ` · score ${label({ step: n.expected.step as Pitch['step'], alter: n.expected.alter as Pitch['alter'] })}` : '')
