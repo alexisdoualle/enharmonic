@@ -72,7 +72,7 @@ function setChordsVisible(v: boolean) {
     render();
 }
 
-// Piano keyboard strip at the bottom (panels/keyboard.ts): off by default (the desktop layout is already
+// Piano keyboard strip under the piano roll, above the cards (panels/keyboard.ts): off by default (the desktop layout is already
 // dense; the strip is for the big poster screen), persisted per-browser; `?piano=1` / `?piano=0` overrides.
 const SHOW_KEYBOARD_KEY = 'viz.showKeyboard';
 let keyboard: KeyboardStrip | null = null;

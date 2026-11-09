@@ -425,7 +425,7 @@ footer code, footer b { color: var(--ink); }
    no labels. Look from the tonnetz app's read-only keyboard: dark rounded case, small gradient keys, lit keys
    filled with their chord's 3D-lattice shade and glowing; notes outside the chord grey; wrong notes framed
    red. Off by default (the "piano" toggle). */
-#keyboard { flex: 0 0 auto; padding: 0 16px 8px; position: relative; }
+#keyboard { flex: 0 0 auto; padding: 10px 16px 0; position: relative; }   /* between #music and #panels */
 #keyboard[hidden] { display: none; }
 /* never wider than at a 1080 px screen (1080 − 2×16 gutter − 2×5 case = 1038 px of keys, ~20 px per white): the
    range is already the whole piano, so a wider screen centres the keyboard instead of growing the keys */
