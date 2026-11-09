@@ -15,7 +15,7 @@ import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
 import { initKeyboard, type KeyboardStrip } from './panels/keyboard.js';
 import { connectMidi, midiAvailable } from './live.js';
-import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
+import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, setInstrument, getInstrument, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { mountExpandButtons } from './modal.js';
@@ -994,7 +994,8 @@ function seek(i: number, audible = false, resume = true) {
     }
     if (audible && soundOn) {   // arrow-key stepping auditions the landed note
         const n = state.replay?.notes[state.step];
-        if (n) { audioEnable(); playMidi(n.midi); }
+        // The piano rings its own decay; held strings sound the note's written length (capped), not a blip.
+        if (n) { audioEnable(); playMidi(n.midi, getInstrument() === 'strings' ? Math.min(4, Math.max(0.5, (n.offT - n.onT) / 1000)) : undefined); }
     }
 }
 
@@ -1513,6 +1514,21 @@ function wire() {
     volEl.addEventListener('input', () => {
         applyVolume();
         try { localStorage.setItem(VOLUME_KEY, volEl.value); } catch { /* storage blocked */ }
+    });
+    // Piano ↔ held strings, remembered per-browser.
+    const INSTRUMENT_KEY = 'viz.instrument';
+    const instBtn = $<HTMLButtonElement>('instrument');
+    const applyInstrument = (i: 'piano' | 'strings') => {
+        setInstrument(i);
+        instBtn.textContent = i === 'strings' ? '🎻 strings' : '🎹 piano';
+        instBtn.setAttribute('aria-pressed', String(i === 'strings'));
+    };
+    applyInstrument((() => { try { return localStorage.getItem(INSTRUMENT_KEY) === 'strings' ? 'strings' : 'piano'; } catch { return 'piano'; } })());
+    instBtn.addEventListener('click', () => {
+        const next = getInstrument() === 'strings' ? 'piano' : 'strings';
+        allNotesOff();   // a note already ringing keeps its old voice; start clean on the new one
+        applyInstrument(next);
+        try { localStorage.setItem(INSTRUMENT_KEY, next); } catch { /* storage blocked */ }
     });
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('show-chords').checked = chordsVisible;

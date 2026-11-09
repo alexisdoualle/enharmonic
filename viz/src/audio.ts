@@ -19,16 +19,18 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
-export type Instrument = 'piano' | 'epiano';
+export type Instrument = 'piano' | 'epiano' | 'strings';
 export interface Voice { sources: AudioScheduledSourceNode[]; gain: GainNode; kind: Instrument; }
 const voices = new Set<Voice>();
 
 let instrument: Instrument = 'piano';
-/** Pick the voice for notes played from now on: the sampled piano or the FM electric piano. */
+/** Pick the voice for notes played from now on: the sampled piano, the FM electric piano, or the held
+ *  strings (which do not decay while a note is held). */
 export function setInstrument(i: Instrument): void {
     instrument = i;
     if (i === 'piano') loadPiano();
 }
+export function getInstrument(): Instrument { return instrument; }
 
 // Salamander sample names, one every minor third from A0 (midi 21) to C8 (midi 108).
 const SAMPLE_NAMES = ['C', 'Ds', 'Fs', 'A'];
@@ -143,7 +145,8 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     const c = ensure();
     const t0 = when != null ? Math.max(when, c.currentTime) : c.currentTime;
     const sample = instrument === 'piano' ? nearestSample(midi) : null;
-    const voice = sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
+    const voice = instrument === 'strings' ? stringsVoice(c, midi, durSec, gain, t0)
+        : sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
     voices.add(voice);
     voice.sources[0]!.onended = () => voices.delete(voice);
     return voice;
@@ -240,6 +243,97 @@ function fmVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0
     return { sources: [carrier, modBody, modTine], gain: g, kind: 'epiano' };
 }
 
+// --- Held strings: a small bowed ensemble that sustains at full level for as long as the note is held ---
+// Four sawtooth voices a few cents apart (an ensemble, not one player), spread across the stereo field,
+// plus a soft triangle at the fundamental for body. A lowpass that tracks the pitch rounds the saw's top
+// and opens a little as the bow speeds up; vibrato fades in after the attack, as a player's does. No
+// decay stage: the level holds until the key comes up, then a soft release. A shared room reverb (a
+// synthetic decaying-noise impulse) adds air.
+const STRING_DETUNE = [-11, -4, 4, 11];        // cents
+const STRING_PAN = [-0.7, -0.25, 0.25, 0.7];
+const STRING_ATTACK = 0.14, STRING_RELEASE = 0.45;
+const STRING_LEVEL = 0.6;                       // per-voice gain multiplier, near the piano's loudness
+let reverbIn: GainNode | null = null;
+
+/** The room: a stereo impulse of decaying noise (about 2.4 s), built once on the live context. */
+function reverbSend(c: AudioContext): GainNode {
+    if (reverbIn) return reverbIn;
+    const len = Math.floor(c.sampleRate * 2.4);
+    const ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    const conv = c.createConvolver();
+    conv.buffer = ir;
+    const wet = c.createGain();
+    wet.gain.value = 0.32;
+    reverbIn = c.createGain();
+    reverbIn.connect(conv).connect(wet).connect(master!);
+    return reverbIn;
+}
+
+function stringsVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0: number): Voice {
+    const f = freqOf(midi);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    const cutoff = Math.min(6500, f * 3.2 + 800);
+    lp.frequency.setValueAtTime(cutoff * 0.55, t0);
+    lp.frequency.linearRampToValueAtTime(cutoff, t0 + STRING_ATTACK * 2);
+    lp.Q.value = 0.5;
+
+    // Vibrato: ~5.3 Hz, ±6 cents, eased in from silence after the attack.
+    const lfo = c.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.3;
+    const depth = c.createGain();
+    depth.gain.setValueAtTime(0, t0);
+    depth.gain.setValueAtTime(0, t0 + 0.25);
+    depth.gain.linearRampToValueAtTime(f * (Math.pow(2, 6 / 1200) - 1), t0 + 0.9);
+    lfo.connect(depth);
+
+    const sources: AudioScheduledSourceNode[] = [];
+    STRING_DETUNE.forEach((cents, k) => {
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f;
+        o.detune.value = cents;
+        depth.connect(o.frequency);
+        const og = c.createGain();
+        og.gain.value = 0.25;
+        const pan = c.createStereoPanner();
+        pan.pan.value = STRING_PAN[k]!;
+        o.connect(og).connect(pan).connect(lp);
+        sources.push(o);
+    });
+    const body = c.createOscillator();
+    body.type = 'triangle';
+    body.frequency.value = f;
+    const bodyGain = c.createGain();
+    bodyGain.gain.value = 0.35;
+    body.connect(bodyGain).connect(lp);
+    sources.push(body);
+
+    // Bowed attack → hold at level for the note's whole length → soft release. Ends on a linear ramp to
+    // true zero (stopping while audible is a click).
+    const level = gain * STRING_LEVEL;
+    const bodyEnd = t0 + Math.max(STRING_ATTACK, durSec);
+    const end = bodyEnd + STRING_RELEASE;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(level, t0 + STRING_ATTACK);
+    g.gain.setValueAtTime(level, bodyEnd);
+    g.gain.exponentialRampToValueAtTime(0.0008, end);
+    g.gain.linearRampToValueAtTime(0, end + 0.006);
+    lp.connect(g);
+    g.connect(master!);
+    g.connect(reverbSend(c));
+
+    for (const o of [...sources, lfo]) { o.start(t0); o.stop(end + 0.03); }
+    // The LFO goes LAST so sources[0] (whose `onended` retires the voice) is a sounding oscillator.
+    return { sources: [...sources, lfo], gain: g, kind: 'strings' };
+}
+
 /** Release one voice now (a key coming up): the same click-free release tail a timed note ends on
  *  (the damper fade for the piano). */
 export function releaseVoice(v: Voice): void {
@@ -252,7 +346,7 @@ export function releaseVoice(v: Voice): void {
             v.gain.gain.setTargetAtTime(0, t, DAMPER);
             for (const o of v.sources) o.stop(t + DAMPER * 8);
         } else {
-            const release = 0.18;
+            const release = v.kind === 'strings' ? STRING_RELEASE : 0.18;
             v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
             v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
             for (const o of v.sources) o.stop(t + release + 0.03);

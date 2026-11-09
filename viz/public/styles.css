@@ -190,6 +190,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 .live-reset:hover { border-color: var(--accent); color: #222; }
 /* Top-toolbar MIDI button: override the fixed 34x30 square that #transport button imposes. */
 #transport button.midi-btn { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
+#transport button#instrument { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
+#transport button#instrument[aria-pressed="true"] { border-color: var(--accent); }
 #transport button.midi-btn:disabled { opacity: .7; cursor: default; border-color: var(--line); }
 #transport button#midi-enable.connected { color: #56d364; border-color: #2f7a3d; background: color-mix(in srgb, #3fb950 12%, var(--panel)); }
 /* The cards that keep their own position for overlays in the corner. */
