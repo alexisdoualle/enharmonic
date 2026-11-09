@@ -12,6 +12,9 @@
  * amp envelope keeps the note ringing for its whole length, a gentle lowpass rounds the top, and a
  * master compressor/limiter glues dense chords so a Bach tutti doesn't clip into harshness.
  *
+ * The held voices (no decay while a key is down): sampled winds (a clarinet, a bassoon for the bass; VSCO 2
+ * CE, CC0) and, while those load, a synth string ensemble. See their sections below.
+ *
  * The AudioContext is created lazily and resumed on a user gesture (browsers require that), so
  * {@link enable} must be called from a click/keypress handler.
  */
@@ -19,16 +22,17 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
-export type Instrument = 'piano' | 'epiano' | 'strings';
+export type Instrument = 'piano' | 'epiano' | 'strings' | 'winds';
 export interface Voice { sources: AudioScheduledSourceNode[]; gain: GainNode; kind: Instrument; }
 const voices = new Set<Voice>();
 
 let instrument: Instrument = 'piano';
-/** Pick the voice for notes played from now on: the sampled piano, the FM electric piano, or the held
- *  strings (which do not decay while a note is held). */
+/** Pick the voice for notes played from now on: the sampled piano, the FM electric piano, the sampled
+ *  winds (clarinet, bassoon in the bass), or the synth strings. Winds and strings do not decay while held. */
 export function setInstrument(i: Instrument): void {
     instrument = i;
     if (i === 'piano') loadPiano();
+    if (i === 'winds') loadWinds();
 }
 export function getInstrument(): Instrument { return instrument; }
 
@@ -102,9 +106,8 @@ export function enable(): Promise<void> {
  *  truly started. The sample wait is capped too, so a slow network starts on the FM voice instead. */
 export async function whenPlaying(): Promise<void> {
     const c = ensure();
-    if (instrument === 'piano' && pianoLoad) {
-        await Promise.race([pianoLoad, new Promise(r => setTimeout(r, PIANO_WAIT_MS))]);
-    }
+    const load = instrument === 'piano' ? pianoLoad : instrument === 'winds' ? windLoad : null;
+    if (load) await Promise.race([load, new Promise(r => setTimeout(r, PIANO_WAIT_MS))]);
     const clock = () => c.getOutputTimestamp?.().contextTime || c.currentTime;
     return new Promise(resolve => {
         const started = performance.now();
@@ -145,7 +148,9 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     const c = ensure();
     const t0 = when != null ? Math.max(when, c.currentTime) : c.currentTime;
     const sample = instrument === 'piano' ? nearestSample(midi) : null;
-    const voice = instrument === 'strings' ? stringsVoice(c, midi, durSec, gain, t0)
+    const wind = instrument === 'winds' ? windSample(midi) : null;
+    const voice = wind ? windVoice(c, midi, wind, durSec, gain, t0)
+        : instrument === 'winds' || instrument === 'strings' ? stringsVoice(c, midi, durSec, gain, t0)   // winds still loading
         : sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
     voices.add(voice);
     voice.sources[0]!.onended = () => voices.delete(voice);
@@ -241,6 +246,95 @@ function fmVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0
     carrier.stop(end + 0.03); modBody.stop(end + 0.03); modTine.stop(end + 0.03);
 
     return { sources: [carrier, modBody, modTine], gain: g, kind: 'epiano' };
+}
+
+// --- Sampled winds: a clarinet, with a bassoon for the bass ---------------------------------------------
+// Real sustained recordings from VSCO 2 Community Edition (Versilian Studios, CC0), one dynamic, a sample
+// every three or four semitones (`viz/public/samples/{clarinet,bassoon}/<midi>.mp3`). The clarinet covers
+// its own range (D3 up); below it the bassoon takes over, so a bass line sounds like a bass instrument
+// instead of a clarinet pitched down. Each file is the attack plus ~3.5 s of steady tone, levelled to the
+// same loudness. A note longer than the file holds by CROSSFADING fresh copies of the steady part over
+// each other (equal-power, 0.3 s), so the tone never decays and no sample-exact loop point is needed
+// (an MP3's encoder padding shifts it differently per browser).
+const CLARINET_MIDIS = [50, 53, 58, 62, 65, 70, 74, 77, 82, 86, 89];
+const BASSOON_MIDIS = [34, 37, 41, 45, 46, 48];
+const CLARINET_LOW = 50;            // the clarinet's lowest sample; below it, the bassoon
+const WIND_ATTACK_END = 3.8;        // buffer seconds of the first, attack-bearing copy (the file fades at ~3.94 s)
+const WIND_STEADY = [0.7, 3.8] as const;   // buffer seconds of steady tone the held copies repeat
+const WIND_XFADE = 0.3;             // buffer seconds of each crossfade
+const WIND_RELEASE = 0.14;          // the breath stopping
+const WIND_GAIN = 2.0;              // the files sit at -20 dB RMS; this brings them near the piano's level
+const windBuffers = new Map<string, AudioBuffer>();   // "clarinet/62" → buffer
+let windLoad: Promise<void> | null = null;
+
+function loadWinds(): void {
+    if (windLoad || typeof OfflineAudioContext === 'undefined') return;
+    const c = new OfflineAudioContext(1, 1, 44100);
+    const files = [...CLARINET_MIDIS.map(m => `clarinet/${m}`), ...BASSOON_MIDIS.map(m => `bassoon/${m}`)];
+    windLoad = Promise.all(files.map(async f => {
+        try {
+            const res = await fetch(`samples/${f}.mp3`);
+            if (res.ok) windBuffers.set(f, await c.decodeAudioData(await res.arrayBuffer()));
+        } catch { /* missing or undecodable: that note borrows the nearest loaded one */ }
+    })).then(() => undefined);
+}
+
+/** The loaded wind sample to play `midi` from (clarinet from D3 up, else bassoon), or null before any loads. */
+function windSample(midi: number): { key: string; midi: number } | null {
+    const pick = (inst: string, set: number[]) => {
+        let best: number | null = null;
+        for (const m of set) if (windBuffers.has(`${inst}/${m}`) && (best == null || Math.abs(m - midi) < Math.abs(best - midi))) best = m;
+        return best == null ? null : { key: `${inst}/${best}`, midi: best };
+    };
+    return midi >= CLARINET_LOW ? pick('clarinet', CLARINET_MIDIS) ?? pick('bassoon', BASSOON_MIDIS)
+        : pick('bassoon', BASSOON_MIDIS) ?? pick('clarinet', CLARINET_MIDIS);
+}
+
+/** Equal-power fade curves for the crossfades. */
+const FADE_STEPS = 32;
+const fadeIn = Float32Array.from({ length: FADE_STEPS }, (_, i) => Math.sin((i / (FADE_STEPS - 1)) * Math.PI / 2));
+const fadeOut = Float32Array.from({ length: FADE_STEPS }, (_, i) => Math.cos((i / (FADE_STEPS - 1)) * Math.PI / 2));
+
+function windVoice(c: AudioContext, midi: number, sample: { key: string; midi: number }, durSec: number, gain: number, t0: number): Voice {
+    const buf = windBuffers.get(sample.key)!;
+    const rate = Math.pow(2, (midi - sample.midi) / 12);
+    const noteEnd = t0 + Math.max(0.08, durSec);
+    const end = noteEnd + WIND_RELEASE * 4;
+
+    // The note's own envelope: a short ramp in (the recording carries the real attack), held flat, then the release.
+    const level = gain * WIND_GAIN;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(level, t0 + 0.004);
+    g.gain.setValueAtTime(level, noteEnd);
+    g.gain.setTargetAtTime(0, noteEnd, WIND_RELEASE);
+    g.connect(master!);
+
+    // Copies of the recording, in real (output) time: buffer seconds pass `rate` times faster.
+    const real = (bufSec: number) => bufSec / rate;
+    const xf = real(WIND_XFADE);
+    const sources: AudioBufferSourceNode[] = [];
+    const copy = (start: number, offset: number, bufLen: number, fadeInFirst: boolean) => {
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = rate;
+        const sg = c.createGain();
+        const stop = start + real(bufLen);
+        if (fadeInFirst) { sg.gain.setValueAtTime(0, start); sg.gain.setValueCurveAtTime(fadeIn, start, xf); }
+        else sg.gain.setValueAtTime(1, start);
+        if (stop < end) sg.gain.setValueCurveAtTime(fadeOut, stop - xf, xf);   // handing over to the next copy
+        src.connect(sg).connect(g);
+        src.start(start, offset);
+        src.stop(Math.min(stop, end));
+        sources.push(src);
+        return stop;
+    };
+    let stop = copy(t0, 0, WIND_ATTACK_END, false);
+    const steadyLen = WIND_STEADY[1] - WIND_STEADY[0];
+    while (stop < end) stop = copy(stop - xf, WIND_STEADY[0], steadyLen, true);
+    // The copy that ends last goes FIRST: playMidi retires the voice on sources[0]'s `onended`.
+    sources.reverse();
+    return { sources, gain: g, kind: 'winds' };
 }
 
 // --- Held strings: a small bowed ensemble that sustains at full level for as long as the note is held ---
@@ -346,7 +440,7 @@ export function releaseVoice(v: Voice): void {
             v.gain.gain.setTargetAtTime(0, t, DAMPER);
             for (const o of v.sources) o.stop(t + DAMPER * 8);
         } else {
-            const release = v.kind === 'strings' ? STRING_RELEASE : 0.18;
+            const release = v.kind === 'strings' ? STRING_RELEASE : v.kind === 'winds' ? WIND_RELEASE : 0.18;
             v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
             v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
             for (const o of v.sources) o.stop(t + release + 0.03);

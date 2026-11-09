@@ -994,8 +994,8 @@ function seek(i: number, audible = false, resume = true) {
     }
     if (audible && soundOn) {   // arrow-key stepping auditions the landed note
         const n = state.replay?.notes[state.step];
-        // The piano rings its own decay; held strings sound the note's written length (capped), not a blip.
-        if (n) { audioEnable(); playMidi(n.midi, getInstrument() === 'strings' ? Math.min(4, Math.max(0.5, (n.offT - n.onT) / 1000)) : undefined); }
+        // The piano rings its own decay; a held voice sounds the note's written length (capped), not a blip.
+        if (n) { audioEnable(); playMidi(n.midi, getInstrument() !== 'piano' ? Math.min(4, Math.max(0.5, (n.offT - n.onT) / 1000)) : undefined); }
     }
 }
 
@@ -1518,14 +1518,15 @@ function wire() {
     // Piano ↔ held strings, remembered per-browser.
     const INSTRUMENT_KEY = 'viz.instrument';
     const instBtn = $<HTMLButtonElement>('instrument');
-    const applyInstrument = (i: 'piano' | 'strings') => {
+    const applyInstrument = (i: 'piano' | 'winds') => {
         setInstrument(i);
-        instBtn.textContent = i === 'strings' ? '🎻 strings' : '🎹 piano';
-        instBtn.setAttribute('aria-pressed', String(i === 'strings'));
+        instBtn.textContent = i === 'winds' ? '🎶 clarinet' : '🎹 piano';
+        instBtn.setAttribute('aria-pressed', String(i === 'winds'));
     };
-    applyInstrument((() => { try { return localStorage.getItem(INSTRUMENT_KEY) === 'strings' ? 'strings' : 'piano'; } catch { return 'piano'; } })());
+    // 'strings' was the earlier held voice; it now opens on the clarinet.
+    applyInstrument((() => { try { const v = localStorage.getItem(INSTRUMENT_KEY); return v === 'winds' || v === 'strings' ? 'winds' : 'piano'; } catch { return 'piano'; } })());
     instBtn.addEventListener('click', () => {
-        const next = getInstrument() === 'strings' ? 'piano' : 'strings';
+        const next = getInstrument() === 'winds' ? 'piano' : 'winds';
         allNotesOff();   // a note already ringing keeps its old voice; start clean on the new one
         applyInstrument(next);
         try { localStorage.setItem(INSTRUMENT_KEY, next); } catch { /* storage blocked */ }
