@@ -15,6 +15,7 @@ import type { Snapshot } from '../replay.js';
 import { pcOf } from '../replay.js';
 import type { LiveState } from '../live.js';
 import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSceneV2.js';
+import { TorusScene, latticeSquash } from '../tonnetz3d/torus/TorusScene.js';
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { triadColor as sharedTriadColor } from '../music/triadColor.js';
 import type { LetterName } from '../tonnetz3d/types.js';
@@ -63,6 +64,14 @@ let lastTick = 0;
 
 let scene: TonnetzSceneV2 | null = null;
 let raf = 0;
+
+// Torus view: built on first use, over the lattice canvas. Both scenes read the same config, so the
+// torus lights from the same activations. The toggle folds the lattice into the torus and back.
+const FOLD_MS = 5000;
+let config: TonnetzSceneConfig | null = null;
+let torus: TorusScene | null = null;
+let torusHost: HTMLElement | null = null;
+let torusOn = false;
 let lastScaleSig = '';
 
 // A row of buttons along the canvas's bottom edge, all at the panel's default when untouched. Read from /
@@ -89,7 +98,7 @@ function scaleSig(s: PitchClass[]): string {
 /** Build the scene once and start the smoothing/render loop. Safe to call repeatedly (no-op if built). */
 export function initTonnetz(container: HTMLElement): void {
     if (scene) return;
-    const config: TonnetzSceneConfig = {
+    config = {
         getThirds: () => scale,
         getTriadColor: triadColor,
         getActivePCs: () => soundingPCs,
@@ -106,6 +115,7 @@ export function initTonnetz(container: HTMLElement): void {
     };
     scene = new TonnetzSceneV2(container, config);
     scene.setVisible(true);
+    addTorusToggle(container);
     // Pull the camera back from the scene's default framing so the whole lattice neighbourhood is in view
     // on load: the panel is smaller than the standalone app's full-window canvas, so the default sits too
     // close. The user can still orbit/scroll to taste; this only sets the initial distance.
@@ -154,6 +164,7 @@ export function initTonnetz(container: HTMLElement): void {
             res[pc] = Math.max(0, level[pc]! - STEP_INHIBIT * Math.max(0, nb - level[pc]!));
         }
         scene?.updateActivations();
+        torus?.updateActivations();   // no-op while the torus is hidden
         raf = requestAnimationFrame(loop);
     };
     loop();
@@ -222,6 +233,7 @@ function applyScene(surface: PitchClass[], sounding: Set<number>, spelled: Set<s
     if (pcChanged) { scene.rebuild(); scene.clearSmoothing(); }
     else if (scaleChanged) scene.updateSpellings();
     syncPlanes();
+    if (torus && (torusOn || torus.folding) && (pcChanged || scaleChanged)) torus.rebuild();
 }
 
 /** The symmetric chords to draw: those whose pitch classes are all sounding, when the planes are on. */
@@ -339,12 +351,59 @@ function writeParam(key: string, value: string | null): void {
     history.replaceState(history.state, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`);
 }
 
+/** The lattice's button row (and plane caption), mounted by mountLatticeControls. */
+const latticeCtrls = (): HTMLElement | null => captionEl?.parentElement ?? null;
+
+/** Lattice / torus toggle in the panel corner. Clicks during a fold are ignored. */
+function addTorusToggle(container: HTMLElement): void {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tonnetz-mode';
+    btn.textContent = 'Torus';
+    btn.title = 'Fold the lattice into the torus';
+    btn.addEventListener('click', () => {
+        if (!scene || !config || torus?.folding) return;
+        if (!torusOn) {
+            if (!torusHost) {
+                torusHost = document.createElement('div');
+                torusHost.className = 'torus-host';
+                container.insertBefore(torusHost, btn);
+            }
+            if (torus) torus.rebuild(); else torus = new TorusScene(torusHost, config);
+            torusHost.hidden = false;
+            const lattice = scene;
+            torus.foldIn(lattice.getFoldView(), lattice.foldLookSource(), FOLD_MS, u => lattice.setFlatten(latticeSquash(u)));
+            torusOn = true;
+            latticeCtrls()?.setAttribute('hidden', '');   // the torus has its own controls
+            btn.textContent = 'Lattice';
+            btn.title = 'Unfold the torus back into the lattice';
+        } else {
+            const t = torus!, host = torusHost!, lattice = scene;
+            t.foldOut(lattice.getFoldView(), lattice.foldLookSource(), FOLD_MS, u => lattice.setFlatten(latticeSquash(u)), () => {
+                t.setVisible(false);
+                host.hidden = true;
+                lattice.setFlatten(1);
+                latticeCtrls()?.removeAttribute('hidden');
+            });
+            torusOn = false;
+            btn.textContent = 'Torus';
+            btn.title = 'Fold the lattice into the torus';
+        }
+    });
+    container.appendChild(btn);
+}
+
 /** Tear down the WebGL context and stop the loop, for completeness; the panel currently lives for the
  *  whole session, but this keeps the port from leaking a GL context if it is ever unmounted. */
 export function disposeTonnetz(): void {
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     scene?.dispose();
     scene = null;
+    torus?.dispose();
+    torus = null;
+    torusHost?.remove();
+    torusHost = null;
+    torusOn = false;
     lastScaleSig = '';
     lastPlanesSig = '';
     captionEl?.parentElement?.remove();
