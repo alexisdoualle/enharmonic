@@ -1294,6 +1294,16 @@ let compareIndex: CompareIndex | null = null;
 let comparePreds: { key: string; preds: (PitchClass | null)[] } | null = null;
 let comparison: Comparison | null = null;
 let moments: Moment[] = [];
+// The compare pickers fold into one small "compare" button while no other speller is shown; the button
+// unfolds them, and picking "none" folds them back. A link with `vs=` or a moment opens them.
+let compareOpen = false;
+function syncCompareFold() {
+    if (!compareIndex) return;
+    const open = compareOpen || !!state.compare;
+    $('compare-btn').hidden = open;
+    $('compare-ctl').hidden = !open;
+    $('moments').hidden = !open || !moments.length;
+}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const compareKey = () => state.fixtureId && state.compare ? `${state.fixtureId}/${state.compare}` : '';
@@ -1304,21 +1314,30 @@ async function initCompare(ids: string[], urlVs: string | null) {
     if (!compareIndex) return;
     const idx = compareIndex;
     state.compare = urlVs && urlVs in idx.algos ? urlVs : null;
-    $('compare-ctl').hidden = false;
+    $('compare-btn').addEventListener('click', () => {
+        compareOpen = true;
+        syncCompareFold();
+        const sel = $<HTMLSelectElement>('compare');
+        sel.focus();
+        try { sel.showPicker(); } catch { /* not supported, or the menu is disabled for this piece */ }
+    });
     $<HTMLSelectElement>('compare').addEventListener('change', e => {
         state.compare = (e.target as HTMLSelectElement).value || null;
+        compareOpen = !!state.compare;
+        syncCompareFold();
         setMoment(null);
         syncUrl();
         void loadComparePreds();
     });
     moments = await fetchMoments();
+    syncCompareFold();
     if (!moments.length) return;
     const sel = $<HTMLSelectElement>('moments');
     sel.innerHTML = '<option value="">★ moments…</option>' + moments.map((m, i) => {
         const ok = ids.includes(m.fixture) && (idx.fixtures[m.fixture] ?? []).includes(m.compare);
         return `<option value="${i}"${ok ? '' : ' disabled'} title="${esc(m.text)}">${esc(m.title)}${ok ? '' : ' (data missing)'}</option>`;
     }).join('');
-    sel.hidden = false;
+    syncCompareFold();
     sel.addEventListener('change', () => {
         const m = moments[Number(sel.value)];
         sel.value = '';
@@ -1368,6 +1387,8 @@ async function jumpToMoment(m: Moment) {
     $<HTMLSelectElement>('mode').value = m.mode;
     if (m.lookAhead !== undefined) { state.lookAhead = m.lookAhead; $<HTMLInputElement>('look-ahead').checked = m.lookAhead; }
     state.compare = m.compare;
+    compareOpen = true;
+    syncCompareFold();
     setMoment(m);
     await pickFixture(m.fixture, m.step - 1);
 }
