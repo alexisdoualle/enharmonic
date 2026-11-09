@@ -3,6 +3,8 @@ dist/
 viz-dist/
 corpora/
 local-fixtures/
+# Local-only speller comparison data (tools/viz-compare/sync.mjs): third-party outputs, never shipped.
+viz-local/
 results/
 research/
 CLAUDE.local.md
