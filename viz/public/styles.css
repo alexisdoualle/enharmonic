@@ -413,3 +413,42 @@ footer code, footer b { color: var(--ink); }
 .cmp-diff { color: var(--compare); font-weight: 700; }
 .cmp-bad { text-decoration: underline wavy var(--wrong); text-underline-offset: 3px; }
 .cmp-sum { font-size: 11px; line-height: 1.4; }
+
+/* --- Piano keyboard strip (panels/keyboard.ts): the sounding notes, each key labelled with our spelling.
+   Off by default (the 🎹 keys toggle). Labels scale with the white-key width (--pk-w, set from JS) so they
+   read from across a room on a big screen. Ink on a lit key is always near-black: every fill is a mid-light
+   tier / letter colour. */
+#keyboard { flex: 0 0 auto; padding: 0 16px 8px; position: relative; }
+#keyboard[hidden] { display: none; }
+.pk-keys { position: relative; height: 132px; background: #0b0d10; border-top: 3px solid #3a3f4a; border-radius: 4px 4px 7px 7px; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.pk-key { position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; cursor: pointer; }
+.pk-white { bottom: 0; background: #f1f2f5; border-right: 1px solid #a9aeb8; border-radius: 0 0 5px 5px; padding-bottom: 7px; z-index: 1; }
+.pk-black { height: 61%; background: #22252c; border: 1px solid #0b0d10; border-top: 0; border-radius: 0 0 4px 4px; transform: translateX(-50%); padding-bottom: 6px; z-index: 2; }
+.pk-white:active { background: #d9dce3; }
+.pk-black:active { background: #3a3f4a; }
+.pk-white[data-c]:not(.pk-on)::after { content: attr(data-c); color: #7a8190; font-size: clamp(9px, calc(var(--pk-w, 30px) * 0.3), 14px); }
+.pk-key.pk-on { background: var(--pk-fill); }
+/* held from an earlier onset: the same colour, paler, with a dashed inner edge (not colour alone) */
+.pk-key.pk-on.pk-held { background: color-mix(in srgb, var(--pk-fill) 45%, #f1f2f5); box-shadow: inset 0 0 0 2px #0b0d10; outline: 2px dashed var(--pk-fill); outline-offset: -6px; }
+.pk-key.pk-cur { box-shadow: inset 0 0 0 4px #0b0d10; }
+.pk-lab, .pk-theirs { white-space: nowrap; line-height: 1.05; border-radius: 4px; padding: 1px 4px; position: relative; z-index: 3; }
+.pk-lab { color: #0b0d10; background: inherit; font-weight: 800; font-size: clamp(12px, calc(var(--pk-w, 30px) * 0.58), 40px); }
+.pk-black .pk-lab { background: var(--pk-fill); font-size: clamp(11px, calc(var(--pk-w, 30px) * 0.42), 28px); }
+.pk-held .pk-lab { background: color-mix(in srgb, var(--pk-fill) 45%, #f1f2f5); }
+.pk-wrong .pk-lab { text-decoration: underline wavy #8b1d28; text-underline-offset: 3px; }
+/* LOCAL compare: the other speller's differing spelling, in the compare cyan, under ours */
+.pk-theirs { background: var(--compare); color: #04252a; font-weight: 700; font-size: clamp(10px, calc(var(--pk-w, 30px) * 0.36), 24px); box-shadow: 0 0 0 1px #0b0d10; }
+/* the enharmonic guide row: every candidate spelling under each sounding key, sharps on top */
+.pk-guide { display: none; position: relative; --pk-gf: clamp(10px, calc(var(--pk-w, 30px) * 0.32), 20px); height: calc(var(--pk-gf) * 4.2 + 12px); }
+.pk-with-guide .pk-guide { display: block; }
+.pk-gcol { position: absolute; top: 6px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pk-gnote { font-size: var(--pk-gf); line-height: 1.15; padding: 0 4px; border-radius: 3px; color: var(--dim); background: var(--panel); white-space: nowrap; }
+.pk-gnote.pk-gours { background: var(--pk-fill); color: #0b0d10; font-weight: 800; }
+.pk-gnote.pk-gtheirs { outline: 2px solid var(--compare); color: var(--compare); font-weight: 700; }
+.pk-gnote.pk-gours.pk-gtheirs { color: #0b0d10; }
+.pk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 720px) {
+  #keyboard { overflow-x: auto; }
+  .pk-keys, .pk-guide { min-width: 640px; }
+  .pk-keys { height: 104px; }
+}

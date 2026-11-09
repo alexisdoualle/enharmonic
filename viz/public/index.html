@@ -60,6 +60,8 @@
     <label class="ctl" title="show / hide the sheet-music staff"><input type="checkbox" id="show-staff" checked /> ♫ staff</label>
     <label class="ctl" title="show / hide the chord lane under the piano roll"><input type="checkbox" id="show-chords" /> chords</label>
     <label class="ctl" title="grey the notes the speller has not heard yet (light blue: the look-ahead buffer)"><input type="checkbox" id="show-heard" /> heard</label>
+    <label class="ctl" title="show / hide the piano keyboard strip at the bottom: the sounding notes, labelled with our spelling"><input type="checkbox" id="show-keyboard" /> keys</label>
+    <label class="ctl" id="keyboard-guide-ctl" hidden title="under each sounding key, every spelling it could take (ours filled)"><input type="checkbox" id="keyboard-guide" /> guide</label>
     <button class="ctl midi-btn" id="midi-enable" title="connect a MIDI keyboard (asks for permission on click)">🎹 MIDI</button>
     <span class="ctl metro" title="record against a metronome: a 4-click countdown, then bar 1; stop (or Space) ends it">
       <button class="ctl midi-btn" id="metro-toggle" type="button">● record</button>
@@ -105,6 +107,9 @@
       <div id="tonnetz-canvas" class="tonnetz-canvas"></div>
     </div>
   </section>
+
+  <!-- Piano keyboard strip (panels/keyboard.ts), toggled by "keys" in the transport. -->
+  <section id="keyboard" hidden aria-label="piano keyboard: the sounding notes with their spelling"></section>
 
   <footer>
     Streams the real shipped speller (<code>src/</code>) note by note — <b>correct</b> / <b>flipped</b>
