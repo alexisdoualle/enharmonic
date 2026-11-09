@@ -961,6 +961,19 @@ function renderStrip() {
     }
 }
 
+/** Step one note left or right, skipping exact unison duplicates (a voice doubling the same pitch at the
+ *  same instant): in a full score like the Requiem half the notes are such copies, and stepping through
+ *  them replays one pitch several times. Copies follow their first voice (bass-first order), so stepping
+ *  back over a chord lands on that first voice. */
+function stepTo(dir: 1 | -1) {
+    const r = state.replay;
+    if (!r) return;
+    ensureTimeline(r);
+    let i = state.step + dir;
+    while (i > 0 && i < r.notes.length - 1 && dupOnset[i]) i += dir;
+    seek(i, true);
+}
+
 /** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there:
  *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
  *  slider, which seeks continuously while dragged and resumes once on release instead. */
@@ -1006,6 +1019,11 @@ const MIN_NOTE_SEC = 0.12, MAX_NOTE_SEC = 8;   // floor / ceiling on a single no
 // equal slider travel = equal ratio.
 const TEMPO_SPAN = 4;
 const posToRate = (p: number) => Math.pow(TEMPO_SPAN, p);
+// The tempo is remembered per-browser and, when not 1×, carried in the URL (`tempo=0.6`); a link's tempo
+// wins over the stored one. Rounded to two decimals, as the label shows it.
+const TEMPO_KEY = 'viz.tempo';
+const clampTempo = (r: number) => Math.min(TEMPO_SPAN, Math.max(1 / TEMPO_SPAN, Math.round(r * 100) / 100));
+const parseTempo = (v: string | null): number | null => { const r = Number(v); return v != null && v !== '' && Number.isFinite(r) && r > 0 ? clampTempo(r) : null; };
 const rateToPos = (r: number) => Math.log(r) / Math.log(TEMPO_SPAN);
 
 // Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS: honours the
@@ -1015,7 +1033,8 @@ let noteDurMs: number[] = [];
 // Exact unison duplicate per on-index: the same MIDI already struck at this same instant (an earlier
 // note shares its onset time and pitch). Orchestral/choral scores double a pitch across voices, so
 // without this the player stacks N identical oscillators at one `when` — louder, phasey, "played twice".
-// Octave doublings are a different pitch and are NOT flagged. Audio-only; the visuals show every note.
+// Octave doublings are a different pitch and are NOT flagged. The player sounds it once and the arrow keys
+// step past it (stepTo); the roll, staff and tallies still show every note.
 let dupOnset: boolean[] = [];
 let timelineFor: Replay | null = null;
 function ensureTimeline(replay: Replay): number[] {
@@ -1130,7 +1149,7 @@ function frame() {
 
 function togglePlay() { if (raf || pending) stopPlay(); else play(); }
 
-function setTempo(rate: number) {
+function setTempo(rate: number, persist = true) {
     if (raf) {   // re-anchor the clock at the CURRENT position (old rate) before applying the new rate,
         // else the whole elapsed span rescales and the playhead LEAPS. A moving playhead can't be
         // delayed to the speaker instant without stalling, so re-anchor now-to-now (playhead and audio
@@ -1140,6 +1159,10 @@ function setTempo(rate: number) {
         if (soundOn) t0Ctx = audioNow();
     }
     tempoRate = rate;
+    if (persist) {
+        try { localStorage.setItem(TEMPO_KEY, String(rate)); } catch { /* storage blocked */ }
+        syncUrl();
+    }
     ($('tempo') as HTMLInputElement).value = String(rateToPos(rate));
     $('tempo-val').textContent = `${rate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×`;
 }
@@ -1188,6 +1211,9 @@ function syncUrl() {
     // experimental key lanes are off by default; only record when enabled
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
     else u.searchParams.delete('keys');
+    // playback tempo: only when it is not 1×
+    if (tempoRate !== 1) u.searchParams.set('tempo', String(tempoRate));
+    else u.searchParams.delete('tempo');
     // the card layout: only when it differs from the default
     if (slots.join() !== DEFAULT_SLOTS.join()) u.searchParams.set('slots', slots.join(','));
     else u.searchParams.delete('slots');
@@ -1446,8 +1472,8 @@ function wire() {
         resumeAfterScrub = false;
         if (state.step < (state.replay?.notes.length ?? 0) - 1) play();
     });
-    $('prev').addEventListener('click', () => seek(state.step - 1, true));
-    $('next').addEventListener('click', () => seek(state.step + 1, true));
+    $('prev').addEventListener('click', () => stepTo(-1));
+    $('next').addEventListener('click', () => stepTo(1));
     $('side-sharp').addEventListener('click', () => setSideOverride(1));
     $('side-flat').addEventListener('click', () => setSideOverride(-1));
     $('side-auto').addEventListener('click', () => setSideOverride(0));
@@ -1486,7 +1512,7 @@ function wire() {
         state.showKeyLanes = (e.target as HTMLInputElement).checked;
         render(); syncUrl();   // display-only: no recompute, just re-render the panels/lanes
     });
-    $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(posToRate(Number((e.target as HTMLInputElement).value))));
+    $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(clampTempo(posToRate(Number((e.target as HTMLInputElement).value)))));
     const latencyEl = $<HTMLInputElement>('latency');
     latencyEl.value = String(audioOffsetMs);
     $('latency-val').textContent = `${audioOffsetMs}ms`;
@@ -1528,8 +1554,8 @@ function wire() {
         if ((ev.key === 'Backspace' || ev.key === 'Delete') && isLive() && rec === 'off') { ev.preventDefault(); deleteNote(state.step); return; }
         // Shift+X is the clear button (letters alone are notes): the first press arms it, the second clears.
         if (ev.shiftKey && (ev.key === 'X' || ev.key === 'x') && isLive() && rec === 'off') { ev.preventDefault(); $('take-clear').click(); return; }
-        if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
-        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
+        if (ev.key === 'ArrowRight') { ev.preventDefault(); stepTo(1); }
+        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); stepTo(-1); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
         else if (ev.key === 'End') { ev.preventDefault(); seek((state.replay?.snapshots.length ?? 1) - 1); }
     });
@@ -1538,7 +1564,11 @@ function wire() {
 async function boot() {
     wire();
     initRollScale();
-    setTempo(1);
+    {   // a link's tempo, else the stored one, else 1×
+        let stored: string | null = null;
+        try { stored = localStorage.getItem(TEMPO_KEY); } catch { /* storage blocked */ }
+        setTempo(parseTempo(new URLSearchParams(location.search).get('tempo')) ?? parseTempo(stored) ?? 1, false);
+    }
     updatePlayBtn();
     const ids = await listFixtures();
     const localOnly = new Set<string>(await fetch('fixtures/local.json').then(r => r.json()).catch(() => []));
