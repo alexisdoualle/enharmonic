@@ -252,14 +252,19 @@ function fmVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0
 // Real sustained recordings from VSCO 2 Community Edition (Versilian Studios, CC0), one dynamic, a sample
 // every three or four semitones (`viz/public/samples/{clarinet,bassoon}/<midi>.mp3`). The clarinet covers
 // its own range (D3 up); below it the bassoon takes over, so a bass line sounds like a bass instrument
-// instead of a clarinet pitched down. Each file is the attack plus ~3.5 s of steady tone, levelled to the
-// same loudness. A note longer than the file holds by CROSSFADING fresh copies of the steady part over
+// instead of a clarinet pitched down. Each file is 4 s of steady tone, levelled to the
+// same loudness. Each file starts where its tone reaches its steady level (the breath and swell of the
+// recorded attack, 0.12 to 1.1 s, are cut off), and the note gets a short fade-in of our own instead.
+// A note longer than the file holds by CROSSFADING fresh copies of the steady part over
 // each other (equal-power, 0.3 s), so the tone never decays and no sample-exact loop point is needed
 // (an MP3's encoder padding shifts it differently per browser).
 const CLARINET_MIDIS = [50, 53, 58, 62, 65, 70, 74, 77, 82, 86, 89];
 const BASSOON_MIDIS = [34, 37, 41, 45, 46, 48];
 const CLARINET_LOW = 50;            // the clarinet's lowest sample; below it, the bassoon
-const WIND_ATTACK_END = 3.8;        // buffer seconds of the first, attack-bearing copy (the file fades at ~3.94 s)
+const WIND_ATTACK_END = 3.8;        // buffer seconds where the first copy ends (the file fades at ~3.94 s)
+// The files start on the steady tone (the recorded breath and swell are cut off when they are made), so
+// the onset is shaped here: a short soft fade-in.
+const WIND_ONSET = 0.06;            // seconds
 const WIND_STEADY = [0.7, 3.8] as const;   // buffer seconds of steady tone the held copies repeat
 const WIND_XFADE = 0.3;             // buffer seconds of each crossfade
 const WIND_RELEASE = 0.14;          // the breath stopping
@@ -301,11 +306,11 @@ function windVoice(c: AudioContext, midi: number, sample: { key: string; midi: n
     const noteEnd = t0 + Math.max(0.08, durSec);
     const end = noteEnd + WIND_RELEASE * 4;
 
-    // The note's own envelope: a short ramp in (the recording carries the real attack), held flat, then the release.
+    // The note's own envelope: a soft ramp in (the breath of the recorded attack is skipped), held flat, then the release.
     const level = gain * WIND_GAIN;
     const g = c.createGain();
     g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(level, t0 + 0.004);
+    g.gain.linearRampToValueAtTime(level, t0 + WIND_ONSET);
     g.gain.setValueAtTime(level, noteEnd);
     g.gain.setTargetAtTime(0, noteEnd, WIND_RELEASE);
     g.connect(master!);

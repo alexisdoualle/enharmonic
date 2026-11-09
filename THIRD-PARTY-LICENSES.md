@@ -57,7 +57,7 @@ Studios Chamber Orchestra 2, Community Edition (`viz/public/samples/clarinet/`,
 
 - Source: https://github.com/sgossner/VSCO-2-CE (`Woodwinds/Clarinet/susLong`, `Woodwinds/Bassoon/sus`)
 - License: CC0 1.0 (public domain dedication), https://creativecommons.org/publicdomain/zero/1.0/
-- Changes: the middle dynamic (`v2`) only; mixed to mono; each cut to its first 4 s (attack plus
-  steady tone) with a 60 ms fade, levelled to -20 dB RMS over the steady part, transcoded to 96 kbps
+- Changes: the middle dynamic (`v2`) only; mixed to mono; each cut to 4 s starting where the tone
+  reaches its steady level (the breath and swell of the attack removed), with a 60 ms fade-out, levelled to -20 dB RMS over the steady part, transcoded to 96 kbps
   MP3 and named by measured MIDI pitch (the library's names sit an octave low, and its clarinet
   "F#5" sounds F6, MIDI 89). Bassoon kept below MIDI 50 only.
