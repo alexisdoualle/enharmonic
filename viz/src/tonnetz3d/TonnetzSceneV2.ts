@@ -15,6 +15,7 @@ import {
     LatticeNode,
 } from './LatticeGeometry';
 import { computeArrowLit, hasNonPerfectFifth, LETTER_INDICES, LIT_THRESHOLD } from './arrowLogic';
+import { buildSymmetricPlanes, disposeSymmetricPlanes, type SymPlaneSpec, type SymPlaneResult } from './symmetricPlanes';
 
 // ── Config interface (simplified: no getNoteAt, getTriadType, getTriadActivation) ──
 
@@ -220,6 +221,11 @@ export class TonnetzSceneV2 {
     private labelGroup = new THREE.Group();
     private arrowGroup = new THREE.Group();
     private axisGroup = new THREE.Group();
+    // Symmetric-chord sheets (aug / dim7 continuations). Owned outside clearGroups(): rebuilt from the
+    // current nodes after every rebuild / spelling update, and on setSymmetricPlanes().
+    private symGroup = new THREE.Group();
+    private symSpec: SymPlaneSpec | null = null;
+    private symCaptions: SymPlaneResult['captions'] = [];
 
     // Resolution arrows (semitone tendencies at d5 boundaries)
     private arrowData: {
@@ -394,6 +400,7 @@ export class TonnetzSceneV2 {
         this.scene.add(this.labelGroup);
         this.scene.add(this.arrowGroup);
         this.scene.add(this.axisGroup);
+        this.scene.add(this.symGroup);
 
         // Camera
         this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
@@ -531,6 +538,7 @@ export class TonnetzSceneV2 {
             this.centerCamera();
         }
 
+        this.buildSymPlanes();
         this.render();
     }
 
@@ -644,6 +652,7 @@ export class TonnetzSceneV2 {
             }
         }
 
+        this.buildSymPlanes();
         this.render();
     }
 
@@ -892,6 +901,7 @@ export class TonnetzSceneV2 {
     dispose(): void {
         this._resizeObserver.disconnect();
         this.clearGroups();
+        disposeSymmetricPlanes(this.symGroup);
         if (this._nodeMaterial) {
             this._nodeMaterial.dispose();
             this._nodeMaterial = null;
@@ -948,6 +958,25 @@ export class TonnetzSceneV2 {
     setShowGhostNodes(show: boolean): void {
         this.showGhostNodes = show;
         this.rebuild();
+    }
+
+    /** Draw the sheets of the given symmetric chords (null or no classes = none). Returns, per chord, its
+     *  continuation as spelled on the main sheet, for a caption. See symmetricPlanes.ts. */
+    setSymmetricPlanes(spec: SymPlaneSpec | null): SymPlaneResult['captions'] {
+        this.symSpec = spec && spec.classes.length ? spec : null;
+        this.buildSymPlanes();
+        this.render();
+        return this.symCaptions;
+    }
+
+    private buildSymPlanes(): void {
+        disposeSymmetricPlanes(this.symGroup);
+        this.symCaptions = [];
+        if (!this.symSpec) return;
+        const res = buildSymmetricPlanes(this.currentNodes, this.symSpec, this.labelAtlas,
+            n => NoteDisplayUtils.toDisplayName(n.pc.letterName, this.displayMode, true, n.pc.accidental));
+        this.symGroup.add(...res.group.children);
+        this.symCaptions = res.captions;
     }
 
     setShowLayerZeroOnly(show: boolean): void {
