@@ -13,6 +13,7 @@ import { buildComparison, fetchCompareIndex, fetchMoments, fetchPredictions, sam
 import type { PitchClass } from '../../src/index.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
+import { initKeyboard, type KeyboardStrip } from './panels/keyboard.js';
 import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
@@ -69,6 +70,25 @@ function setChordsVisible(v: boolean) {
     chordsVisible = v;
     try { localStorage.setItem(SHOW_CHORDS_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
     render();
+}
+
+// Piano keyboard strip at the bottom (panels/keyboard.ts): off by default (the desktop layout is already
+// dense; the strip is for the big poster screen), persisted per-browser; `?piano=1` / `?piano=0` overrides.
+const SHOW_KEYBOARD_KEY = 'viz.showKeyboard', KEYBOARD_GUIDE_KEY = 'viz.keyboardGuide';
+let keyboard: KeyboardStrip | null = null;
+const readFlag = (key: string) => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
+function setKeyboardOption(key: string, v: boolean) {
+    try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* storage blocked */ }
+    applyKeyboard();
+    window.dispatchEvent(new Event('resize'));   // the bands above changed height: let the canvases re-fit
+}
+function applyKeyboard() {
+    const on = readFlag(SHOW_KEYBOARD_KEY), guide = readFlag(KEYBOARD_GUIDE_KEY);
+    $<HTMLInputElement>('show-keyboard').checked = on;
+    $<HTMLInputElement>('keyboard-guide').checked = guide;
+    $('keyboard-guide-ctl').hidden = !on;
+    keyboard?.setGuide(guide);
+    keyboard?.setVisible(on);
 }
 
 // Heard colouring on the piano roll (unheard notes grey, the look-ahead buffer light blue): on by default.
@@ -898,6 +918,7 @@ function render() {
         syncTimeLine();
     }
     renderStrip();
+    keyboard?.render(state.replay, state.step, comparison);   // no-op while the strip is hidden
     $('scrub').setAttribute('max', String(Math.max(0, (state.replay?.snapshots.length ?? 1) - 1)));
     ($('scrub') as HTMLInputElement).value = String(state.step);
     $('pos').textContent = `${state.step + 1} / ${state.replay?.snapshots.length ?? 0}`;
@@ -1452,6 +1473,12 @@ function wire() {
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('show-chords').checked = chordsVisible;
     $<HTMLInputElement>('show-chords').addEventListener('change', e => setChordsVisible((e.target as HTMLInputElement).checked));
+    keyboard = initKeyboard($('keyboard'), midi => { if (soundOn) { audioEnable(); playMidi(midi); } });
+    const pianoParam = new URLSearchParams(location.search).get('piano');
+    if (pianoParam === '1' || pianoParam === '0') { try { localStorage.setItem(SHOW_KEYBOARD_KEY, pianoParam); } catch { /* storage blocked */ } }
+    $<HTMLInputElement>('show-keyboard').addEventListener('change', e => setKeyboardOption(SHOW_KEYBOARD_KEY, (e.target as HTMLInputElement).checked));
+    $<HTMLInputElement>('keyboard-guide').addEventListener('change', e => setKeyboardOption(KEYBOARD_GUIDE_KEY, (e.target as HTMLInputElement).checked));
+    applyKeyboard();
     $<HTMLInputElement>('show-heard').checked = heardVisible;
     setShowHeard(heardVisible);
     $<HTMLInputElement>('show-heard').addEventListener('change', e => setHeardVisible((e.target as HTMLInputElement).checked));
