@@ -426,6 +426,9 @@ footer code, footer b { color: var(--ink); }
    filled with the tier colour and glowing. Off by default (the "keys" toggle). */
 #keyboard { flex: 0 0 auto; padding: 0 16px 8px; position: relative; }
 #keyboard[hidden] { display: none; }
+/* never wider than at a 1080 px screen (1080 − 2×16 gutter − 2×5 case = 1038 px of keys, ~20 px per white): the
+   range is already the whole piano, so a wider screen centres the keyboard instead of growing the keys */
+.pk-keys, .pk-guide { max-width: 1038px; margin: 0 auto; }
 .pk-keys { position: relative; height: 56px; background: #3a3a3a; border: 5px solid #3a3a3a; border-radius: 8px; box-sizing: content-box; box-shadow: 0 2px 8px rgba(0,0,0,.25); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .pk-key { position: absolute; top: 0; cursor: pointer; transition: background .15s ease, box-shadow .15s ease; box-sizing: border-box; }
 .pk-white { bottom: 0; background: linear-gradient(145deg, #ffffff, #f7fafc); border: 1px solid #cbd5e0; border-radius: 0 0 4px 4px; z-index: 1; }
