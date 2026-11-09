@@ -35,6 +35,9 @@
       </select>
     </label>
     <label class="ctl" id="look-ahead-ctl" title="③ near-real-time: let each note wait for its resolution (a small forward buffer) before committing — `new Speller({ lookAhead: true })`"><input type="checkbox" id="look-ahead" checked /> ③ look-ahead</label>
+    <!-- LOCAL ONLY: shown only when the build carries compare/index.json (tools/viz-compare/sync.mjs). -->
+    <label id="compare-ctl" hidden>compare with <select id="compare"><option value="">none</option></select></label>
+    <select id="moments" hidden aria-label="curated comparison moments" title="jump to a curated comparison moment"></select>
     <span class="spacer"></span>
     <span id="status"></span>
   </header>
@@ -76,6 +79,8 @@
       <input type="range" id="latency" min="0" max="500" step="10" value="0" />
       <span id="latency-val" class="pos">0ms</span></label>
   </section>
+
+  <div id="moment-note" hidden><span id="moment-text"></span><button type="button" id="moment-close" title="hide this note" aria-label="hide this note">×</button></div>
 
   <!-- <div id="strip" class="strip" title="every onset, coloured by tier — click to jump"></div> -->
 

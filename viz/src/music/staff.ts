@@ -10,8 +10,9 @@
  * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
  */
-import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
+import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType, Annotation } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
+import type { Comparison } from '../compare.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // most measures on a page (fewer when dense bars would not fit)
@@ -80,6 +81,18 @@ let builtZoom = 1;
 // Every drawn note head with its note, so a new sounding set can recolour it without engraving again.
 let heads: { sn: StaveNote; i: number; note: ReplayNote }[] = [];
 let headEls: { el: Element; note: ReplayNote }[] = [];
+
+// LOCAL compare (viz/src/compare.ts): under each chord, the other speller's spellings that differ from ours.
+let cmp: Comparison | null = null;
+const COMPARE_INK = '#00798c';   // --compare-on-light: the staff is on a light background
+const GLYPH: Record<number, string> = { [-2]: '𝄫', [-1]: '♭', 0: '♮', 1: '♯', 2: '𝄪' };
+
+/** Show (or with null, hide) another speller's differing spellings under the staff's chords. */
+export function setStaffCompare(c: Comparison | null): void {
+    if (c === cmp) return;
+    cmp = c;
+    builtForReplay = null;   // engrave again on the next render
+}
 
 export function renderStaff(replay: Replay, step: number): void {
     const host = document.getElementById('staff')!;
@@ -552,6 +565,16 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
         if (dots) Dot.buildAndAttach([sn], { all: true });
         // No manual accidental adding: applyAccidentals in the caller handles it per the key sig.
 
+        // Compare: their spelling of each note in this chord that differs from ours, lowest first, under it.
+        const theirs = cmp ? g.filter(n => cmp!.differ[n.onIndex]).map(n => {
+            const p = cmp!.theirs[n.onIndex]!;
+            return `${p.step}${p.alter ? GLYPH[p.alter] : ''}${cmp!.tiers[n.onIndex] === 'wrong' ? '✗' : ''}`;
+        }) : [];
+        if (theirs.length) {
+            const a = new Annotation(theirs.join(' ')).setVerticalJustification(Annotation.VerticalJustify.BOTTOM).setFont('Arial', 12, 'bold');
+            a.setStyle({ fillStyle: COMPARE_INK, strokeStyle: COMPARE_INK });
+            sn.addModifier(a, 0);
+        }
         g.forEach((n, i) => {
             const color = headColour(n, sounding);
             sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });

@@ -1,0 +1,50 @@
+{
+  "_comment": "Curated compare moments for the LOCAL-ONLY speller comparison (viz/src/compare.ts). step is 1-based, as in the URL. mode is ours. Copied to compare/moments.json by viz/build.mjs only outside CI.",
+  "moments": [
+    {
+      "title": "Purcell, Cold Song m. 27: one chord, two spellings",
+      "fixture": "purcell_cold_song", "step": 964, "mode": "tp", "compare": "pkspell_heldout",
+      "text": "A B♭-minor triad struck twice, half a beat apart: PKSpell writes D♭ on beat 2, then C♯ on beat 2.5 (B♭–C♯–F). Ours keeps D♭ both times."
+    },
+    {
+      "title": "Shostakovich, Quartet No. 8 m. 92: a unison split",
+      "fixture": "shostakovich_sq8_op110", "step": 6956, "mode": "tp", "compare": "pkspell_heldout",
+      "text": "Two voices on the same E: PKSpell spells one E and the other F♭. Co-sounding notes of one pitch share one spelling."
+    },
+    {
+      "title": "Chopin, Prelude No. 20 m. 8: our own split (two-pass)",
+      "fixture": "chopin_prelude_op28_no20", "step": 173, "mode": "tp", "compare": "ps13",
+      "text": "Our mistake: two-pass spells a struck D♭-major chord C♯–F–A♭, breaking the triad. ps13, Temperley, Chew & Chen, PKSpell and our own Core, real-time and look-ahead modes all write D♭."
+    },
+    {
+      "title": "Chopin, Prelude No. 4 m. 6: B major with E♭",
+      "fixture": "chopin_prelude_op28_no4", "step": 152, "mode": "tp", "compare": "ps13",
+      "text": "B, D♯ and F♯ struck together: ps13 writes E♭ (B–E♭–F♯, a diminished fourth inside a major triad). Temperley, Chew & Chen and music21 do the same; ours writes D♯."
+    },
+    {
+      "title": "Grieg, Morning Mood m. 9: G♯ major with C",
+      "fixture": "grieg_morning_mood", "step": 115, "mode": "tp", "compare": "chew_chen",
+      "text": "A struck G♯-major chord: Chew & Chen write C for the third (G♯–C–D♯), and so does ps13. Ours writes B♯, as Grieg did."
+    },
+    {
+      "title": "Schumann, Träumerei m. 7: A major with D♭",
+      "fixture": "schumann_traumerei", "step": 69, "mode": "tp", "compare": "temperley",
+      "text": "A struck A7 chord (A–C♯–E–G): Temperley spells the bass C♯ as D♭, a diminished fourth above A. Ours writes C♯."
+    },
+    {
+      "title": "Beethoven, Moonlight m. 26: G♯ major with C and E♭",
+      "fixture": "beethoven_moonlight_mvt1", "step": 436, "mode": "tp", "compare": "music21",
+      "text": "music21's default MIDI spelling has one fixed name per key, so the G♯-major chord comes out G♯–C–E♭. Ours writes G♯–B♯–D♯, as Beethoven did."
+    },
+    {
+      "title": "Mozart, K. 545 m. 68: they are right, we are wrong",
+      "fixture": "mozart_k545", "step": 1177, "mode": "tp", "compare": "temperley",
+      "text": "A diminished-seventh sonority F♯–C–E♭: Mozart writes E♭, and so do Temperley, ps13 and Chew & Chen. Ours writes D♯. Dim7 chords are our hardest case."
+    },
+    {
+      "title": "Chopin, Prelude No. 4 m. 16: they are right, we are wrong",
+      "fixture": "chopin_prelude_op28_no4", "step": 399, "mode": "tp", "compare": "ps13",
+      "text": "Chopin's line is C♯–B–A♯ over E–G. Two-pass flips the line to D♭–C♭–B♭ over E–G; ps13 keeps Chopin's sharps."
+    }
+  ]
+}

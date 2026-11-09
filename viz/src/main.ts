@@ -7,8 +7,10 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying } from './music/pianoroll.js';
-import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
+import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying, setRollCompare } from './music/pianoroll.js';
+import { renderStaff, renderLiveStaff, resetStaffScroll, setStaffCompare } from './music/staff.js';
+import { buildComparison, fetchCompareIndex, fetchMoments, fetchPredictions, sameSpelling, type CompareIndex, type Comparison, type Moment } from './compare.js';
+import type { PitchClass } from '../../src/index.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
 import { connectMidi, midiAvailable } from './live.js';
@@ -808,6 +810,7 @@ function recompute() {
         { ...spiralOpts(), ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
+    if (compareIndex) updateComparison();   // LOCAL compare: re-score theirs against this replay
     renderStatus();
     render();
 }
@@ -868,13 +871,15 @@ function renderStatusText() {
         + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
         + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
         + `<span class="wrong">${pc(t.wrong)}% wrong (${t.wrong})</span>`
-        + (t.unread ? ` · <span class="dim">${t.unread} unread</span>` : '');
+        + (t.unread ? ` · <span class="dim">${t.unread} unread</span>` : '')
+        + (comparison ? ` · <span class="cmp">vs ${esc(comparison.label)}: ${comparison.nDiffer} differ · theirs ${pc(comparison.tally.wrong)}% wrong (${comparison.tally.wrong})</span>` : '');
 }
 
 function render() {
     const snap = current(state);
     $('look-ahead-ctl').style.display = state.mode === 'rt' ? '' : 'none';
     renderScoring($('scoring'), snap, effMode() === 'la' || effMode() === 'tp', effMode() === 'core');
+    if (comparison) renderCompareBlock($('scoring'), snap);
     renderWheel($('wheel'), snap, {
         range: state.spiralRange, center: state.spiralCenter, even: state.spiralEven,
         streaming: state.mode === 'rt' || state.mode === 'la',
@@ -1168,6 +1173,9 @@ function syncUrl() {
     // the card layout: only when it differs from the default
     if (slots.join() !== DEFAULT_SLOTS.join()) u.searchParams.set('slots', slots.join(','));
     else u.searchParams.delete('slots');
+    // LOCAL compare: the other speller shown (only while comparison data exists)
+    if (compareIndex && state.compare) u.searchParams.set('vs', state.compare);
+    else u.searchParams.delete('vs');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
@@ -1232,6 +1240,133 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     state.step = step;
     recompute();
     syncUrl();
+    if (compareIndex) { syncCompareUi(); await loadComparePreds(); }
+}
+
+// --- LOCAL-ONLY comparison with other spellers (viz/src/compare.ts) --------------------------------
+// Present only when the build carries `compare/index.json` (tools/viz-compare/sync.mjs, never deployed).
+// Without it every control below stays hidden and nothing else changes.
+let compareIndex: CompareIndex | null = null;
+let comparePreds: { key: string; preds: (PitchClass | null)[] } | null = null;
+let comparison: Comparison | null = null;
+let moments: Moment[] = [];
+
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+const compareKey = () => state.fixtureId && state.compare ? `${state.fixtureId}/${state.compare}` : '';
+const compareAvailable = (): string[] => (state.fixtureId && compareIndex?.fixtures[state.fixtureId]) || [];
+
+async function initCompare(ids: string[], urlVs: string | null) {
+    compareIndex = await fetchCompareIndex();
+    if (!compareIndex) return;
+    const idx = compareIndex;
+    state.compare = urlVs && urlVs in idx.algos ? urlVs : null;
+    $('compare-ctl').hidden = false;
+    $<HTMLSelectElement>('compare').addEventListener('change', e => {
+        state.compare = (e.target as HTMLSelectElement).value || null;
+        setMoment(null);
+        syncUrl();
+        void loadComparePreds();
+    });
+    moments = await fetchMoments();
+    if (!moments.length) return;
+    const sel = $<HTMLSelectElement>('moments');
+    sel.innerHTML = '<option value="">★ moments…</option>' + moments.map((m, i) => {
+        const ok = ids.includes(m.fixture) && (idx.fixtures[m.fixture] ?? []).includes(m.compare);
+        return `<option value="${i}"${ok ? '' : ' disabled'} title="${esc(m.text)}">${esc(m.title)}${ok ? '' : ' (data missing)'}</option>`;
+    }).join('');
+    sel.hidden = false;
+    sel.addEventListener('change', () => {
+        const m = moments[Number(sel.value)];
+        sel.value = '';
+        if (m) void jumpToMoment(m);
+    });
+    $('moment-close').addEventListener('click', () => setMoment(null));
+}
+
+/** The compare menu lists only the spellers with aligned predictions for this fixture. */
+function syncCompareUi() {
+    if (!compareIndex) return;
+    const sel = $<HTMLSelectElement>('compare');
+    const avail = compareAvailable();
+    sel.innerHTML = '<option value="">none</option>'
+        + avail.map(a => `<option value="${esc(a)}">${esc(compareIndex!.algos[a] ?? a)}</option>`).join('');
+    sel.disabled = !avail.length;
+    sel.title = avail.length ? 'LOCAL ONLY: show another speller\'s spelling wherever it differs from ours' : 'no other speller\'s output for this piece';
+    sel.value = state.compare && avail.includes(state.compare) ? state.compare : '';
+}
+
+/** Fetch the selected speller's predictions for this fixture (cached for the pair), then redraw. */
+async function loadComparePreds() {
+    const key = compareKey();
+    if (!compareIndex || !key || !compareAvailable().includes(state.compare!)) comparePreds = null;
+    else if (comparePreds?.key !== key) {
+        const preds = await fetchPredictions(state.fixtureId!, state.compare!);
+        if (compareKey() !== key) return;   // the selection moved on while this loaded
+        comparePreds = preds ? { key, preds } : null;
+    }
+    updateComparison();
+    renderStatus();
+    render();
+}
+
+/** Score the loaded predictions against the current replay (a mode change re-runs this via recompute). */
+function updateComparison() {
+    const r = state.replay, key = compareKey();
+    comparison = r && comparePreds && comparePreds.key === key && !isLive() && state.fixtureId !== IMPORTED_ID
+        ? buildComparison(r, comparePreds.preds, rawExpected, state.compare!, compareIndex!.algos[state.compare!] ?? state.compare!)
+        : null;
+    setRollCompare(comparison);
+    setStaffCompare(comparison);
+}
+
+async function jumpToMoment(m: Moment) {
+    state.mode = m.mode;
+    $<HTMLSelectElement>('mode').value = m.mode;
+    if (m.lookAhead !== undefined) { state.lookAhead = m.lookAhead; $<HTMLInputElement>('look-ahead').checked = m.lookAhead; }
+    state.compare = m.compare;
+    setMoment(m);
+    await pickFixture(m.fixture, m.step - 1);
+}
+
+/** The banner under the transport naming the curated moment on screen. */
+function setMoment(m: Moment | null) {
+    const el = $('moment-note');
+    el.hidden = !m;
+    if (m) $('moment-text').innerHTML = `<b>★ ${esc(m.title)}</b> ${esc(m.text)}`;
+}
+
+/** Scoring panel: their spelling of this note, the struck chord three ways, and the piece summary. */
+function renderCompareBlock(host: HTMLElement, snap: ReturnType<typeof current>) {
+    const c = comparison, r = state.replay;
+    if (!c || !r || !snap) return;
+    const k = snap.onIndex, theirs = c.theirs[k] ?? null;
+    const box = document.createElement('div');
+    box.className = 'cmp-block';
+    const tierTxt = (t: string) => `<span class="cmp-tier ${t}">${t === 'correct' ? 'exact' : t}</span>`;
+    const head = !theirs ? `<span class="dim">no spelling from ${esc(c.label)} here</span>`
+        : c.differ[k] ? `<span class="cmp-sp">${label(theirs)}</span> ${tierTxt(c.tiers[k]!)} <span class="dim">vs ours ${label(snap.committed)}</span>`
+        : `<span class="dim">same as ours (${label(theirs)})</span>`;
+    // Every note struck with this one, low to high: the score, ours, theirs (theirs marked where it differs).
+    const at = r.snapshots.filter(s => s.t === snap.t);
+    const row = (name: string, cls: string, cells: string[]) => `<tr><th class="${cls}">${name}</th>${cells.map(x => `<td>${x}</td>`).join('')}</tr>`;
+    const pcs = (p: PitchClass | null) => p ? label({ step: p.step, alter: p.alter }) : '∅';
+    const chord = `<table class="cmp-chord"><tbody>`
+        + row('score', '', at.map(s => pcs(s.expected)))
+        + row('ours', '', at.map(s => `<span class="${s.tier === 'wrong' ? 'cmp-bad' : ''}">${pcs(s.committed)}</span>`))
+        + row(esc(c.label), 'cmp-name', at.map(s => {
+            const th = c.theirs[s.onIndex] ?? null;
+            const diff = !!th && !!s.committed && !sameSpelling(th, s.committed);
+            return `<span class="${diff ? 'cmp-diff' : ''} ${c.tiers[s.onIndex] === 'wrong' ? 'cmp-bad' : ''}">${pcs(th)}</span>`;
+        }))
+        + `</tbody></table>`;
+    const pct = (x: number, n: number) => n ? (100 * x / n).toFixed(1) : '0.0';
+    box.innerHTML = `<div class="cmp-head"><span class="cmp-name">${esc(c.label)}</span> ${head}</div>`
+        + `<div class="cmp-sub dim">struck together at this onset, low to high (struck wrong notes underlined):</div>${chord}`
+        + `<div class="cmp-sum dim">this piece: ${c.nDiffer} note${c.nDiffer === 1 ? '' : 's'} spelled differently; `
+        + `${esc(c.label)} wrong on ${c.differTheirsWrong}, ours on ${c.differOursWrong}. `
+        + `Overall wrong: ${esc(c.label)} ${pct(c.tally.wrong, c.tally.total)}% (${c.tally.wrong}), ours ${pct(r.tally.wrong, r.tally.total)}% (${r.tally.wrong}).</div>`;
+    const after = host.querySelector('.note-line');
+    if (after) after.after(box); else host.appendChild(box);
 }
 
 function wire() {
@@ -1265,7 +1400,7 @@ function wire() {
     // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
     SLOT_TABS.forEach((id, i) => $(id).addEventListener('click', () => setMobileSlot(i)));
     MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
-    $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
+    $<HTMLSelectElement>('fixture').addEventListener('change', e => { setMoment(null); void pickFixture((e.target as HTMLSelectElement).value); });
     // Import a MusicXML score (button opens the picker; drop works anywhere on the app).
     $('import-btn').addEventListener('click', () => $('import-file').click());
     $<HTMLInputElement>('import-file').addEventListener('change', e => {
@@ -1389,6 +1524,7 @@ async function boot() {
         : `<option value="${id}">${id}</option>`).join('');
     restoreTakes();
     const p = new URLSearchParams(location.search);
+    await initCompare(ids, p.get('vs'));
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');
     const urlStep = p.get('step');

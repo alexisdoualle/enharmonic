@@ -16,9 +16,10 @@ export interface AppState {
     lookAhead: boolean;       // real-time mode option: near-real-time letter look-ahead (Speller({ lookAhead }))
     showKeyLanes: boolean;    // EXPERIMENTAL, display-only: the local + stable collection lanes (default off)
     sideOverrides: SideOverride[]; // editorial comma orientation markers for two-pass replay
+    compare: string | null;   // LOCAL compare: the other speller shown next to ours (null = none)
 }
 
-export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, meanFrame: false, lookAhead: true, showKeyLanes: false, sideOverrides: [] };
+export const initialState: AppState = { fixtureId: null, mode: 'rt', replay: null, step: 0, spiralRange: 7, spiralCenter: 1, spiralEven: false, repair: false, meanFrame: false, lookAhead: true, showKeyLanes: false, sideOverrides: [], compare: null };
 
 /** Shipped-preset defaults: the spiral controls reset to these, and the URL omits them when unchanged.
  *  `range` is the clamp radius directly, so the default is 7 (= RT_PRESET foldRadius); min 6 = a tighter fold. */

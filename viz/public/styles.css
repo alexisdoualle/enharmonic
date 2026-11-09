@@ -2,6 +2,8 @@
   --bg: #14161a; --panel: #1c2027; --ink: #e7e9ee; --dim: #9aa3b2; --line: #2c313b;
   --accent: #6ea8fe; --correct: #57caa0; --flipped: #d8b35a; --wrong: #e06c75;
   --coll: #2a3550; --tonic: #3a5bd0;
+  /* LOCAL compare (another speller's spelling): cyan, apart from the tier palette; a darker teal on the light staff */
+  --compare: #4dd0e1; --compare-on-light: #00798c;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   /* Base UI zoom: the desktop debugger renders at 80% so the whole layout breathes (this was the density
      that read well at 80% browser zoom). Browser zoom still stacks on top. The phone layout resets to 1:1. */
@@ -385,3 +387,29 @@ footer code, footer b { color: var(--ink); }
 .help-content .help-keys td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .help-content .help-keys td:first-child { white-space: nowrap; color: var(--ink); }
 #transport .ctl-val { cursor: pointer; }   /* click resets the roll scale to its default */
+
+/* --- LOCAL-ONLY speller comparison (viz/src/compare.ts); hidden unless compare data was synced --- */
+#compare { width: 170px; }
+#moments { width: 120px; }
+#status .cmp { color: var(--compare); }
+#moment-note { display: flex; align-items: baseline; gap: 10px; margin: 4px 16px 0; padding: 5px 10px; font-size: 12.5px;
+  border-left: 3px solid var(--compare); border-radius: 4px; background: color-mix(in srgb, var(--compare) 10%, var(--panel)); }
+#moment-note[hidden] { display: none; }
+#moment-note b { color: var(--compare); margin-right: 4px; }
+#moment-note #moment-text { flex: 1 1 auto; }
+#moment-note button { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 15px; line-height: 1; }
+#moment-note button:hover { color: var(--ink); }
+.cmp-block { margin: -2px 0 10px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--compare) 45%, var(--line)); border-radius: 6px; font-size: 12px; }
+.cmp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cmp-name { color: var(--compare); font-weight: 700; }
+.cmp-sp { color: var(--compare); font-size: 18px; font-weight: 700; }
+.cmp-tier { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; padding: 0 5px; border-radius: 3px; border: 1px solid currentColor; }
+.cmp-tier.correct { color: var(--correct); } .cmp-tier.flipped { color: var(--flipped); } .cmp-tier.wrong { color: var(--wrong); } .cmp-tier.unread { color: var(--dim); }
+.cmp-sub { margin-top: 5px; font-size: 10.5px; }
+.cmp-chord { border-collapse: collapse; margin: 2px 0 4px; font-size: 13px; }
+.cmp-chord th { text-align: left; font-weight: 500; color: var(--dim); padding: 1px 10px 1px 0; font-size: 11px; white-space: nowrap; }
+.cmp-chord th.cmp-name { color: var(--compare); font-weight: 700; }
+.cmp-chord td { padding: 1px 7px; text-align: center; }
+.cmp-diff { color: var(--compare); font-weight: 700; }
+.cmp-bad { text-decoration: underline wavy var(--wrong); text-underline-offset: 3px; }
+.cmp-sum { font-size: 11px; line-height: 1.4; }
