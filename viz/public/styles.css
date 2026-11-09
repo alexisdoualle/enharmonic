@@ -125,6 +125,13 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 #tonnetz { display: flex; flex-direction: column; min-height: 0; }
 .tonnetz-canvas { position: relative; flex: 1 1 0; min-height: 0; border-radius: 8px; overflow: hidden; background: #1a1a2e; }
 .tonnetz-canvas canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
+/* 3D lattice toggles (chord planes, inactive nodes) + the plane caption, over the canvas's lower-left corner */
+.lattice-ctrls { position: absolute; left: 6px; bottom: 6px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: calc(100% - 12px); font-size: 11px; color: var(--dim); }
+.lattice-ctrls label { display: flex; align-items: center; gap: 5px; background: rgba(20, 22, 26, .78); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; cursor: pointer; }
+.lattice-ctrls label:hover, .lattice-ctrls label:focus-within { color: var(--ink); border-color: var(--accent); }
+.lattice-ctrls select { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; padding: 0 2px; }
+.lattice-ctrls input { accent-color: var(--accent); margin: 0; }
+.lattice-caption { background: rgba(20, 22, 26, .78); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; color: var(--ink); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 
 /* live coiled Tonnetz: MIDI pc spokes plus persistent speller-selected spellings */
 .live-tonnetz { display: flex; flex-direction: column; min-height: 0; background: #fff; color: #222; border-color: #d6d6d6; }

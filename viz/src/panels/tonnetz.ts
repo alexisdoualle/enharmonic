@@ -18,6 +18,7 @@ import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSce
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { triadColor as sharedTriadColor } from '../music/triadColor.js';
 import type { LetterName } from '../tonnetz3d/types.js';
+import { allSymClasses, symClassesIn, type SymClass, type SymPlaneSpec } from '../tonnetz3d/symmetricPlanes.js';
 
 // Grid footprint: wide enough along the fifths chain to hold a key's neighbourhood, a few third-rows
 // deep so triads read as triangles. Kept modest: this is a debugger panel, not the full app's lattice.
@@ -64,6 +65,21 @@ let scene: TonnetzSceneV2 | null = null;
 let raf = 0;
 let lastScaleSig = '';
 
+// Two display toggles, both off by default (off = the panel exactly as before). Read from / written to the
+// page URL (`planes=sounding|aug|dim7`, `ghosts=1`) so a view can be linked; nothing is stored.
+//   • PLANES: the sheet a symmetric chord's enharmonic continuation forms in the lattice (symmetricPlanes.ts).
+//     `sounding` = the sheets of any augmented triad / dim7 whose pitch classes are all ringing (the main
+//     sheet bright, its parallel copies faint); `aug` / `dim7` = every sheet of every such chord at once,
+//     one hue per chord: the lattice sliced into 4 (or 3) interleaved diagonal sheets.
+//   • GHOSTS: the scene's "All Notes" mode: every lattice cell in the window, not only the 7-note surface.
+type PlanesMode = 'off' | 'sounding' | 'aug' | 'dim7';
+const PLANES_MODES: PlanesMode[] = ['off', 'sounding', 'aug', 'dim7'];
+let planesMode: PlanesMode = 'off';
+let showGhosts = false;
+let soundingSpelled = new Set<string>();   // `letter:accidental` of the ringing notes, as committed
+let lastPlanesSig = '';
+let captionEl: HTMLElement | null = null;
+
 /** Signature of the 7-letter surface, so we only pay for a geometry rebuild when the spelling changes. */
 function scaleSig(s: PitchClass[]): string {
     return s.map(p => `${p.letterName}${p.accidental}`).join(',');
@@ -109,6 +125,8 @@ export function initTonnetz(container: HTMLElement): void {
     // The vendored scene hardcodes a debug (x, y, z) label under every node; hide them: the note names
     // are the labels that matter here.
     scene.setShowCoords(false);
+    mountLatticeControls(container);
+    if (showGhosts) scene.setShowGhostNodes(true);
     lastScaleSig = scaleSig(scale);
     // Render loop: advance the decay accumulator on the wall clock, then let the scene smooth toward it.
     const loop = () => {
@@ -150,7 +168,8 @@ export function renderTonnetz(snap: Snapshot | null): void {
     const surface = snap?.resolvedScale && snap.resolvedScale.length === 7
         ? snap.resolvedScale.map(p => new PitchClass(p.step as LetterName, p.alter))
         : defaultScale();
-    applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))));
+    applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))),
+        new Set((snap?.sounding ?? []).map(s => `${s.pitch.step}:${s.pitch.alter}`)));
 }
 
 /** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard).
@@ -170,14 +189,15 @@ export function renderTonnetzLive(state: LiveState): void {
         byLetter.set(step, { step, alter: Number(alter) });
     }
     const surface = [...byLetter.values()].map(p => new PitchClass(p.step as LetterName, p.alter));
-    applyScene(surface, new Set(state.heldPCs));
+    applyScene(surface, new Set(state.heldPCs), new Set(state.heldSpellings));
 }
 
 /** Point the scene at a 7-letter surface and the pitch classes ringing on it, choosing the cheapest
  *  scene update. The RAF loop turns the sounding set into full activation and decays everything else
  *  toward the scale floor (see the accumulator above). */
-function applyScene(surface: PitchClass[], sounding: Set<number>): void {
+function applyScene(surface: PitchClass[], sounding: Set<number>, spelled: Set<string>): void {
     if (!scene) return;
+    soundingSpelled = spelled;
     const sig = scaleSig(surface);
     const scaleChanged = sig !== lastScaleSig;
     scale = surface;
@@ -200,6 +220,98 @@ function applyScene(surface: PitchClass[], sounding: Set<number>): void {
 
     if (pcChanged) { scene.rebuild(); scene.clearSmoothing(); }
     else if (scaleChanged) scene.updateSpellings();
+    syncPlanes();
+}
+
+/** The symmetric chords to draw under the current mode and sounding notes. */
+function planeClasses(): SymClass[] {
+    switch (planesMode) {
+        case 'off': return [];
+        case 'sounding': return symClassesIn(soundingPCs);
+        case 'aug': case 'dim7': return allSymClasses(planesMode);
+    }
+}
+
+/** Point the scene at the planes for the current state; a no-op unless the chords or the struck
+ *  spellings changed (the sheets are cheap, but stepping should not churn GPU buffers). */
+function syncPlanes(force = false): void {
+    if (!scene) return;
+    const classes = planeClasses();
+    const sig = `${planesMode}|${classes.map(c => c.kind + c.residue).join(',')}|${[...soundingSpelled].sort().join(',')}`;
+    if (!force && sig === lastPlanesSig) return;
+    lastPlanesSig = sig;
+    const spec: SymPlaneSpec | null = classes.length
+        ? { classes, mode: planesMode === 'sounding' ? 'focus' : 'all', emphasis: soundingSpelled }
+        : null;
+    const captions = scene.setSymmetricPlanes(spec);
+    if (!captionEl) return;
+    captionEl.hidden = captions.length === 0;
+    captionEl.replaceChildren(...captions.map(c => {
+        const row = document.createElement('div');
+        const name = document.createElement('b');
+        name.textContent = c.kind === 'aug' ? 'aug' : 'dim7';
+        name.style.color = c.color;
+        // The continuation in stacking order, struck spellings in bold. A long chain (all-sheets mode, or a
+        // wide sheet) is cut to two spellings either side of the struck ones, so the caption stays one line.
+        const hit = c.chain.map((x, i) => x.struck ? i : -1).filter(i => i >= 0);
+        const lo = hit.length ? Math.max(0, hit[0]! - 2) : 0;
+        const hi = hit.length ? Math.min(c.chain.length, hit[hit.length - 1]! + 3) : Math.min(c.chain.length, 8);
+        row.append(name, ' ', lo > 0 ? '… ' : '');
+        c.chain.slice(lo, hi).forEach((x, i) => {
+            if (i) row.append(' – ');
+            if (x.struck) { const s = document.createElement('b'); s.textContent = x.label; row.append(s); }
+            else row.append(x.label);
+        });
+        if (hi < c.chain.length) row.append(' …');
+        return row;
+    }));
+}
+
+/** The two toggles, overlaid on the canvas's lower-left corner. State comes from the URL on first mount. */
+function mountLatticeControls(container: HTMLElement): void {
+    const params = new URLSearchParams(location.search);
+    const p = params.get('planes') as PlanesMode | null;
+    planesMode = p && PLANES_MODES.includes(p) ? p : 'off';
+    showGhosts = params.get('ghosts') === '1';
+
+    const box = document.createElement('div');
+    box.className = 'lattice-ctrls';
+    box.innerHTML = `
+        <div class="lattice-caption" aria-live="polite" hidden></div>
+        <label title="Draw the sheet a symmetric chord forms across the lattice: every cell on it is the same augmented triad (stacked major thirds) or diminished seventh (stacked minor thirds), spelled a comma further each cycle">chord planes
+            <select class="lattice-planes">
+                <option value="off">off</option>
+                <option value="sounding">sounding aug / dim7</option>
+                <option value="aug">all augmented triads</option>
+                <option value="dim7">all diminished 7ths</option>
+            </select></label>
+        <label title="Show every lattice cell in view, not only the 7-note collection"><input type="checkbox" class="lattice-ghosts"> inactive nodes</label>`;
+    container.appendChild(box);
+    captionEl = box.querySelector<HTMLElement>('.lattice-caption');
+    const sel = box.querySelector<HTMLSelectElement>('.lattice-planes')!;
+    const chk = box.querySelector<HTMLInputElement>('.lattice-ghosts')!;
+    sel.value = planesMode;
+    chk.checked = showGhosts;
+    // Keep orbit/zoom gestures on the canvas from starting when the controls are used.
+    for (const ev of ['pointerdown', 'wheel'] as const) box.addEventListener(ev, e => e.stopPropagation());
+    sel.addEventListener('change', () => {
+        planesMode = sel.value as PlanesMode;
+        writeParam('planes', planesMode === 'off' ? null : planesMode);
+        syncPlanes(true);
+    });
+    chk.addEventListener('change', () => {
+        showGhosts = chk.checked;
+        writeParam('ghosts', showGhosts ? '1' : null);
+        scene?.setShowGhostNodes(showGhosts);
+    });
+}
+
+/** Record a toggle in the page URL without touching the other params (main.ts owns those). */
+function writeParam(key: string, value: string | null): void {
+    const u = new URL(location.href);
+    if (value === null) u.searchParams.delete(key); else u.searchParams.set(key, value);
+    const q = u.searchParams.toString().replace(/%2C/g, ',');
+    history.replaceState(history.state, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`);
 }
 
 /** Tear down the WebGL context and stop the loop, for completeness; the panel currently lives for the
@@ -209,4 +321,7 @@ export function disposeTonnetz(): void {
     scene?.dispose();
     scene = null;
     lastScaleSig = '';
+    lastPlanesSig = '';
+    captionEl?.parentElement?.remove();
+    captionEl = null;
 }
