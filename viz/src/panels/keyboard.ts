@@ -8,7 +8,8 @@
  *
  * - A lit key that belongs to the chord read at this onset (chord.ts `chordReading`, the same read as the
  *   chord lane) is filled with that chord's 3D-lattice shade (`chordFill`: the triad gradient over the
- *   current surface, so minor is bluish and major yellow-orange; maj7 / min7 blend their two triads).
+ *   current surface, so minor is bluish and major yellow-orange; maj7 / min7 a deeper shade of their
+ *   triad; sus4 and an open fifth a washed-out shade of the triad the scale gives their root).
  *   A sounding note outside the chord, or with no chord named, is neutral grey.
  * - A wrong note gets a red inner frame (the tier, which the fill no longer carries).
  * - Struck-now notes are solid; notes still held from an earlier onset are paler; the current step's
@@ -132,7 +133,7 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
             const ungraded = !n.expected && !!ours;
             const member = !!ours && inChord.has(`${ours.step}${ours.alter}`);
             const bg = member ? chord!.fill : NEUTRAL;
-            // --pk-fill: one solid colour (glow, held tint); --pk-bg: the full background (a blend for maj7/min7)
+            // --pk-fill: the colour (glow, held tint); --pk-bg: the background (chordFill is always one solid colour now)
             k.style.setProperty('--pk-bg', bg);
             k.style.setProperty('--pk-fill', bg.startsWith('linear') ? (bg.match(/#[0-9a-f]{6}/i)?.[0] ?? NEUTRAL) : bg);
             k.classList.add('pk-on');

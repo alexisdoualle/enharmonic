@@ -84,7 +84,7 @@ suite('viz chord finder', () => {
 });
 
 import { triadColor } from '../viz/src/music/triadColor.js';
-import { chordColor } from '../viz/src/chord.js';
+import { chordColor, chordFill } from '../viz/src/chord.js';
 suite('viz triadColor (shared with the Tonnetz panel)', () => {
     const cMaj = ['C', 'D', 'E', 'F', 'G', 'A', 'B'].map(step => ({ step, alter: 0 }));
     const sp = (...xs: [string, number][]) => xs.map(([step, alter]) => ({ step, alter }));
@@ -97,6 +97,26 @@ suite('viz triadColor (shared with the Tonnetz panel)', () => {
         const col = (spec: string) => chordColor(findChord(notes(spec)), cMaj as never);
         assertEq(col('G3 B3 D4 F4'), triadColor('major', sp(['G', 0], ['B', 0], ['D', 0]), cMaj));
         assertEq(col('B3 D4 F4 Ab4'), triadColor('diminished', undefined, cMaj));
+    });    test('sus4 and an open fifth are read, and take a washed-out shade of the triad the scale gives them', () => {
+        assertEq(findChord(notes('C4 F4 G4')).short, 'Csus4');
+        assertEq(findChord(notes('G3 C4 D4')).short, 'Gsus4');
+        assertEq(findChord(notes('C3 G3 C4')).short, 'C5');
+        assertEq(findChord(notes('C4 E4 G4')).type, 'maj');            // a third-built chord still wins
+        assertEq(findChord(notes('C4 E4')).type, null);                // other dyads stay unnamed
+        const col = (spec: string) => chordColor(findChord(notes(spec)), cMaj as never)!;
+        const sat = (hex: string) => { const n = parseInt(hex.slice(1), 16), c = [n >> 16, n >> 8 & 255, n & 255]; return Math.max(...c) - Math.min(...c); };
+        const cTriad = col('C4 E4 G4'), dTriad = col('D4 F4 A4');
+        // in C major, Csus4 / C5 lean to C major (yellow side), Dsus4 / D5 to D minor (blue side)
+        assert(parseInt(col('C4 F4 G4').slice(1, 3), 16) > parseInt(col('C4 F4 G4').slice(5, 7), 16), 'Csus4 is warm');
+        assert(parseInt(col('D4 G4 A4').slice(5, 7), 16) > parseInt(col('D4 G4 A4').slice(1, 3), 16), 'Dsus4 is cool');
+        assert(sat(col('C4 F4 G4')) < sat(cTriad) && sat(col('C3 G3')) < sat(col('C4 F4 G4')), 'sus4 washed, fifth more');
+        assert(sat(col('D3 A3')) < sat(dTriad), 'D5 washed');
+    });
+    test('maj7 / min7 are one solid colour, a deeper shade of their triad (no gradient)', () => {
+        const fill = (spec: string) => chordFill(findChord(notes(spec)), cMaj as never)!;
+        assert(!fill('C4 E4 G4 B4').startsWith('linear'), 'maj7 solid');
+        assert(fill('C4 E4 G4 B4') !== fill('C4 E4 G4'), 'maj7 differs from the triad');
+        assert(fill('A3 C4 E4 G4') !== fill('A3 C4 E4'), 'min7 differs from the triad');
     });
 });
 
