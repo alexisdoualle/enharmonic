@@ -423,36 +423,33 @@ footer code, footer b { color: var(--ink); }
 
 /* --- Piano keyboard strip (panels/keyboard.ts): the sounding notes lit on a compact full keyboard (A0..C8),
    no labels. Look from the tonnetz app's read-only keyboard: dark rounded case, small gradient keys, lit keys
-   filled with the tier colour and glowing. Off by default (the "keys" toggle). */
+   filled with their chord's 3D-lattice shade and glowing; notes outside the chord grey; wrong notes framed
+   red. Off by default (the "piano" toggle). */
 #keyboard { flex: 0 0 auto; padding: 0 16px 8px; position: relative; }
 #keyboard[hidden] { display: none; }
 /* never wider than at a 1080 px screen (1080 − 2×16 gutter − 2×5 case = 1038 px of keys, ~20 px per white): the
    range is already the whole piano, so a wider screen centres the keyboard instead of growing the keys */
-.pk-keys, .pk-guide { max-width: 1038px; margin: 0 auto; }
+.pk-keys { max-width: 1038px; margin: 0 auto; }
 .pk-keys { position: relative; height: 56px; background: #3a3a3a; border: 5px solid #3a3a3a; border-radius: 8px; box-sizing: content-box; box-shadow: 0 2px 8px rgba(0,0,0,.25); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .pk-key { position: absolute; top: 0; cursor: pointer; transition: background .15s ease, box-shadow .15s ease; box-sizing: border-box; }
 .pk-white { bottom: 0; background: linear-gradient(145deg, #ffffff, #f7fafc); border: 1px solid #cbd5e0; border-radius: 0 0 4px 4px; z-index: 1; }
 .pk-black { height: 58%; background: linear-gradient(145deg, #2d3748, #1a202c); border: 1px solid #1a202c; border-radius: 0 0 3px 3px; transform: translateX(-50%); z-index: 2; }
 .pk-white:hover { background: linear-gradient(145deg, #edf2f7, #e2e8f0); }
 .pk-black:hover { background: linear-gradient(145deg, #4a5568, #2d3748); }
-.pk-key.pk-on { background: var(--pk-fill); border-color: color-mix(in srgb, var(--pk-fill) 70%, #000); box-shadow: 0 0 8px color-mix(in srgb, var(--pk-fill) 60%, transparent); }
+.pk-key.pk-on { background: var(--pk-bg, var(--pk-fill)); border-color: color-mix(in srgb, var(--pk-fill) 70%, #000); box-shadow: 0 0 8px color-mix(in srgb, var(--pk-fill) 60%, transparent); }
 .pk-black.pk-on { z-index: 3; }   /* lit whites stay under the blacks */
 /* held from an earlier onset: the same colour, paler, no glow */
 .pk-key.pk-on.pk-held { background: color-mix(in srgb, var(--pk-fill) 40%, #f1f2f5); box-shadow: none; }
 .pk-black.pk-on.pk-held { background: color-mix(in srgb, var(--pk-fill) 45%, #2d3748); }
+.pk-key.pk-on.pk-nct { box-shadow: none; }
 .pk-key.pk-cur { box-shadow: inset 0 0 0 2px #0b0d10, 0 0 10px var(--pk-fill); }
+/* wrong (the tier the fill no longer carries): a red inner frame, drawn over the current-note ring */
+.pk-key.pk-wrong::before { content: ''; position: absolute; inset: 2px; border: 3px solid var(--wrong); border-radius: 2px; pointer-events: none; }
+.pk-key.pk-cur.pk-wrong { box-shadow: 0 0 10px var(--pk-fill); }
 /* LOCAL compare: the other speller spelled this sounding note differently (tooltip names both) */
 .pk-key.pk-diff::after { content: ''; position: absolute; left: 15%; right: 15%; bottom: 3px; height: 4px; border-radius: 2px; background: var(--compare); box-shadow: 0 0 0 1px #0b0d10; }
-/* the enharmonic guide row: every candidate spelling under each sounding key, sharps on top */
-.pk-guide { display: none; position: relative; --pk-gf: clamp(10px, calc(var(--pk-w, 30px) * 0.32), 20px); height: calc(var(--pk-gf) * 4.2 + 12px); }
-.pk-with-guide .pk-guide { display: block; }
-.pk-gcol { position: absolute; top: 6px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.pk-gnote { font-size: var(--pk-gf); line-height: 1.15; padding: 0 4px; border-radius: 3px; color: var(--dim); background: var(--panel); white-space: nowrap; }
-.pk-gnote.pk-gours { background: var(--pk-fill); color: #0b0d10; font-weight: 800; }
-.pk-gnote.pk-gtheirs { outline: 2px solid var(--compare); color: var(--compare); font-weight: 700; }
-.pk-gnote.pk-gours.pk-gtheirs { color: #0b0d10; }
 .pk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 720px) {
   #keyboard { overflow-x: auto; }
-  .pk-keys, .pk-guide { min-width: 640px; }
+  .pk-keys { min-width: 640px; }
 }

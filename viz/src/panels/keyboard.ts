@@ -6,24 +6,26 @@
  * lattice carry it on screen. Display only, except that a clicked key is handed to `onKey` (main.ts
  * plays it when sound is on).
  *
- * - A lit key is filled with its note's tier colour, the same palette as the piano roll.
+ * - A lit key that belongs to the chord read at this onset (chord.ts `chordReading`, the same read as the
+ *   chord lane) is filled with that chord's 3D-lattice shade (`chordFill`: the triad gradient over the
+ *   current surface, so minor is bluish and major yellow-orange; maj7 / min7 blend their two triads).
+ *   A sounding note outside the chord, or with no chord named, is neutral grey.
+ * - A wrong note gets a red inner frame (the tier, which the fill no longer carries).
  * - Struck-now notes are solid; notes still held from an earlier onset are paler; the current step's
  *   own note gets a ring.
  * - LOCAL compare (viz/src/compare.ts): where the other speller spelled a sounding note differently,
  *   the key gets a compare-cyan underline bar (tooltip names both spellings).
- * - The enharmonic guide (optional row under the keys): every candidate spelling of each sounding key,
- *   sharps on top, with ours filled and theirs outlined.
  */
 import type { Pitch } from '../../../src/index.js';
-import { enharmonicCandidatesFor } from '../../../src/candidates.js';
-import { lofOf } from '../../../src/lof.js';
 import type { Replay, ReplayNote, Tier } from '../replay.js';
 import type { Comparison } from '../compare.js';
-import { label, LETTER_COLOR } from '../format.js';
+import { label } from '../format.js';
+import { chordReading, chordFill, type ChordRead } from '../chord.js';
 
 const WHITE_PCS = new Set([0, 2, 4, 5, 7, 9, 11]);
 const isWhite = (midi: number) => WHITE_PCS.has(((midi % 12) + 12) % 12);
 const FULL_LO = 21, FULL_HI = 108;   // A0..C8, the whole piano
+const NEUTRAL = '#9aa3b2';           // a sounding note outside the chord, or no chord named
 
 /** One lit key: the note that decides its label (the current step's note, else the latest struck). */
 interface Lit { note: ReplayNote; struck: boolean; current: boolean }
@@ -34,28 +36,18 @@ export interface KeyboardStrip {
     /** Light the keys for `step` of `replay`. A no-op while the strip is hidden. */
     render(replay: Replay | null, step: number, cmp: Comparison | null): void;
     setVisible(v: boolean): void;
-    setGuide(v: boolean): void;
 }
 
 export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): KeyboardStrip {
     host.classList.add('pk-strip');
-    host.innerHTML = '<div class="pk-keys" aria-hidden="true"></div><div class="pk-guide" aria-hidden="true"></div>'
-        + '<div class="pk-sr" role="status" aria-live="off"></div>';
+    host.innerHTML = '<div class="pk-keys" aria-hidden="true"></div><div class="pk-sr" role="status" aria-live="off"></div>';
     const keysEl = host.querySelector<HTMLElement>('.pk-keys')!;
-    const guideEl = host.querySelector<HTMLElement>('.pk-guide')!;
     const srEl = host.querySelector<HTMLElement>('.pk-sr')!;
-    let visible = false, guide = false;
+    let visible = false;
     let lo = -1, hi = -1;
     const keyEls = new Map<number, HTMLElement>();
     let litMidis: number[] = [];
     let last: { replay: Replay | null; step: number; cmp: Comparison | null } = { replay: null, step: 0, cmp: null };
-
-    /** White-key width in px, for the guide row's font size. */
-    const fit = () => {
-        const nWhite = [...keyEls.keys()].filter(isWhite).length || 1;
-        host.style.setProperty('--pk-w', `${keysEl.clientWidth / nWhite}px`);
-    };
-    new ResizeObserver(fit).observe(keysEl);
 
     function build(nlo: number, nhi: number) {
         lo = nlo; hi = nhi;
@@ -81,7 +73,6 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
             keysEl.appendChild(k);
             keyEls.set(m, k);
         }
-        fit();
     }
 
     /** The range: always the full keyboard. */
@@ -104,6 +95,17 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
         return lit;
     }
 
+    /** The chord read at `step`, once the whole struck chord is in (the last note at this onset time), as
+     *  the chord lane reads it: coherent and complete (or a complete chord inside extra notes), else none. */
+    function chordFor(replay: Replay, step: number): { read: ChordRead; fill: string } | null {
+        let j = step;
+        while (j + 1 < replay.snapshots.length && replay.snapshots[j + 1]!.t === replay.snapshots[step]!.t) j++;
+        const read = chordReading(replay, j).read;
+        if (!read.type || !read.coherent || read.status === 'partial') return null;
+        const fill = chordFill(read, replay.snapshots[j]!.resolvedScale);
+        return fill ? { read, fill } : null;
+    }
+
     function paint() {
         const { replay, step, cmp } = last;
         const [nlo, nhi] = rangeFor(replay);
@@ -111,15 +113,16 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
         for (const m of litMidis) {
             const k = keyEls.get(m);
             if (!k) continue;
-            k.classList.remove('pk-on', 'pk-held', 'pk-cur', 'pk-wrong', 'pk-diff');
+            k.classList.remove('pk-on', 'pk-held', 'pk-cur', 'pk-wrong', 'pk-diff', 'pk-nct');
             k.style.removeProperty('--pk-fill');
+            k.style.removeProperty('--pk-bg');
             k.removeAttribute('title');
         }
         litMidis = [];
-        guideEl.innerHTML = '';
         const lit = replay ? litAt(replay, step) : new Map<number, Lit>();
+        const chord = replay && lit.size ? chordFor(replay, step) : null;
+        const inChord = new Set((chord?.read.chordNotes ?? []).map(p => `${p.step}${p.alter}`));
         const spoken: string[] = [];
-        const whitesW = 100 / ([...keyEls.keys()].filter(isWhite).length || 1);
         for (const [m, l] of [...lit.entries()].sort((a, b) => a[0] - b[0])) {
             const k = keyEls.get(m);
             if (!k) continue;
@@ -127,9 +130,13 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
             const n = l.note, ours = n.committed;
             const tier: Tier = n.tier;
             const ungraded = !n.expected && !!ours;
-            const fill = ungraded ? LETTER_COLOR[ours!.step]! : `var(--${tier === 'correct' ? 'correct' : tier === 'unread' ? 'dim' : tier})`;
-            k.style.setProperty('--pk-fill', fill);
+            const member = !!ours && inChord.has(`${ours.step}${ours.alter}`);
+            const bg = member ? chord!.fill : NEUTRAL;
+            // --pk-fill: one solid colour (glow, held tint); --pk-bg: the full background (a blend for maj7/min7)
+            k.style.setProperty('--pk-bg', bg);
+            k.style.setProperty('--pk-fill', bg.startsWith('linear') ? (bg.match(/#[0-9a-f]{6}/i)?.[0] ?? NEUTRAL) : bg);
             k.classList.add('pk-on');
+            if (!member) k.classList.add('pk-nct');
             if (!l.struck) k.classList.add('pk-held');
             if (l.current) k.classList.add('pk-cur');
             const wrong = tier === 'wrong';
@@ -141,30 +148,11 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
             k.title = `ours ${label(ours)} (${tierWord})`
                 + (n.expected ? ` · score ${label({ step: n.expected.step as Pitch['step'], alter: n.expected.alter as Pitch['alter'] })}` : '')
                 + (theirs ? ` · ${cmp!.label} ${pc(theirs)}${theirsWrong ? ' (wrong)' : ''}` : '')
+                + (member ? ` · in ${chord!.read.short}` : '')
                 + (l.struck ? '' : ' · held');
             spoken.push(`${label(ours)}${wrong ? ' wrong' : ''}${theirs ? `, ${cmp!.label} ${pc(theirs)}` : ''}`);
-            if (guide) guideEl.appendChild(guideColumn(m, n, theirs, fill, k, whitesW));
         }
-        srEl.textContent = spoken.length ? `Sounding: ${spoken.join('; ')}` : 'Nothing sounding';
-    }
-
-    /** The guide column under key `m`: its candidate spellings, sharps on top; ours filled, theirs outlined. */
-    function guideColumn(m: number, n: ReplayNote, theirs: Pitch | null, fill: string, k: HTMLElement, w: number): HTMLElement {
-        const col = document.createElement('div');
-        col.className = 'pk-gcol';
-        const left = parseFloat(k.style.left) + (isWhite(m) ? w / 2 : 0);
-        col.style.left = `${left}%`;
-        const cands = enharmonicCandidatesFor(m).sort((a, b) => lofOf(b) - lofOf(a));
-        for (const c of cands) {
-            const s = document.createElement('span');
-            s.className = 'pk-gnote';
-            s.textContent = label(c);
-            const same = (p: Pitch | null) => !!p && p.step === c.step && p.alter === c.alter;
-            if (same(n.committed)) { s.classList.add('pk-gours'); s.style.setProperty('--pk-fill', fill); }
-            if (same(theirs)) s.classList.add('pk-gtheirs');
-            col.appendChild(s);
-        }
-        return col;
+        srEl.textContent = spoken.length ? `Sounding${chord ? ` (${chord.read.short})` : ''}: ${spoken.join('; ')}` : 'Nothing sounding';
     }
 
     return {
@@ -175,12 +163,7 @@ export function initKeyboard(host: HTMLElement, onKey: (midi: number) => void): 
         setVisible(v) {
             visible = v;
             host.hidden = !v;
-            if (v) { fit(); paint(); }
-        },
-        setGuide(v) {
-            guide = v;
-            host.classList.toggle('pk-with-guide', v);
-            if (visible) paint();
+            if (v) paint();
         },
     };
 }

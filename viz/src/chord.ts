@@ -403,25 +403,44 @@ const fifthsOf = (p: PitchClass) => FIFTHS_IDX[p.step]! + p.alter * 7;
 export function chordColor(r: ChordRead, surface: readonly PitchClass[] | null): string | null {
     if (!r.type) return null;
     const surf = surface && surface.length === 7 ? surface : DEFAULT_SURFACE;
-    const fixed = r.type === 'dim' || r.type === 'hdim7' || r.type === 'dim7' ? 'diminished'
-        : r.type === 'aug' ? 'augmented'
-        : r.type === 'it6' || r.type === 'fr6' || r.type === 'ger6' ? 'aug6' : null;
+    const fixed = fixedQuality(r.type);
     if (fixed) return triadColor(fixed, undefined, surf);
     const minor = r.type === 'min' || r.type === 'min7';
-    const quality = minor ? 'minor' : 'major';
+    const mean = rootPos(r, minor) + (minor ? (0 - 3 + 1) / 3 : (0 + 4 + 1) / 3);
+    return triadColorAt(minor ? 'minor' : 'major', mean, surf);
+}
+
+const fixedQuality = (t: NonNullable<ChordRead['type']>): string | null =>
+    t === 'dim' || t === 'hdim7' || t === 'dim7' ? 'diminished'
+        : t === 'aug' ? 'augmented'
+        : t === 'it6' || t === 'fr6' || t === 'ger6' ? 'aug6' : null;
+
+/** Fifths position of the chord's root, read from a matched chord note's committed spelling when coherent.
+ *  Offsets above the root on the chain: root 0, major third +4, minor third -3, fifth +1. */
+function rootPos(r: ChordRead, minor: boolean): number {
     const root = r.root!;
-    // Fifths position of the root, from any matched chord note (committed spelling) when coherent.
-    // Offsets above the root on the chain: root 0, major third +4, minor third -3, fifth +1.
     const rootPc = spellPc(root);
-    let rootPos = fifthsOf(root);
     if (r.coherent) {
         for (const n of r.chordNotes) {
             const off = mod12(spellPc(n) - rootPc);
             const rel = off === 0 ? 0 : off === 7 ? 1 : off === (minor ? 3 : 4) ? (minor ? -3 : 4) : null;
-            if (rel !== null) { rootPos = fifthsOf(n) - rel; break; }
+            if (rel !== null) return fifthsOf(n) - rel;
         }
     }
-    const mean = rootPos + (minor ? (0 - 3 + 1) / 3 : (0 + 4 + 1) / 3);
-    return triadColorAt(quality, mean, surf);
+    return fifthsOf(root);
+}
+
+/** CSS background for a chord, as the 3D lattice would shade it. A major-seventh or minor-seventh chord is
+ *  TWO triads of opposite quality on the lattice (C–E–G + E–G–B; C–E♭–G + E♭–G–B♭), whose shades are
+ *  opposite (yellow vs blue), so it gets both: a soft two-tone blend, lower triad at the bottom. Every
+ *  other chord is one colour (chordColor). null = no chord. */
+export function chordFill(r: ChordRead, surface: readonly PitchClass[] | null): string | null {
+    const base = chordColor(r, surface);
+    if (!base || (r.type !== 'maj7' && r.type !== 'min7')) return base;
+    const surf = surface && surface.length === 7 ? surface : DEFAULT_SURFACE;
+    const minor = r.type === 'min7';
+    // upper triad on the third: maj7 → minor {+4,+1,+5}, mean +10/3; min7 → major {−3,+1,−2}, mean −4/3
+    const upper = triadColorAt(minor ? 'major' : 'minor', rootPos(r, minor) + (minor ? -4 / 3 : 10 / 3), surf);
+    return `linear-gradient(to top, ${base} 30%, ${upper} 70%)`;
 }
 const DEFAULT_SURFACE: PitchClass[] = (['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const).map(step => ({ step, alter: 0 }));

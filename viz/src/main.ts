@@ -74,7 +74,7 @@ function setChordsVisible(v: boolean) {
 
 // Piano keyboard strip at the bottom (panels/keyboard.ts): off by default (the desktop layout is already
 // dense; the strip is for the big poster screen), persisted per-browser; `?piano=1` / `?piano=0` overrides.
-const SHOW_KEYBOARD_KEY = 'viz.showKeyboard', KEYBOARD_GUIDE_KEY = 'viz.keyboardGuide';
+const SHOW_KEYBOARD_KEY = 'viz.showKeyboard';
 let keyboard: KeyboardStrip | null = null;
 const readFlag = (key: string) => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
 function setKeyboardOption(key: string, v: boolean) {
@@ -83,11 +83,8 @@ function setKeyboardOption(key: string, v: boolean) {
     window.dispatchEvent(new Event('resize'));   // the bands above changed height: let the canvases re-fit
 }
 function applyKeyboard() {
-    const on = readFlag(SHOW_KEYBOARD_KEY), guide = readFlag(KEYBOARD_GUIDE_KEY);
+    const on = readFlag(SHOW_KEYBOARD_KEY);
     $<HTMLInputElement>('show-keyboard').checked = on;
-    $<HTMLInputElement>('keyboard-guide').checked = guide;
-    $('keyboard-guide-ctl').hidden = !on;
-    keyboard?.setGuide(guide);
     keyboard?.setVisible(on);
 }
 
@@ -1477,7 +1474,6 @@ function wire() {
     const pianoParam = new URLSearchParams(location.search).get('piano');
     if (pianoParam === '1' || pianoParam === '0') { try { localStorage.setItem(SHOW_KEYBOARD_KEY, pianoParam); } catch { /* storage blocked */ } }
     $<HTMLInputElement>('show-keyboard').addEventListener('change', e => setKeyboardOption(SHOW_KEYBOARD_KEY, (e.target as HTMLInputElement).checked));
-    $<HTMLInputElement>('keyboard-guide').addEventListener('change', e => setKeyboardOption(KEYBOARD_GUIDE_KEY, (e.target as HTMLInputElement).checked));
     applyKeyboard();
     $<HTMLInputElement>('show-heard').checked = heardVisible;
     setShowHeard(heardVisible);
