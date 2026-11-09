@@ -18,7 +18,7 @@ import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSce
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { triadColor as sharedTriadColor } from '../music/triadColor.js';
 import type { LetterName } from '../tonnetz3d/types.js';
-import { allSymClasses, symClassesIn, type SymClass, type SymPlaneSpec } from '../tonnetz3d/symmetricPlanes.js';
+import { symClassesIn, type SymClass, type SymPlaneSpec } from '../tonnetz3d/symmetricPlanes.js';
 
 // Grid footprint: wide enough along the fifths chain to hold a key's neighbourhood, a few third-rows
 // deep so triads read as triangles. Kept modest: this is a debugger panel, not the full app's lattice.
@@ -65,17 +65,18 @@ let scene: TonnetzSceneV2 | null = null;
 let raf = 0;
 let lastScaleSig = '';
 
-// Two display toggles, both off by default (off = the panel exactly as before). Read from / written to the
-// page URL (`planes=sounding|aug|dim7`, `ghosts=1`) so a view can be linked; nothing is stored.
-//   • PLANES: the sheet a symmetric chord's enharmonic continuation forms in the lattice (symmetricPlanes.ts).
-//     `sounding` = the sheets of any augmented triad / dim7 whose pitch classes are all ringing (the main
-//     sheet bright, its parallel copies faint); `aug` / `dim7` = every sheet of every such chord at once,
-//     one hue per chord: the lattice sliced into 4 (or 3) interleaved diagonal sheets.
-//   • GHOSTS: the scene's "All Notes" mode: every lattice cell in the window, not only the 7-note surface.
-type PlanesMode = 'off' | 'sounding' | 'aug' | 'dim7';
-const PLANES_MODES: PlanesMode[] = ['off', 'sounding', 'aug', 'dim7'];
-let planesMode: PlanesMode = 'off';
+// A row of buttons along the canvas's bottom edge, all at the panel's default when untouched. Read from /
+// written to the page URL (`planes=1`, `ghosts=1`, `z=0..3`) so a view can be linked; nothing is stored.
+//   • PLANES (toggle): the sheet a symmetric chord's enharmonic continuation forms in the lattice
+//     (symmetricPlanes.ts), for any augmented triad / dim7 whose pitch classes are all ringing (the main
+//     sheet bright, its parallel copies faint).
+//   • GHOSTS (toggle): the scene's "All Notes" mode: every lattice cell in the window, not only the 7-note surface.
+//   • Z RANGE (− / +): how many accidental layers each side of the naturals the lattice spans (the chromatic
+//     depth, z), symmetric: ±1 by default (♭ · ♮ · ♯), 0 = the naturals' layer only, up to ±3.
+const Z_MIN = 0, Z_MAX = 3, Z_DEFAULT = 1;
+let showPlanes = false;
 let showGhosts = false;
+let zRange = Z_DEFAULT;
 let soundingSpelled = new Set<string>();   // `letter:accidental` of the ringing notes, as committed
 let lastPlanesSig = '';
 let captionEl: HTMLElement | null = null;
@@ -223,13 +224,9 @@ function applyScene(surface: PitchClass[], sounding: Set<number>, spelled: Set<s
     syncPlanes();
 }
 
-/** The symmetric chords to draw under the current mode and sounding notes. */
+/** The symmetric chords to draw: those whose pitch classes are all sounding, when the planes are on. */
 function planeClasses(): SymClass[] {
-    switch (planesMode) {
-        case 'off': return [];
-        case 'sounding': return symClassesIn(soundingPCs);
-        case 'aug': case 'dim7': return allSymClasses(planesMode);
-    }
+    return showPlanes ? symClassesIn(soundingPCs) : [];
 }
 
 /** Point the scene at the planes for the current state; a no-op unless the chords or the struck
@@ -237,11 +234,11 @@ function planeClasses(): SymClass[] {
 function syncPlanes(force = false): void {
     if (!scene) return;
     const classes = planeClasses();
-    const sig = `${planesMode}|${classes.map(c => c.kind + c.residue).join(',')}|${[...soundingSpelled].sort().join(',')}`;
+    const sig = `${showPlanes}|${classes.map(c => c.kind + c.residue).join(',')}|${[...soundingSpelled].sort().join(',')}`;
     if (!force && sig === lastPlanesSig) return;
     lastPlanesSig = sig;
     const spec: SymPlaneSpec | null = classes.length
-        ? { classes, mode: planesMode === 'sounding' ? 'focus' : 'all', emphasis: soundingSpelled }
+        ? { classes, mode: 'focus', emphasis: soundingSpelled }
         : null;
     const captions = scene.setSymmetricPlanes(spec);
     if (!captionEl) return;
@@ -267,43 +264,71 @@ function syncPlanes(force = false): void {
     }));
 }
 
-/** The two toggles, overlaid on the canvas's lower-left corner. State comes from the URL on first mount. */
+/** The button row along the canvas's bottom edge, with the plane caption above it. State comes from the
+ *  URL on first mount (`planes=sounding`, the old select's value, still reads as on). */
 function mountLatticeControls(container: HTMLElement): void {
     const params = new URLSearchParams(location.search);
-    const p = params.get('planes') as PlanesMode | null;
-    planesMode = p && PLANES_MODES.includes(p) ? p : 'off';
+    const p = params.get('planes');
+    showPlanes = p === '1' || p === 'sounding';
     showGhosts = params.get('ghosts') === '1';
+    const z = Number(params.get('z'));
+    zRange = params.has('z') && Number.isInteger(z) ? Math.max(Z_MIN, Math.min(Z_MAX, z)) : Z_DEFAULT;
 
     const box = document.createElement('div');
     box.className = 'lattice-ctrls';
     box.innerHTML = `
         <div class="lattice-caption" aria-live="polite" hidden></div>
-        <label title="Draw the sheet a symmetric chord forms across the lattice: every cell on it is the same augmented triad (stacked major thirds) or diminished seventh (stacked minor thirds), spelled a comma further each cycle">chord planes
-            <select class="lattice-planes">
-                <option value="off">off</option>
-                <option value="sounding">sounding aug / dim7</option>
-                <option value="aug">all augmented triads</option>
-                <option value="dim7">all diminished 7ths</option>
-            </select></label>
-        <label title="Show every lattice cell in view, not only the 7-note collection"><input type="checkbox" class="lattice-ghosts"> inactive nodes</label>`;
+        <div class="lattice-btns" role="toolbar" aria-label="3D lattice display">
+            <button type="button" class="lattice-btn lattice-planes" title="Draw the sheet a sounding symmetric chord forms across the lattice: every cell on it is the same augmented triad (stacked major thirds) or diminished seventh (stacked minor thirds), spelled a comma further each cycle">sym. chords</button>
+            <button type="button" class="lattice-btn lattice-ghosts" title="Show every lattice cell in view, not only the 7-note collection">inactive nodes</button>
+            <span class="lattice-z" title="Chromatic range (z): how many accidental layers each side of the naturals">
+                <button type="button" class="lattice-btn lattice-z-dec" aria-label="fewer accidental layers">−</button>
+                <span class="lattice-z-val" aria-live="polite"></span>
+                <button type="button" class="lattice-btn lattice-z-inc" aria-label="more accidental layers">+</button>
+            </span>
+        </div>`;
     container.appendChild(box);
     captionEl = box.querySelector<HTMLElement>('.lattice-caption');
-    const sel = box.querySelector<HTMLSelectElement>('.lattice-planes')!;
-    const chk = box.querySelector<HTMLInputElement>('.lattice-ghosts')!;
-    sel.value = planesMode;
-    chk.checked = showGhosts;
+    const planesBtn = box.querySelector<HTMLButtonElement>('.lattice-planes')!;
+    const ghostsBtn = box.querySelector<HTMLButtonElement>('.lattice-ghosts')!;
+    const dec = box.querySelector<HTMLButtonElement>('.lattice-z-dec')!;
+    const inc = box.querySelector<HTMLButtonElement>('.lattice-z-inc')!;
+    const zVal = box.querySelector<HTMLElement>('.lattice-z-val')!;
+    const paint = () => {
+        planesBtn.setAttribute('aria-pressed', String(showPlanes));
+        ghostsBtn.setAttribute('aria-pressed', String(showGhosts));
+        zVal.textContent = `z ±${zRange}`;
+        dec.disabled = zRange <= Z_MIN;
+        inc.disabled = zRange >= Z_MAX;
+    };
+    const applyZ = () => { scene?.setLayerMin(-zRange); scene?.setLayerMax(zRange); };
+    if (zRange !== Z_DEFAULT) applyZ();
+    paint();
     // Keep orbit/zoom gestures on the canvas from starting when the controls are used.
     for (const ev of ['pointerdown', 'wheel'] as const) box.addEventListener(ev, e => e.stopPropagation());
-    sel.addEventListener('change', () => {
-        planesMode = sel.value as PlanesMode;
-        writeParam('planes', planesMode === 'off' ? null : planesMode);
+    planesBtn.addEventListener('click', () => {
+        showPlanes = !showPlanes;
+        writeParam('planes', showPlanes ? '1' : null);
+        paint();
         syncPlanes(true);
     });
-    chk.addEventListener('change', () => {
-        showGhosts = chk.checked;
+    ghostsBtn.addEventListener('click', () => {
+        showGhosts = !showGhosts;
         writeParam('ghosts', showGhosts ? '1' : null);
+        paint();
         scene?.setShowGhostNodes(showGhosts);
     });
+    const stepZ = (d: number) => {
+        const next = Math.max(Z_MIN, Math.min(Z_MAX, zRange + d));
+        if (next === zRange) return;
+        zRange = next;
+        writeParam('z', zRange === Z_DEFAULT ? null : String(zRange));
+        paint();
+        applyZ();
+        syncPlanes(true);   // the sheets are drawn over the layers in view
+    };
+    dec.addEventListener('click', () => stepZ(-1));
+    inc.addEventListener('click', () => stepZ(1));
 }
 
 /** Record a toggle in the page URL without touching the other params (main.ts owns those). */
