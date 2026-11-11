@@ -364,11 +364,13 @@ function barStart(t: number, early = 0): number {
     return g.t0 + Math.max(0, Math.floor((t - g.t0 + early) / bar)) * bar;
 }
 
-/** The speller that spells the take right now: while playing, look-ahead and two-pass need a future
- *  that does not exist yet, so the real-time speller stands in until the pause. */
+/** The speller that spells the take right now. Look-ahead runs while playing: the newest notes have no
+ *  next note yet, so they are spelled without a direction and revised when it arrives (rung 3's "revise
+ *  the last visible notes"). Falling back to real time made every earlier note flip on each new note.
+ *  Two-pass needs the whole take, so the real-time speller stands in for it until the pause. */
 function liveMode(): Mode {
     const m = effMode();
-    return !takeSettled && (m === 'la' || m === 'tp') ? 'rt' : m;
+    return !takeSettled && m === 'tp' ? 'rt' : m;
 }
 
 function resetTake(tk: Take) {
@@ -1441,15 +1443,7 @@ function wire() {
     });
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes go to the free take (or the metronome take)
-    // Clear asks twice: the first click arms it for 3 s, the second clears.
-    let clearArmed = 0;
-    const disarmClear = () => { clearTimeout(clearArmed); clearArmed = 0; $('take-clear').textContent = 'clear'; $('take-clear').classList.remove('armed'); };
-    $('take-clear').addEventListener('click', () => {
-        if (clearArmed) { disarmClear(); clearTake(); return; }
-        $('take-clear').textContent = 'click again to clear';
-        $('take-clear').classList.add('armed');
-        clearArmed = window.setTimeout(disarmClear, 3000);
-    });
+    $('take-clear').addEventListener('click', clearTake);
     $('take-export').addEventListener('click', exportTake);
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());

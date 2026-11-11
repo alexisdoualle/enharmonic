@@ -272,6 +272,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     const localReader = new CollectionReader(LOCAL_HALF_LIFE_MS, LOCAL_HYSTERESIS);
     const stableReader = new CollectionReader(STABLE_HALF_LIFE_MS, STABLE_HYSTERESIS);
     const notes: ReplayNote[] = [];
+    const lastByPc = new Map<number, string>();   // pc → letter of its latest commit (display-only surface dedupe)
     const open = new Map<number, number[]>();     // midi → queue of note indices awaiting note-off
     let onIndex = 0;
 
@@ -347,7 +348,10 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             const before = engine!.getResolvedScale();
             engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0);
             committed = engine!.getSpelling(e.midi!);
-            resolvedScale = engine!.getResolvedScale();
+            // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
+            // ringing notes so the lattice shows the engine's current spellings, not their first ones.
+            for (const m of sounding.keys()) { const p = engine!.getSpelling(m); if (p) sounding.set(m, p); }
+            resolvedScale = onePcPerSlot(engine!.getResolvedScale(), engine!.getCollection(), committed, lastByPc);
             // Read the frame side off the resolved scale's MEAN, the quantity the spiral fold actually
             // clamps (a major scale's mean line-of-fifths sits at tonic + 2). Both rt and la use the mean
             // so the lit key on the wheel matches what range/offset control; the stable collection is
@@ -369,6 +373,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
                 }
                 : coreDecision(before, e.midi!, committed);
         }
+        if (committed) lastByPc.set(((e.midi! % 12) + 12) % 12, committed.step);
         if (committed) { sounding.set(e.midi!, committed); soundingOnT.set(e.midi!, e.t_ms); soundingN.set(e.midi!, (soundingN.get(e.midi!) ?? 0) + 1); }
         // Display-only collection reads over the raw pitch-class stream; labels spelled on the frame's side.
         localReader.observe(e.midi!, e.t_ms);
@@ -415,4 +420,30 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     for (const n of notes) { durationMs = Math.max(durationMs, n.offT); minMidi = Math.min(minMidi, n.midi); maxMidi = Math.max(maxMidi, n.midi); }
     if (notes.length === 0) { minMidi = 60; maxMidi = 72; }
     return { mode, snapshots, notes, respells, durationMs, minMidi, maxMidi, tally, spiralRange, spiralCenter };
+}
+
+const STEP_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const pcOfSpelling = (p: PitchClass) => ((STEP_PC[p.step]! + p.alter) % 12 + 12) % 12;
+
+/** VIZ-ONLY EXCEPTION (the shipped speller does not do this yet): show ONE spelling per pitch class on the
+ *  surface. When two letters spell the same pitch class (a held G♯ next to a new A♭), keep the letter of
+ *  that pitch class's latest commit (this note first) and show the other letter at its collection spelling
+ *  (G). Display only: the engine keeps both and its spellings are unchanged. The engine version
+ *  (`keepAliveOnePc`, default off) was a wash on the corpus; drop this once the speller does it itself. */
+function onePcPerSlot(surface: PitchClass[], collection: PitchClass[], current: Pitch | null,
+                      lastByPc: ReadonlyMap<number, string>): PitchClass[] {
+    const byPc = new Map<number, number[]>();
+    surface.forEach((p, i) => { const pc = pcOfSpelling(p); (byPc.get(pc) ?? byPc.set(pc, []).get(pc)!).push(i); });
+    const out = surface.slice();
+    for (const [pc, idx] of byPc) {
+        if (idx.length < 2) continue;
+        const winner = current && pcOfSpelling(current) === pc ? current.step : lastByPc.get(pc);
+        if (winner === undefined) continue;
+        for (const i of idx) {
+            if (surface[i]!.step === winner) continue;
+            const home = collection.find(c => c.step === surface[i]!.step);
+            if (home && pcOfSpelling(home) !== pc) out[i] = home;
+        }
+    }
+    return out;
 }
