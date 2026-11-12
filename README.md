@@ -106,6 +106,21 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
 
+## Performance
+
+Node v23.9 on an Apple M1 Pro, Meredith corpus (195,972 notes per variant), median of 3 runs, spelling
+time only (driver and speller; parsing and scoring excluded):
+
+| mode | clean | notes/s (clean) | noisy | notes/s (noisy) |
+|---|--:|--:|--:|--:|
+| core | 0.11 s | 1,740,000 | 0.11 s | 1,720,000 |
+| real-time | 0.84 s | 232,000 | 0.68 s | 290,000 |
+| look-ahead | 0.86 s | 227,000 | 0.70 s | 280,000 |
+| two-pass | 1.70 s | 115,000 | 1.70 s | 115,000 |
+
+Timings vary by CPU and machine load; reproduce with `npm run meredith -- --time` (add `--noisy` for the
+noisy set).
+
 ## The four principles
 
 The smallest form of the model is [`examples/core-speller.ts`](examples/core-speller.ts): the speller in

@@ -58,6 +58,22 @@ function spellNearest(pc: number, c: number): number {
     return best;
 }
 
+/** The economy fold's evidence as per-pitch-class counts: every raw pc in the window plus the current onset.
+ *  Costing each heard pitch class once (count × accidentals) instead of once per note gives the same integer
+ *  sum, and makes the fold about 6× cheaper on two-pass, where it runs at every note. */
+function heardCounts(win: number[][], cur: number[]): { counts: number[]; total: number } {
+    const counts = new Array<number>(12).fill(0); let total = 0;
+    for (const w of win) for (const pc of w) { counts[pc]!++; total++; }
+    for (const pc of cur) { counts[pc]!++; total++; }
+    return { counts, total };
+}
+/** Accidentals needed to notate the counted pitch classes from centre `c` (each pc spelled nearest `c`). */
+function costAtCounts(counts: number[], c: number): number {
+    let total = 0;
+    for (let pc = 0; pc < 12; pc++) if (counts[pc]) total += counts[pc]! * Math.abs(acc(spellNearest(pc, c)));
+    return total;
+}
+
 /** The 7-letter diatonic collection whose line-of-fifths centre is `c`, e.g. `collectionAt(2)` is C
  *  major (a major key's centre = tonic + 2), `collectionAt(−3)` is D♭ major. A supplied-key seed. */
 export function collectionAt(c: number): PitchClass[] { return LETTER_ORDER.map(s => spellingOf(letterAt(s, c))); }
@@ -689,9 +705,9 @@ export class SpellingEngine {
             // It only VETOES, though; it cannot fix UNDER-firing, where a fold that should happen never
             // triggers because the centre never reaches the edge.
             if (favoured !== 0 && this.foldEconomyGate) {
-                const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
-                if (heard.length) {
-                    const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
+                const heard = heardCounts(this.pcWindow, this.curOnsetPcs);
+                if (heard.total) {
+                    const costAt = (c: number) => costAtCounts(heard.counts, c);
                     if (costAt(cFrame + favoured) > costAt(cFrame)) favoured = 0;   // target dearer ⇒ veto
                 }
             }
@@ -699,10 +715,10 @@ export class SpellingEngine {
             // Accidental economy over every raw pc heard across the window (repeats kept, so a
             // key-defining note pulls harder for free). Fold toward a comma-neighbour that notates it
             // cheaper, unless a near-chromatic window (no clear key) vetoes the vote.
-            const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
-            if (heard.length === 0) return;
-            const vetoed = this.foldMaxChroma > 0 && new Set(heard).size > this.foldMaxChroma;
-            const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
+            const heard = heardCounts(this.pcWindow, this.curOnsetPcs);
+            if (heard.total === 0) return;
+            const vetoed = this.foldMaxChroma > 0 && heard.counts.filter(k => k > 0).length > this.foldMaxChroma;
+            const costAt = (c: number) => costAtCounts(heard.counts, c);
             const here = costAt(cFrame);
             const up = costAt(cFrame + COMMA), dn = costAt(cFrame - COMMA);
             if (up < here - this.foldMargin && up <= dn) favoured = +COMMA;

@@ -10,6 +10,7 @@
  *   npm run meredith -- --noisy        # score the noisy (human-MIDI-like) corpus
  *   npm run meredith -- --check        # also assert exact% >= the published thresholds
  *   npm run meredith -- --ablate       # build Core up one principle per row (1+2, +3, +4)
+ *   npm run meredith -- --time         # also print each mode's spelling time and notes per second
  *
  * `exact` = strict composer-spelling match (ps13's metric, comparable to their 99.31%);
  * `coherent` = exact + contextually coherent enharmonic flip (the three-tier scorer, ±16 consensus).
@@ -33,6 +34,7 @@ const noisy = process.argv.includes('--noisy');
 const check = process.argv.includes('--check');
 const counts = process.argv.includes('--counts');
 const ablate = process.argv.includes('--ablate');
+const time = process.argv.includes('--time');
 // `--json <path>` also writes the aggregate tiers as machine-readable JSON (consumed by the
 // scoreboard figure generator, tools/figures/three-tier.mjs), so the scoreboard is sourced from
 // THIS repo's shipped modes.
@@ -144,12 +146,17 @@ const MODES: { key: Mode; label: string }[] = [
 ];
 const agg = Object.fromEntries((['core12', 'core123', 'core', 'rt', 'la', 'tp'] as const).map(k =>
     [k, { correct: 0, flipped: 0, wrong: 0, unread: 0, total: 0 }])) as Record<Mode, { correct: number; flipped: number; wrong: number; unread: number; total: number }>;
+/** Spelling time per mode in ms (driver + speller; parsing and scoring excluded), for `--time`. */
+const ms = Object.fromEntries(MODES.map(({ key }) => [key, 0])) as Record<Mode, number>;
 for (const f of files) {
     const notes = parseOpndv(readFileSync(join(dir, f), 'utf8'));
     const expected = notes.map(n => ({ step: n.step, alter: n.alter }));
     const keys = notes.map(n => n.onset); // co-struck notes share an onset tatum
     for (const { key } of MODES) {
-        const t = scoreTiers(predict(key, notes), expected, keys);
+        const t0 = performance.now();
+        const pred = predict(key, notes);
+        ms[key] += performance.now() - t0;
+        const t = scoreTiers(pred, expected, keys);
         agg[key].correct += t.correct; agg[key].flipped += t.flipped;
         agg[key].wrong += t.wrong; agg[key].unread += t.unread; agg[key].total += t.total;
     }
@@ -173,6 +180,13 @@ if (counts) {
     console.log(`  two-pass counts: exact ${a.correct}, flipped ${a.flipped}, wrong ${a.wrong}, unread ${a.unread}`);
 }
 console.log(`  exact = strict composer match (ps13 metric); coherent = exact + contextually coherent flip.`);
+if (time) {
+    console.log(`\n  spelling time (driver + speller, parsing excluded; varies by CPU):`);
+    for (const { key, label } of MODES) {
+        const secs = ms[key] / 1000;
+        console.log(`  ${label.padEnd(W)} ${secs.toFixed(2).padStart(6)} s  ${Math.round(agg[key].total / secs).toLocaleString('en-US').padStart(10)} notes/s`);
+    }
+}
 
 // --- machine-readable emit for the scoreboard figure ---------------------------------------
 if (jsonPath) {
