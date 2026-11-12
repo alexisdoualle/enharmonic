@@ -15,9 +15,11 @@ import type { Snapshot } from '../replay.js';
 import { pcOf } from '../replay.js';
 import type { LiveState } from '../live.js';
 import { TonnetzSceneV2, type TonnetzSceneConfig } from '../tonnetz3d/TonnetzSceneV2.js';
+import { TorusScene, latticeSquash } from '../tonnetz3d/torus/TorusScene.js';
 import { PitchClass } from '../tonnetz3d/core/PitchClass.js';
 import { triadColor as sharedTriadColor } from '../music/triadColor.js';
 import type { LetterName } from '../tonnetz3d/types.js';
+import { symClassesIn, type SymClass, type SymPlaneSpec } from '../tonnetz3d/symmetricPlanes.js';
 
 // Grid footprint: wide enough along the fifths chain to hold a key's neighbourhood, a few third-rows
 // deep so triads read as triangles. Kept modest: this is a debugger panel, not the full app's lattice.
@@ -62,7 +64,43 @@ let lastTick = 0;
 
 let scene: TonnetzSceneV2 | null = null;
 let raf = 0;
+
+// Torus view: built on first use, over the lattice canvas. Both scenes read the same config, so the
+// torus lights from the same activations. The toggle folds the lattice into the torus and back.
+const FOLD_MS = 5000;
+let config: TonnetzSceneConfig | null = null;
+let torus: TorusScene | null = null;
+let torusHost: HTMLElement | null = null;
+let torusOn = false;
 let lastScaleSig = '';
+
+// A row of buttons along the canvas's bottom edge, all at the panel's default when untouched. Read from /
+// written to the page URL (`planes=1`, `ghosts=1`, `lt=1`, `z=0..3`) so a view can be linked; nothing is stored.
+//   • PLANES (toggle): the sheet a symmetric chord's enharmonic continuation forms in the lattice
+//     (symmetricPlanes.ts), for any augmented triad / dim7 whose pitch classes are all ringing (the main
+//     sheet bright, its parallel copies faint).
+//   • GHOSTS (toggle): the scene's "All Notes" mode: every lattice cell in the window, not only the 7-note surface.
+//   • LEADING TONES (toggle): the tonnetz app's semitone-resolution arrows. Each tritone of the surface marks
+//     its two tendency notes, the upper resolving up a semitone and the lower down (B→C, F→E in C major),
+//     drawn from scale node to target across an accidental layer. An arrow lights while its source sounds
+//     and goes out once the target is struck after it (the resolution happened).
+//   • Z RANGE (− / +): how many accidental layers each side of the naturals the lattice spans (the chromatic
+//     depth, z), symmetric: ±1 by default (♭ · ♮ · ♯), 0 = the naturals' layer only, up to ±3.
+const Z_MIN = 0, Z_MAX = 3, Z_DEFAULT = 1;
+let showPlanes = false;
+let showGhosts = false;
+let showLeadingTones = false;
+const noteOnTimes = new Map<number, number>();   // pc → wall time it last started sounding (arrow logic)
+// The arrows' fifth check: an arrow is withheld when its target does not sit in a perfect fifth with the
+// surface. A note that is itself one end of a SOUNDING tritone is a tendency tone on its way out, not part
+// of the target's harmony, so it is left out of that check. E minor's vii°7 D♯–F♯–A–C holds two tritones,
+// D♯–A and F♯–C, and resolves by three semitones: D♯→E, F♯→G, C→B. Counted as G's fifth, the leaving D♯
+// would make G the root of an augmented fifth (G–D♯) and hide F♯→G. Same for D minor's C♯–E–G–B♭ → D, F, A.
+const leavingTone = (pc: number): boolean => soundingPCs.has(pc) && soundingPCs.has((pc + 6) % 12);
+let zRange = Z_DEFAULT;
+let soundingSpelled = new Set<string>();   // `letter:accidental` of the ringing notes, as committed
+let lastPlanesSig = '';
+let captionEl: HTMLElement | null = null;
 
 /** Signature of the 7-letter surface, so we only pay for a geometry rebuild when the spelling changes. */
 function scaleSig(s: PitchClass[]): string {
@@ -72,7 +110,7 @@ function scaleSig(s: PitchClass[]): string {
 /** Build the scene once and start the smoothing/render loop. Safe to call repeatedly (no-op if built). */
 export function initTonnetz(container: HTMLElement): void {
     if (scene) return;
-    const config: TonnetzSceneConfig = {
+    config = {
         getThirds: () => scale,
         getTriadColor: triadColor,
         getActivePCs: () => soundingPCs,
@@ -83,12 +121,24 @@ export function initTonnetz(container: HTMLElement): void {
         // makes a full triad flare bright the instant all three notes sound, then fade over CHORD_DECAY_TAU
         // as the chord decays, while a diatonic triad whose notes only idle at the scale floor stays faint.
         getResonanceActivation: pc => res[pc] ?? 0,
+        getNoteOnTimestamps: () => noteOnTimes,
+        // letter index (C=0 … B=6) → pitch class of that letter on the surface, for the arrows' P5 check;
+        // null (no constraint) for a letter whose note is a leaving tendency tone (see leavingTone)
+        getResolvedMidi: () => {
+            const byLetter: (number | null)[] = [null, null, null, null, null, null, null];
+            for (const p of scale) {
+                const pc = ((p.midiValue % 12) + 12) % 12;
+                byLetter[LETTER_ORDER.indexOf(p.letterName)] = leavingTone(pc) ? null : pc;
+            }
+            return (i: number) => byLetter[i] ?? null;
+        },
         freeMode: () => false,
         cols: () => COLS,
         rows: () => ROWS,
     };
     scene = new TonnetzSceneV2(container, config);
     scene.setVisible(true);
+    addTorusToggle(container);
     // Pull the camera back from the scene's default framing so the whole lattice neighbourhood is in view
     // on load: the panel is smaller than the standalone app's full-window canvas, so the default sits too
     // close. The user can still orbit/scroll to taste; this only sets the initial distance.
@@ -103,12 +153,12 @@ export function initTonnetz(container: HTMLElement): void {
     // reads as a mesh triangle bridging accidental layers: the depth cue, no ghost nodes needed.
     scene.setTrianglePattern(true);
     scene.setMeshTiltedNonPerfect(true);
-    // Hide the leading-tone / semitone resolution arrows: that overlay is driven by the app's
-    // accumulator (note-on timestamps + resolved-midi logic) we don't feed, so it isn't meaningful here.
-    scene.setShowArrows(false);
     // The vendored scene hardcodes a debug (x, y, z) label under every node; hide them: the note names
     // are the labels that matter here.
     scene.setShowCoords(false);
+    mountLatticeControls(container);
+    if (showGhosts) scene.setShowGhostNodes(true);
+    scene.setShowArrows(showLeadingTones);   // leading-tone arrows: off unless the button / `lt=1` asks
     lastScaleSig = scaleSig(scale);
     // Render loop: advance the decay accumulator on the wall clock, then let the scene smooth toward it.
     const loop = () => {
@@ -135,6 +185,7 @@ export function initTonnetz(container: HTMLElement): void {
             res[pc] = Math.max(0, level[pc]! - STEP_INHIBIT * Math.max(0, nb - level[pc]!));
         }
         scene?.updateActivations();
+        torus?.updateActivations();   // no-op while the torus is hidden
         raf = requestAnimationFrame(loop);
     };
     loop();
@@ -150,7 +201,8 @@ export function renderTonnetz(snap: Snapshot | null): void {
     const surface = snap?.resolvedScale && snap.resolvedScale.length === 7
         ? snap.resolvedScale.map(p => new PitchClass(p.step as LetterName, p.alter))
         : defaultScale();
-    applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))));
+    applyScene(surface, new Set((snap?.sounding ?? []).map(s => pcOf(s.pitch))),
+        new Set((snap?.sounding ?? []).map(s => `${s.pitch.step}:${s.pitch.alter}`)));
 }
 
 /** Live input: retarget from the shared live model's state (same grid, so both views track the keyboard).
@@ -170,14 +222,17 @@ export function renderTonnetzLive(state: LiveState): void {
         byLetter.set(step, { step, alter: Number(alter) });
     }
     const surface = [...byLetter.values()].map(p => new PitchClass(p.step as LetterName, p.alter));
-    applyScene(surface, new Set(state.heldPCs));
+    applyScene(surface, new Set(state.heldPCs), new Set(state.heldSpellings));
 }
 
 /** Point the scene at a 7-letter surface and the pitch classes ringing on it, choosing the cheapest
  *  scene update. The RAF loop turns the sounding set into full activation and decays everything else
  *  toward the scale floor (see the accumulator above). */
-function applyScene(surface: PitchClass[], sounding: Set<number>): void {
+function applyScene(surface: PitchClass[], sounding: Set<number>, spelled: Set<string>): void {
     if (!scene) return;
+    soundingSpelled = spelled;
+    const now = performance.now();
+    for (const pc of sounding) if (!soundingPCs.has(pc)) noteOnTimes.set(pc, now);
     const sig = scaleSig(surface);
     const scaleChanged = sig !== lastScaleSig;
     scale = surface;
@@ -200,6 +255,175 @@ function applyScene(surface: PitchClass[], sounding: Set<number>): void {
 
     if (pcChanged) { scene.rebuild(); scene.clearSmoothing(); }
     else if (scaleChanged) scene.updateSpellings();
+    syncPlanes();
+    if (torus && (torusOn || torus.folding) && (pcChanged || scaleChanged)) torus.rebuild();
+}
+
+/** The symmetric chords to draw: those whose pitch classes are all sounding, when the planes are on. */
+function planeClasses(): SymClass[] {
+    return showPlanes ? symClassesIn(soundingPCs) : [];
+}
+
+/** Point the scene at the planes for the current state; a no-op unless the chords or the struck
+ *  spellings changed (the sheets are cheap, but stepping should not churn GPU buffers). */
+function syncPlanes(force = false): void {
+    if (!scene) return;
+    const classes = planeClasses();
+    const sig = `${showPlanes}|${classes.map(c => c.kind + c.residue).join(',')}|${[...soundingSpelled].sort().join(',')}`;
+    if (!force && sig === lastPlanesSig) return;
+    lastPlanesSig = sig;
+    const spec: SymPlaneSpec | null = classes.length
+        ? { classes, mode: 'focus', emphasis: soundingSpelled }
+        : null;
+    const captions = scene.setSymmetricPlanes(spec);
+    if (!captionEl) return;
+    captionEl.hidden = captions.length === 0;
+    captionEl.replaceChildren(...captions.map(c => {
+        const row = document.createElement('div');
+        const name = document.createElement('b');
+        name.textContent = c.kind === 'aug' ? 'aug' : 'dim7';
+        name.style.color = c.color;
+        // The continuation in stacking order, struck spellings in bold. A long chain (all-sheets mode, or a
+        // wide sheet) is cut to two spellings either side of the struck ones, so the caption stays one line.
+        const hit = c.chain.map((x, i) => x.struck ? i : -1).filter(i => i >= 0);
+        const lo = hit.length ? Math.max(0, hit[0]! - 2) : 0;
+        const hi = hit.length ? Math.min(c.chain.length, hit[hit.length - 1]! + 3) : Math.min(c.chain.length, 8);
+        row.append(name, ' ', lo > 0 ? '… ' : '');
+        c.chain.slice(lo, hi).forEach((x, i) => {
+            if (i) row.append(' – ');
+            if (x.struck) { const s = document.createElement('b'); s.textContent = x.label; row.append(s); }
+            else row.append(x.label);
+        });
+        if (hi < c.chain.length) row.append(' …');
+        return row;
+    }));
+}
+
+/** The button row along the canvas's bottom edge, with the plane caption above it. State comes from the
+ *  URL on first mount (`planes=sounding`, the old select's value, still reads as on). */
+function mountLatticeControls(container: HTMLElement): void {
+    const params = new URLSearchParams(location.search);
+    const p = params.get('planes');
+    showPlanes = p === '1' || p === 'sounding';
+    showGhosts = params.get('ghosts') === '1';
+    showLeadingTones = params.get('lt') === '1';
+    const z = Number(params.get('z'));
+    zRange = params.has('z') && Number.isInteger(z) ? Math.max(Z_MIN, Math.min(Z_MAX, z)) : Z_DEFAULT;
+
+    const box = document.createElement('div');
+    box.className = 'lattice-ctrls';
+    box.innerHTML = `
+        <div class="lattice-caption" aria-live="polite" hidden></div>
+        <div class="lattice-btns" role="toolbar" aria-label="3D lattice display">
+            <button type="button" class="lattice-btn lattice-planes" title="Draw the sheet a sounding symmetric chord forms across the lattice: every cell on it is the same augmented triad (stacked major thirds) or diminished seventh (stacked minor thirds), spelled a comma further each cycle">sym. chords</button>
+            <button type="button" class="lattice-btn lattice-ghosts" title="Show every lattice cell in view, not only the 7-note collection">inactive nodes</button>
+            <button type="button" class="lattice-btn lattice-lt" title="Leading tones: arrows from each tendency note of the collection's tritone to the note a semitone away it resolves to (B→C and F→E in C major), lit while the source sounds">leading tones</button>
+            <span class="lattice-z" title="Chromatic range (z): how many accidental layers each side of the naturals">
+                <button type="button" class="lattice-btn lattice-z-dec" aria-label="fewer accidental layers">−</button>
+                <span class="lattice-z-val" aria-live="polite"></span>
+                <button type="button" class="lattice-btn lattice-z-inc" aria-label="more accidental layers">+</button>
+            </span>
+        </div>`;
+    container.appendChild(box);
+    captionEl = box.querySelector<HTMLElement>('.lattice-caption');
+    const planesBtn = box.querySelector<HTMLButtonElement>('.lattice-planes')!;
+    const ghostsBtn = box.querySelector<HTMLButtonElement>('.lattice-ghosts')!;
+    const ltBtn = box.querySelector<HTMLButtonElement>('.lattice-lt')!;
+    const dec = box.querySelector<HTMLButtonElement>('.lattice-z-dec')!;
+    const inc = box.querySelector<HTMLButtonElement>('.lattice-z-inc')!;
+    const zVal = box.querySelector<HTMLElement>('.lattice-z-val')!;
+    const paint = () => {
+        planesBtn.setAttribute('aria-pressed', String(showPlanes));
+        ghostsBtn.setAttribute('aria-pressed', String(showGhosts));
+        ltBtn.setAttribute('aria-pressed', String(showLeadingTones));
+        zVal.textContent = `z ±${zRange}`;
+        dec.disabled = zRange <= Z_MIN;
+        inc.disabled = zRange >= Z_MAX;
+    };
+    const applyZ = () => { scene?.setLayerMin(-zRange); scene?.setLayerMax(zRange); };
+    if (zRange !== Z_DEFAULT) applyZ();
+    paint();
+    // Keep orbit/zoom gestures on the canvas from starting when the controls are used.
+    for (const ev of ['pointerdown', 'wheel'] as const) box.addEventListener(ev, e => e.stopPropagation());
+    planesBtn.addEventListener('click', () => {
+        showPlanes = !showPlanes;
+        writeParam('planes', showPlanes ? '1' : null);
+        paint();
+        syncPlanes(true);
+    });
+    ghostsBtn.addEventListener('click', () => {
+        showGhosts = !showGhosts;
+        writeParam('ghosts', showGhosts ? '1' : null);
+        paint();
+        scene?.setShowGhostNodes(showGhosts);
+    });
+    ltBtn.addEventListener('click', () => {
+        showLeadingTones = !showLeadingTones;
+        writeParam('lt', showLeadingTones ? '1' : null);
+        paint();
+        scene?.setShowArrows(showLeadingTones);
+    });
+    const stepZ = (d: number) => {
+        const next = Math.max(Z_MIN, Math.min(Z_MAX, zRange + d));
+        if (next === zRange) return;
+        zRange = next;
+        writeParam('z', zRange === Z_DEFAULT ? null : String(zRange));
+        paint();
+        applyZ();
+        syncPlanes(true);   // the sheets are drawn over the layers in view
+    };
+    dec.addEventListener('click', () => stepZ(-1));
+    inc.addEventListener('click', () => stepZ(1));
+}
+
+/** Record a toggle in the page URL without touching the other params (main.ts owns those). */
+function writeParam(key: string, value: string | null): void {
+    const u = new URL(location.href);
+    if (value === null) u.searchParams.delete(key); else u.searchParams.set(key, value);
+    const q = u.searchParams.toString().replace(/%2C/g, ',');
+    history.replaceState(history.state, '', `${u.pathname}${q ? `?${q}` : ''}${u.hash}`);
+}
+
+/** The lattice's button row (and plane caption), mounted by mountLatticeControls. */
+const latticeCtrls = (): HTMLElement | null => captionEl?.parentElement ?? null;
+
+/** Lattice / torus toggle in the panel corner. Clicks during a fold are ignored. */
+function addTorusToggle(container: HTMLElement): void {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tonnetz-mode';
+    btn.textContent = 'Torus';
+    btn.title = 'Fold the lattice into the torus';
+    btn.addEventListener('click', () => {
+        if (!scene || !config || torus?.folding) return;
+        if (!torusOn) {
+            if (!torusHost) {
+                torusHost = document.createElement('div');
+                torusHost.className = 'torus-host';
+                container.insertBefore(torusHost, btn);
+            }
+            if (torus) torus.rebuild(); else torus = new TorusScene(torusHost, config);
+            torusHost.hidden = false;
+            const lattice = scene;
+            torus.foldIn(lattice.getFoldView(), lattice.foldLookSource(), FOLD_MS, u => lattice.setFlatten(latticeSquash(u)));
+            torusOn = true;
+            latticeCtrls()?.setAttribute('hidden', '');   // the torus has its own controls
+            btn.textContent = 'Lattice';
+            btn.title = 'Unfold the torus back into the lattice';
+        } else {
+            const t = torus!, host = torusHost!, lattice = scene;
+            t.foldOut(lattice.getFoldView(), lattice.foldLookSource(), FOLD_MS, u => lattice.setFlatten(latticeSquash(u)), () => {
+                t.setVisible(false);
+                host.hidden = true;
+                lattice.setFlatten(1);
+                latticeCtrls()?.removeAttribute('hidden');
+            });
+            torusOn = false;
+            btn.textContent = 'Torus';
+            btn.title = 'Fold the lattice into the torus';
+        }
+    });
+    container.appendChild(btn);
 }
 
 /** Tear down the WebGL context and stop the loop, for completeness; the panel currently lives for the
@@ -208,5 +432,13 @@ export function disposeTonnetz(): void {
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     scene?.dispose();
     scene = null;
+    torus?.dispose();
+    torus = null;
+    torusHost?.remove();
+    torusHost = null;
+    torusOn = false;
     lastScaleSig = '';
+    lastPlanesSig = '';
+    captionEl?.parentElement?.remove();
+    captionEl = null;
 }

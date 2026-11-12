@@ -3,7 +3,8 @@
  *
  * One class, two latency modes over the single {@link SpellingEngine}:
  *   - `new Speller()`                    → real-time (recency guard + spiral fold + diatonic-anchor leash)
- *   - `new Speller({ lookAhead: true })` → near-real-time (adds letter-aware look-ahead + vertical guard)
+ *   - `new Speller({ lookAhead: true })` → near-real-time (adds letter-aware look-ahead + vertical guard, and
+ *                                          the aug6 outward rule when the caller supplies `outwardPartner`)
  *
  * For offline use with the whole piece in hand, see {@link spellTwoPass} (highest accuracy).
  *
@@ -66,7 +67,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
-        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0);
+        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0, ctx.outwardPartner, ctx.outwardRole ?? 0);
     }
 
     noteOff(midi: number, ctx: { t?: number } = {}): void {

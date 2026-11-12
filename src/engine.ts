@@ -58,6 +58,22 @@ function spellNearest(pc: number, c: number): number {
     return best;
 }
 
+/** The economy fold's evidence as per-pitch-class counts: every raw pc in the window plus the current onset.
+ *  Costing each heard pitch class once (count × accidentals) instead of once per note gives the same integer
+ *  sum, and makes the fold about 6× cheaper on two-pass, where it runs at every note. */
+function heardCounts(win: number[][], cur: number[]): { counts: number[]; total: number } {
+    const counts = new Array<number>(12).fill(0); let total = 0;
+    for (const w of win) for (const pc of w) { counts[pc]!++; total++; }
+    for (const pc of cur) { counts[pc]!++; total++; }
+    return { counts, total };
+}
+/** Accidentals needed to notate the counted pitch classes from centre `c` (each pc spelled nearest `c`). */
+function costAtCounts(counts: number[], c: number): number {
+    let total = 0;
+    for (let pc = 0; pc < 12; pc++) if (counts[pc]) total += counts[pc]! * Math.abs(acc(spellNearest(pc, c)));
+    return total;
+}
+
 /** The 7-letter diatonic collection whose line-of-fifths centre is `c`, e.g. `collectionAt(2)` is C
  *  major (a major key's centre = tonic + 2), `collectionAt(−3)` is D♭ major. A supplied-key seed. */
 export function collectionAt(c: number): PitchClass[] { return LETTER_ORDER.map(s => spellingOf(letterAt(s, c))); }
@@ -118,6 +134,11 @@ export interface EngineOptions {
     /** COLLISION REPAIR: after a commit, move a non-sounding letter that now spells the same pitch class
      *  as the committed note back to a distinct spelling, keeping 7 distinct pitch classes. */
     collisionRepair?: boolean;
+    /** ONE SPELLING PER PITCH CLASS (diatonic frame + keep-alive): a commit evicts a held alteration that
+     *  spells the same pitch class on ANOTHER letter (A♭ evicts G♯), unless that note is still sounding; the
+     *  evicted letter returns to its collection spelling (G). The diatonic-frame counterpart of
+     *  collisionRepair, which that path never reaches. Default false. */
+    keepAliveOnePc?: boolean;
     /** Drop STALE slots from the CLAMP fold's centre mean: a letter not committed within this many onsets
      *  holds an outdated spelling (a degree the music has not used for a while) that should not anchor the
      *  key centre. Averaging only the recently-sounded letters keeps the fold centre on the live key.
@@ -188,6 +209,15 @@ export interface EngineOptions {
     /** The vertical guard's triad test on pitch classes, the note's own included: a root struck after its third
      *  and fifth still counts as inside the triad. A dim7 has no fifth by pitch class either. Default false. */
     verticalPcTriad?: boolean;
+    /** AUGMENTED SIXTH BY OUTWARD CONVERGENCE (look-ahead only). Two tones ten semitones apart that move
+     *  outward and meet on one pitch class are an augmented sixth, and the rising tone is the ♯4: it is spelled
+     *  ten fifths sharp of its partner's committed spelling (F♯ against A♭, never G♭), dispositively, over
+     *  every score. The pair comes from the caller (`NoteContext.outwardPartner`, found by `outwardPairs`).
+     *  KEY GATE: only when the meeting pitch is a degree of the key collection and the rising tone is not. A
+     *  diatonic tone rising a semitone into a chromatic one is that tone's inflection (the dom7's seventh D→D♯
+     *  in E7 → B/D♯), not a ♯4; a chromatic tone rising into the key takes its letter from its goal. Default
+     *  false. */
+    aug6Outward?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -222,6 +252,7 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
+    aug6Outward: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
@@ -242,6 +273,7 @@ export const TP_PASS_PRESET: EngineOptions = {
     // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
+    aug6Outward: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
     // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
     // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
@@ -250,7 +282,8 @@ export const TP_PASS_PRESET: EngineOptions = {
 // ── Decision trace (introspection only) ────────────────────────────────────────
 
 /** One candidate's scoring breakdown for a note (introspection / visualiser only). The argmax is
- *  `base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta`. */
+ *  `base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta`, unless the aug6 outward
+ *  rule fires: it is dispositive and overrides the argmax (`Decision.chosen` shows it). */
 export interface DecisionCandidate {
     readonly c: PitchClass;
     readonly base: number;
@@ -314,6 +347,7 @@ export class SpellingEngine {
     private readonly doubleAccPenalty: number;
     private readonly verticalWeight: number;
     private readonly collisionRepair: boolean;
+    private readonly keepAliveOnePc: boolean;
     private readonly foldSlotRecency: number;
     private readonly foldRepairScale: boolean;
     private readonly foldEconomyGate: boolean;
@@ -329,6 +363,7 @@ export class SpellingEngine {
     private readonly guardRaiseLine: boolean;
     private readonly ornamentMs: number;
     private readonly verticalPcTriad: boolean;
+    private readonly aug6Outward: boolean;
     /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
     private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
@@ -337,6 +372,8 @@ export class SpellingEngine {
     private curOnsetDirs = new Map<number, number>();
     /** The current onset's exact-pitch resolution per midi, for the same. */
     private curOnsetExact = new Map<number, number>();
+    /** The current onset's aug6 outward partner per midi (partner midi, role +1 rising / −1 falling). */
+    private curOnsetOutward = new Map<number, { partner: number; role: number }>();
     /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
      *  own first spelling is not exempt from the guard. */
     private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
@@ -403,6 +440,7 @@ export class SpellingEngine {
         this.doubleAccPenalty = opts.doubleAccPenalty ?? 0;
         this.verticalWeight = opts.verticalWeight ?? 0;
         this.collisionRepair = opts.collisionRepair ?? false;
+        this.keepAliveOnePc = opts.keepAliveOnePc ?? false;
         this.foldSlotRecency = opts.foldSlotRecency ?? 0;
         this.foldRepairScale = opts.foldRepairScale ?? false;
         this.foldEconomyGate = opts.foldEconomyGate ?? false;
@@ -418,15 +456,16 @@ export class SpellingEngine {
         this.guardRaiseLine = opts.guardRaiseLine ?? false;
         this.ornamentMs = opts.ornamentMs ?? 0;
         this.verticalPcTriad = opts.verticalPcTriad ?? false;
+        this.aug6Outward = opts.aug6Outward ?? false;
     }
 
     /**
      * Commit a spelling for `midi`: the candidate whose combined score (interval fit plus every enabled
      * mechanism's delta) is highest; then run the fold check. `t`, when given, groups co-struck notes
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
-     * feeds the look-ahead when enabled.
+     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison
@@ -438,6 +477,7 @@ export class SpellingEngine {
             this.curOnsetT.clear();
             this.curOnsetDirs.clear();
             this.curOnsetExact.clear();
+            this.curOnsetOutward.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -455,6 +495,8 @@ export class SpellingEngine {
         if (t !== undefined && !this.curOnsetT.has(midi)) this.curOnsetT.set(midi, t);
         this.curOnsetDirs.set(midi, resolveDir);
         this.curOnsetExact.set(midi, resolveExact);
+        // A unison doubling without a pair of its own keeps its twin's (both are the same tone).
+        if (outwardPartner !== undefined && outwardRole !== 0) this.curOnsetOutward.set(midi, { partner: outwardPartner, role: outwardRole });
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -504,6 +546,7 @@ export class SpellingEngine {
                 // Timed from the onset's first note, so a spread chord does not shorten its notes.
                 else if (this.ornamentMs > 0 && t !== undefined) this.pending.set(midi, { n: best, t: this.lastT });
                 else this.kept.set(letter(best), best);
+                this.evictSamePc(best);
             }
             if (this.onsetRevise) this.reviseOnset(midi);
             return;
@@ -561,10 +604,13 @@ export class SpellingEngine {
                 if (m !== -Infinity) leanTarget = m;
             }
         }
+        const outward = this.aug6Outward && this.lookAheadOn ? this.outwardSpelling(midi) : null;
         const cands: DecisionCandidate[] = [];
         let best: number | null = null;
         let bestScore = Number.NEGATIVE_INFINITY;
+        let outwardIsCandidate = false;
         for (const n of candidates(midi)) {
+            if (n === outward) outwardIsCandidate = true;
             const base = intervalScore(n, this.scale);
             const last = (this.guardMemo ?? this.lastByLetter)[letter(n)];
             const raiseLine = this.guardRaiseLine && resolveExact === 1 && last !== undefined && n - last.n === 7;
@@ -586,7 +632,38 @@ export class SpellingEngine {
             cands.push({ c: spellingOf(n), base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
             if (s > bestScore) { bestScore = s; best = n; }
         }
+        // AUG6 OUTWARD: dispositive, above every score (a struck augmented sixth is a fact, not a preference).
+        if (outwardIsCandidate) best = outward;
         return { best, scale, cands };
+    }
+
+    /** The aug6 outward rule's spelling for `midi`, or null when it does not apply: the note has a pair this
+     *  onset whose partner is committed and sounding, the pair's meeting pitch is a degree of the key
+     *  collection and the rising tone is not. The rising tone is ten fifths sharp of its partner, the falling
+     *  tone ten fifths flat. */
+    private outwardSpelling(midi: number): number | null {
+        const pair = this.curOnsetOutward.get(midi);
+        if (!pair) return null;
+        const partnerN = this.active.get(pair.partner);
+        if (partnerN === undefined) return null;
+        const centre = this.frameMode === 'diatonic' ? this.frameCentre : this.surfaceCollectionCentre();
+        const collection = new Set(LETTER_ORDER.map(s => pitchClass(letterAt(s, centre))));
+        const meetPc = (((midi + pair.role) % 12) + 12) % 12;
+        const risingPc = (((pair.role === 1 ? midi : pair.partner) % 12) + 12) % 12;
+        if (!collection.has(meetPc) || collection.has(risingPc)) return null;
+        return pair.role === 1 ? partnerN + 10 : partnerN - 10;
+    }
+
+    /** The mean frame keeps no diatonic collection: the centre of the contiguous 7-fifth window that covers the
+     *  most of the drifting surface's slots (ties to the slots' median). Used by the aug6 key gate. */
+    private surfaceCollectionCentre(): number {
+        const L = this.scale.slice().sort((a, b) => a - b), med = L[3]!;
+        let bestK = med, bestCov = -1;
+        for (let k = Math.min(L[0]! + 3, L[6]! - 3); k <= Math.max(L[0]! + 3, L[6]! - 3); k++) {
+            let cov = 0; for (const v of L) if (v >= k - 3 && v <= k + 3) cov++;
+            if (cov > bestCov || (cov === bestCov && Math.abs(k - med) < Math.abs(bestK - med))) { bestCov = cov; bestK = k; }
+        }
+        return bestK;
     }
 
     /** ONSET BUFFER: re-decide each earlier note of the current onset with the whole onset so far ringing. */
@@ -618,6 +695,7 @@ export class SpellingEngine {
                 const pend = this.pending.get(m);
                 if (pend) pend.n = best;
                 else if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
+                this.evictSamePc(best);
             }
         }
     }
@@ -680,9 +758,9 @@ export class SpellingEngine {
             // It only VETOES, though; it cannot fix UNDER-firing, where a fold that should happen never
             // triggers because the centre never reaches the edge.
             if (favoured !== 0 && this.foldEconomyGate) {
-                const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
-                if (heard.length) {
-                    const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
+                const heard = heardCounts(this.pcWindow, this.curOnsetPcs);
+                if (heard.total) {
+                    const costAt = (c: number) => costAtCounts(heard.counts, c);
                     if (costAt(cFrame + favoured) > costAt(cFrame)) favoured = 0;   // target dearer ⇒ veto
                 }
             }
@@ -690,10 +768,10 @@ export class SpellingEngine {
             // Accidental economy over every raw pc heard across the window (repeats kept, so a
             // key-defining note pulls harder for free). Fold toward a comma-neighbour that notates it
             // cheaper, unless a near-chromatic window (no clear key) vetoes the vote.
-            const heard = [...this.pcWindow.flat(), ...this.curOnsetPcs];
-            if (heard.length === 0) return;
-            const vetoed = this.foldMaxChroma > 0 && new Set(heard).size > this.foldMaxChroma;
-            const costAt = (c: number) => heard.reduce((s, pc) => s + Math.abs(acc(spellNearest(pc, c))), 0);
+            const heard = heardCounts(this.pcWindow, this.curOnsetPcs);
+            if (heard.total === 0) return;
+            const vetoed = this.foldMaxChroma > 0 && heard.counts.filter(k => k > 0).length > this.foldMaxChroma;
+            const costAt = (c: number) => costAtCounts(heard.counts, c);
             const here = costAt(cFrame);
             const up = costAt(cFrame + COMMA), dn = costAt(cFrame - COMMA);
             if (up < here - this.foldMargin && up <= dn) favoured = +COMMA;
@@ -791,6 +869,24 @@ export class SpellingEngine {
         const n = this.active.get(midi)
             ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
         return n === undefined ? null : { ...spellingOf(n), octave };
+    }
+
+    /** One spelling per pitch class: drop held alterations (kept or pending) that spell `n`'s pitch class on
+     *  another letter, unless that note is still sounding, and return their letters to the collection. */
+    private evictSamePc(n: number): void {
+        if (!this.keepAliveOnePc) return;
+        const pc = pitchClass(n);
+        const sounding = new Set(this.active.values());
+        for (const [s, k] of [...this.kept]) {
+            if (s === letter(n) || pitchClass(k) !== pc || sounding.has(k)) continue;
+            this.kept.delete(s);
+            this.scale[s] = letterAt(s, this.frameCentre);
+        }
+        for (const [m, p] of [...this.pending]) {
+            if (letter(p.n) === letter(n) || pitchClass(p.n) !== pc || sounding.has(p.n)) continue;
+            this.pending.delete(m);
+            this.scale[letter(p.n)] = letterAt(letter(p.n), this.frameCentre);
+        }
     }
 
     /** Keep a chromatic alive in its letter's slot, unless a later commit has since respelled that letter. */

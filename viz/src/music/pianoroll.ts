@@ -18,6 +18,7 @@ import { clickMs, clicksPerBar, type Grid } from '../metronome.js';
 import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
 import { chordColor, chordSegments, chordText } from '../chord.js';
+import type { Comparison } from '../compare.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -53,6 +54,8 @@ interface Layout {
     x: number; w: number; y: number;
     onIndex: number; onT: number; offT: number;
     tier: Tier; midi: number; committedLabel: string; expectedLabel: string; fill: string;
+    cmpLabel?: string;   // LOCAL compare: the other speller's spelling, only where it differs from ours
+    cmpTitle?: string;
 }
 
 function svgEl(name: string, attrs: Record<string, string | number>): SVGElement {
@@ -143,6 +146,12 @@ let playhead: SVGLineElement | null = null;
 let layouts: Layout[] = [];                 // one per note, index == onIndex, ascending by x (== onset order)
 let maxW = 0;                                // widest note, so long-held notes starting off-screen-left still show
 let rects: (SVGRectElement | null)[] = [];   // sparse, indexed by onIndex: only the visible ones exist
+let cmpTexts: (SVGTextElement | null)[] = []; // LOCAL compare labels, materialized with their rects
+// LOCAL compare (viz/src/compare.ts): another speller's spellings, drawn as a second label where they differ.
+let cmp: Comparison | null = null;
+let cmpGroup: SVGGElement | null = null;
+// Literal colour (var() is invalid in an SVG presentation attribute); same value as --compare in styles.css.
+const COMPARE_FILL = '#4dd0e1';
 let rendered = new Set<number>();            // onIndices currently materialized in the DOM
 let pxPerMs = PX_PER_SEC / 1000;
 let svgWidth = 0;
@@ -259,6 +268,13 @@ export function initRollScale(): void {
     showScale();
 }
 
+/** Show (or with null, hide) another speller's differing spellings as labels on the notes. */
+export function setRollCompare(c: Comparison | null): void {
+    if (c === cmp) return;
+    cmp = c;
+    builtForReplay = null;   // rebuild the layouts on the next render
+}
+
 export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null, showChords = true): void {
     if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid || showChords !== builtWithChords) {
         builtWithChords = showChords;
@@ -270,7 +286,7 @@ export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = fal
 function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
-    rects = []; rendered = new Set(); prevActive = []; shownFill = [];
+    rects = []; cmpTexts = []; rendered = new Set(); prevActive = []; shownFill = [];
     laneItems = []; laneChunks = []; laneShown = new Set();
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
     const sc = (isMobile() ? 0.6 : 1) * zoom;  // phones start zoomed out (time + pitch axes together)
@@ -325,11 +341,19 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
             // Ungraded notes (a live take) take their letter's colour; graded ones their tier's.
             fill: !note.expected && note.committed ? LETTER_COLOR[note.committed.step]! : TIER_COLOR[note.tier],
         };
+        if (cmp?.differ[note.onIndex]) {
+            const theirs = cmp.theirs[note.onIndex]!, wrong = cmp.tiers[note.onIndex] === 'wrong';
+            layouts[note.onIndex]!.cmpLabel = label({ step: theirs.step, alter: theirs.alter }) + (wrong ? ' ✗' : '');
+            layouts[note.onIndex]!.cmpTitle = `${cmp.label}: ${label(theirs)} (${cmp.tiers[note.onIndex]})`;
+        }
     }
     rects = new Array(replay.notes.length).fill(null);
+    cmpTexts = new Array(replay.notes.length).fill(null);
 
     notesGroup = document.createElementNS(SVGNS, 'g') as SVGGElement;
     svg.appendChild(notesGroup);
+    cmpGroup = null;
+    if (cmp) { cmpGroup = svgEl('g', {}) as SVGGElement; svg.appendChild(cmpGroup); }   // compare labels above every note rect
     // Lanes paint in three layers: backgrounds, the lazily drawn segments, then captions on top.
     laneBack = svgEl('g', {}) as SVGGElement;
     lanesGroup = svgEl('g', {}) as SVGGElement;
@@ -415,11 +439,22 @@ function makeRect(oi: number): void {
     rect.setAttribute('fill', shownFill[oi]!);
     rect.style.cursor = 'pointer';
     const title = document.createElementNS(SVGNS, 'title');
-    title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`);
+    title.textContent = `${L.committedLabel} (midi ${L.midi})` + (L.expectedLabel === '∅' ? '' : `, expected ${L.expectedLabel}`)
+        + (L.cmpTitle ? `; ${L.cmpTitle}` : '');
     rect.appendChild(title);
     rect.addEventListener('click', e => { e.stopPropagation(); onSeek(L.onIndex); });
     notesGroup!.appendChild(rect);
     rects[oi] = rect;
+    if (L.cmpLabel && cmpGroup) {
+        // Their spelling, just right of the note's start, haloed so it reads over neighbouring notes.
+        const t = svgEl('text', {
+            x: L.x + 3, y: L.y + rowH - 1.5, fill: COMPARE_FILL, 'font-size': Math.max(10, rowH + 2), 'font-weight': 700,
+            stroke: '#14161a', 'stroke-width': 3, 'paint-order': 'stroke', 'pointer-events': 'none',
+        }) as SVGTextElement;
+        t.textContent = L.cmpLabel;
+        cmpGroup!.appendChild(t);
+        cmpTexts[oi] = t;
+    }
 }
 
 /** A note's fill: its own colour once committed, the buffer blue while the look-ahead has read it, grey
@@ -459,7 +494,7 @@ function renderVisible(): void {
     renderVisibleLanes();
     const [lo, hi] = visibleRange();
     for (const oi of [...rendered]) {
-        if (oi < lo || oi >= hi) { rects[oi]?.remove(); rects[oi] = null; rendered.delete(oi); }
+        if (oi < lo || oi >= hi) { rects[oi]?.remove(); rects[oi] = null; cmpTexts[oi]?.remove(); cmpTexts[oi] = null; rendered.delete(oi); }
     }
     for (let oi = lo; oi < hi; oi++) {
         if (!rendered.has(oi)) { makeRect(oi); rendered.add(oi); }

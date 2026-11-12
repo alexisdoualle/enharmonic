@@ -24,6 +24,10 @@ const VIZ = join(OUT, 'viz');          // the interactive app, served under /viz
 const SITE = join(here, 'site');       // static landing page + CNAME, copied to the site root
 const FIXTURES = join(REPO, 'fixtures');
 const LOCAL_FIXTURES = join(REPO, 'local-fixtures');
+// Local-only speller comparison overlay (tools/viz-compare/sync.mjs, gitignored): other spellers'
+// predictions + the lab fixtures they need. Never part of a CI/deploy build, even if the folder exists.
+const VIZ_LOCAL = join(REPO, 'viz-local');
+const WITH_LOCAL = !process.env.CI;
 
 const buildOpts = {
     entryPoints: [join(here, 'src/main.ts')],
@@ -55,12 +59,12 @@ async function copyAssets() {
     await cp(SITE, OUT, { recursive: true });        // landing index.html + CNAME → site root
     await cp(join(here, 'public'), VIZ, { recursive: true });   // app shell (index.html, styles.css) → /viz/
     const ids = [];
-    const copyFixtureRoot = async (root) => {
+    const copyFixtureRoot = async (root, skip = new Set()) => {
         let entries;
         try { entries = await readdir(root, { withFileTypes: true }); }
         catch { return; } // optional local overlay may not exist
         for (const e of entries) {
-            if (!e.isDirectory()) continue;
+            if (!e.isDirectory() || skip.has(e.name)) continue;
             try {
                 await stat(join(root, e.name, 'expected.json'));
                 await cp(join(root, e.name), join(VIZ, 'fixtures', e.name), { recursive: true });
@@ -73,6 +77,16 @@ async function copyAssets() {
     // Developer-only fixtures override a committed fixture with the same id. This keeps the
     // overlay useful for trying revised ground truth without changing the shipped corpus.
     await copyFixtureRoot(LOCAL_FIXTURES);
+    if (WITH_LOCAL) {
+        // Lab fixtures the comparison needs that this repo lacks (a committed or local fixture wins).
+        const before = new Set(ids);
+        await copyFixtureRoot(join(VIZ_LOCAL, 'fixtures'), before);
+        try {
+            await cp(join(VIZ_LOCAL, 'compare'), join(VIZ, 'compare'), { recursive: true });
+            await cp(join(here, 'compare-moments.json'), join(VIZ, 'compare', 'moments.json'));
+            console.log('[viz] LOCAL ONLY: speller comparison data → viz-dist/viz/compare/ (never deploy this build)');
+        } catch { /* no comparison data synced: the compare menu stays hidden */ }
+    }
     ids.sort();
     await writeFile(join(VIZ, 'fixtures', 'manifest.json'), JSON.stringify([...new Set(ids)], null, 2));
     // The ids only the local overlay has (never in prod), so the menu can mark them.

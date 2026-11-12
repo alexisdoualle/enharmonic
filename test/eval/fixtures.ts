@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
-import { Speller, spellTwoPass } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs } from '../../src/index.js';
 import { resolveStep, resolveExactStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
@@ -58,11 +58,15 @@ export function loadExpected(id: string): Expected[] {
  * event in onset order. Read-back happens at `noteOff` (a note's final committed
  * spelling). For look-ahead mode, `resolveDir` is derived from the next onset a
  * semitone away in ANY octave within `horizon` upcoming onsets: the small forward
- * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored.
+ * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored. Look-ahead mode
+ * also gets each note's aug6 outward partner ({@link outwardPairs}).
  */
 export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
     const out: (Pitch | null)[] = [];
     const pending = new Map<number, number[]>();
+    let notes: { midi: number }[] = [], pairs: { partner: number[]; role: number[] } | null = null;
+    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); }
+    let onIdx = 0;
     for (let i = 0; i < events.length; i++) {
         const e = events[i]!;
         if (e.type === 'on') {
@@ -77,7 +81,11 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
                     if (dir !== 0 && exact !== 0) break;
                 }
             }
-            s.noteOn(e.midi, { t: e.t, resolveDir: dir, resolveExact: exact });
+            const y = pairs ? pairs.partner[onIdx]! : -1;
+            s.noteOn(e.midi, y >= 0
+                ? { t: e.t, resolveDir: dir, resolveExact: exact, outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[onIdx]! }
+                : { t: e.t, resolveDir: dir, resolveExact: exact });
+            onIdx++;
             const idx = out.length; out.push(null);
             (pending.get(e.midi) ?? pending.set(e.midi, []).get(e.midi)!).push(idx);
         } else {

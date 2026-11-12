@@ -14,11 +14,11 @@
  * German from dominant 7: the same keys spelled with a minor seventh are a dominant 7.
  */
 import type { Pitch, PitchClass } from '../../src/index.js';
-import { triadColor, triadColorAt } from './music/triadColor.js';
+import { hslToHex, triadColor, triadColorAt } from './music/triadColor.js';
 
 export interface ChordNote { midi: number; pitch: Pitch; /** struck at this onset (false = held over from earlier) */ struck: boolean; }
 
-type TypeId = 'maj' | 'min' | 'dim' | 'aug' | 'dom7' | 'maj7' | 'min7' | 'hdim7' | 'dim7' | 'it6' | 'fr6' | 'ger6';
+type TypeId = 'maj' | 'min' | 'dim' | 'aug' | 'dom7' | 'maj7' | 'min7' | 'hdim7' | 'dim7' | 'it6' | 'fr6' | 'ger6' | 'sus4' | 'five';
 interface ChordType {
     id: TypeId; name: string; short: (root: string) => string;
     /** [semitones above root, expected letters above root, role] */
@@ -42,6 +42,10 @@ const CHORD_TYPES: ChordType[] = [
     { id: 'it6', name: 'Italian sixth', short: () => 'It+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [10, 5, '♯4']] },
     { id: 'fr6', name: 'French sixth', short: () => 'Fr+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [6, 3, '2'], [10, 5, '♯4']] },
     { id: 'ger6', name: 'German sixth', short: () => 'Ger+6', aug6: true, tones: [[0, 0, '♭6'], [4, 2, 'tonic'], [7, 4, '♭3'], [10, 5, '♯4']] },
+    // Open sonorities, last so any third-built chord on the same notes wins. A sus4 is three consecutive
+    // fifths (F–C–G = Csus4, the same pcs as Fsus2); a bare fifth is read only when it is ALL that sounds.
+    { id: 'sus4', name: 'suspended 4th', short: r => `${r}sus4`, tones: [[0, 0, 'root'], [5, 3, 'fourth'], [7, 4, 'fifth']] },
+    { id: 'five', name: 'open fifth', short: r => `${r}5`, tones: [[0, 0, 'root'], [7, 4, 'fifth']] },
 ];
 const TYPE_ORDER = new Map(CHORD_TYPES.map((t, i) => [t.id, i]));
 
@@ -110,7 +114,7 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     const pcs = [...byPc.keys()];
     const bassPc = mod12(notes[0]!.midi);
     const noChord = () => none(notes.filter((n, i) => notes.findIndex(m => mod12(m.midi) === mod12(n.midi)) === i));
-    if (pcs.length < 3) return noChord();   // every chord type needs three pitch classes
+    if (pcs.length < 2) return noChord();   // the open fifth needs two pitch classes, every other type three
 
     interface Cand {
         t: ChordType; rootPc: number; present: number[]; missingRoles: string[]; extras: number[];
@@ -121,10 +125,12 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
     let mask = 0;
     for (const pc of pcs) mask |= 1 << pc;
     for (const t of CHORD_TYPES) {
+        if (t.id === 'five' ? pcs.length !== 2 : pcs.length < 3) continue;
         const tm = TONE_MASK.get(t)!;
+        const need = Math.min(3, t.tones.length);
         for (let rootPc = 0; rootPc < 12; rootPc++) {
-            // Every candidate needs at least 3 of its pitch classes sounding: skip the rest before any work.
-            if (bits(mask & (((tm << rootPc) | (tm >>> (12 - rootPc))) & 0xfff)) < 3) continue;
+            // Every candidate needs at least 3 of its pitch classes sounding (the fifth: both): skip the rest before any work.
+            if (bits(mask & (((tm << rootPc) | (tm >>> (12 - rootPc))) & 0xfff)) < need) continue;
             const tonePcs = t.tones.map(([s]) => mod12(rootPc + s));
             const present = tonePcs.filter(p => byPc.has(p));
             const covered = present.length;
@@ -134,7 +140,7 @@ export function findChord(notesIn: readonly ChordNote[]): ChordRead {
                 if (!t.seventh || covered !== 3) continue;
                 const roleHas = (role: string) => byPc.has(mod12(rootPc + t.tones.find(x => x[2] === role)![0]));
                 if (!roleHas('third') || !roleHas('seventh')) continue;
-            } else if (covered < 3) continue;
+            } else if (covered < need) continue;
             if (t.symmetric) {
                 const key = `${t.id}:${[...tonePcs].sort((a, b) => a - b).join(',')}`;
                 if (seenSym.has(key)) continue;
@@ -399,29 +405,71 @@ const fifthsOf = (p: PitchClass) => FIFTHS_IDX[p.step]! + p.alter * 7;
 /** Fill colour for a chord read, shared with the Tonnetz panel (viz/src/music/triadColor.ts). Triads and
  *  sevenths take the gradient of their TRIAD (root, third, fifth) at the committed spellings, placed
  *  within `surface`; diminished/half-dim/dim7 and augmented use fixed colours, augmented sixths 'aug6'.
- *  An incoherent read is coloured by its pc-identity chord (root named by pc). null = no chord. */
+ *  An incoherent read is coloured by its pc-identity chord (root named by pc). null = no chord.
+ *  Every chord gets one solid colour, never grey:
+ *   - maj7 / min7: the major / minor triad's hue, a deeper shade (two triads on the lattice, one fill here);
+ *   - sus4: the triad it suggests (its root with the third the scale gives it), washed out;
+ *   - an open fifth: the same, washed out further, a hint of the chord the scale would make of it. */
 export function chordColor(r: ChordRead, surface: readonly PitchClass[] | null): string | null {
     if (!r.type) return null;
     const surf = surface && surface.length === 7 ? surface : DEFAULT_SURFACE;
-    const fixed = r.type === 'dim' || r.type === 'hdim7' || r.type === 'dim7' ? 'diminished'
-        : r.type === 'aug' ? 'augmented'
-        : r.type === 'it6' || r.type === 'fr6' || r.type === 'ger6' ? 'aug6' : null;
+    const fixed = fixedQuality(r.type);
     if (fixed) return triadColor(fixed, undefined, surf);
-    const minor = r.type === 'min' || r.type === 'min7';
-    const quality = minor ? 'minor' : 'major';
+    const open = r.type === 'sus4' || r.type === 'five';
+    const minor = open ? scaleThirdIsMinor(r, surf) : r.type === 'min' || r.type === 'min7';
+    const mean = rootPos(r, minor) + (minor ? (0 - 3 + 1) / 3 : (0 + 4 + 1) / 3);
+    const hex = triadColorAt(minor ? 'minor' : 'major', mean, surf);
+    if (r.type === 'sus4') return reshade(hex, 0.7, 3);
+    if (r.type === 'five') return reshade(hex, 0.5, 6);
+    if (r.type === 'maj7' || r.type === 'min7') return reshade(hex, 1, -12);
+    return hex;
+}
+
+/** The third the current scale puts on an open chord's root (the letter two steps up): minor if it lies a
+ *  minor third above, else major (also when the scale has no such note or the root is not spelled). */
+function scaleThirdIsMinor(r: ChordRead, surface: readonly PitchClass[]): boolean {
     const root = r.root!;
-    // Fifths position of the root, from any matched chord note (committed spelling) when coherent.
-    // Offsets above the root on the chain: root 0, major third +4, minor third -3, fifth +1.
+    const third = surface.find(p => LETTER_IDX[p.step] === (LETTER_IDX[root.step]! + 2) % 7);
+    return !!third && mod12(spellPc(third) - spellPc(root)) === 3;
+}
+
+/** Scale a colour's saturation by `sat` and shift its lightness by `dl` points (HSL), clamped. */
+function reshade(hex: string, sat: number, dl: number): string {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    let h = 0, s = 0;
+    if (d > 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h *= 60;
+    }
+    return hslToHex(h, Math.min(100, s * 100 * sat), Math.max(0, Math.min(96, l * 100 + dl)));
+}
+
+const fixedQuality = (t: NonNullable<ChordRead['type']>): string | null =>
+    t === 'dim' || t === 'hdim7' || t === 'dim7' ? 'diminished'
+        : t === 'aug' ? 'augmented'
+        : t === 'it6' || t === 'fr6' || t === 'ger6' ? 'aug6' : null;
+
+/** Fifths position of the chord's root, read from a matched chord note's committed spelling when coherent.
+ *  Offsets above the root on the chain: root 0, major third +4, minor third -3, fifth +1. */
+function rootPos(r: ChordRead, minor: boolean): number {
+    const root = r.root!;
     const rootPc = spellPc(root);
-    let rootPos = fifthsOf(root);
     if (r.coherent) {
         for (const n of r.chordNotes) {
             const off = mod12(spellPc(n) - rootPc);
-            const rel = off === 0 ? 0 : off === 7 ? 1 : off === (minor ? 3 : 4) ? (minor ? -3 : 4) : null;
-            if (rel !== null) { rootPos = fifthsOf(n) - rel; break; }
+            const rel = off === 0 ? 0 : off === 7 ? 1 : off === 5 ? -1 : off === (minor ? 3 : 4) ? (minor ? -3 : 4) : null;
+            if (rel !== null) return fifthsOf(n) - rel;
         }
     }
-    const mean = rootPos + (minor ? (0 - 3 + 1) / 3 : (0 + 4 + 1) / 3);
-    return triadColorAt(quality, mean, surf);
+    return fifthsOf(root);
+}
+
+/** CSS background for a chord: one solid colour (chordColor). maj7 / min7 used to be a two-tone blend of
+ *  their two lattice triads; they are now a deeper shade of their own triad's colour. null = no chord. */
+export function chordFill(r: ChordRead, surface: readonly PitchClass[] | null): string | null {
+    return chordColor(r, surface);
 }
 const DEFAULT_SURFACE: PitchClass[] = (['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const).map(step => ({ step, alter: 0 }));

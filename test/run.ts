@@ -5,11 +5,13 @@ await import('./liveTonnetz.test.js');
 await import('./spirals.test.js');
 await import('./slots.test.js');
 await import('./viz.test.js');
+await import('./compare.test.js');
 await import('./chord.test.js');
 await import('./examples/standalone.test.js');
 await import('./chromatic-lines.test.js');
 await import('./export.test.js');
 await import('./import.test.js');
+await import('./symmetricPlanes.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;

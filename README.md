@@ -40,8 +40,8 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard |
-| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule |
+| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries (aug6 rule in both passes) |
 
 Frameless and key-signature-free: the side a passage settles on is a statistic of the notes
 committed so far, never a detected key.
@@ -73,6 +73,13 @@ shape how later notes are spelled; without `t` every note counts.
 `resolveExactStep` compute each from a pair of midi numbers. The exact one lets a rising chromatic line
 (B, B♯, C♯) through the recency guard.
 
+`outwardPartner` and `outwardRole` name an augmented sixth by where its tones go: two tones ten semitones
+apart that move outward onto one pitch class (A♭–C–E♭–F♯ → G) make the rising tone the ♯4, spelled F♯
+against A♭, not G♭. `outwardPairs(notes)` finds the pairs from `{ midi, tOn, tOff }` notes sorted by onset;
+pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
+only when the meeting pitch is in the key and the rising tone is not, so a dominant seventh whose diatonic
+seventh rises chromatically (D→D♯ in E7) keeps its spelling. `spellTwoPass` does this itself (`aug6Outward: false` turns it off).
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -100,11 +107,27 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.75% | 99.79% | 99.72% | 99.75% |
-| + two-pass | 99.87% | 99.87% | 99.82% | 99.84% |
+| + look-ahead | 99.77% | 99.82% | 99.72% | 99.75% |
+| + two-pass | 99.88% | 99.88% | 99.83% | 99.84% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
+
+## Performance
+
+Node v23.9 on an Apple M1 Pro, Meredith corpus (195,972 notes per variant), median of 3 runs, spelling
+time only (driver and speller; parsing and scoring excluded):
+
+| mode | clean | notes/s (clean) | noisy | notes/s (noisy) |
+|---|--:|--:|--:|--:|
+| core | 0.11 s | 1,740,000 | 0.11 s | 1,720,000 |
+| real-time | 0.84 s | 232,000 | 0.68 s | 290,000 |
+| look-ahead | 1.02 s | 192,000 | 0.84 s | 233,000 |
+| two-pass | 1.79 s | 109,000 | 1.86 s | 105,000 |
+
+Look-ahead and two-pass include finding the aug6 outward pairs (`outwardPairs`). Timings vary by CPU and
+machine load; reproduce with `npm run meredith -- --time` (add `--noisy` for the
+noisy set).
 
 ## The four principles
 

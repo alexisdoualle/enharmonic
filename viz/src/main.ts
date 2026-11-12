@@ -7,12 +7,15 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying } from './music/pianoroll.js';
-import { renderStaff, renderLiveStaff, resetStaffScroll } from './music/staff.js';
+import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying, setRollCompare } from './music/pianoroll.js';
+import { renderStaff, renderLiveStaff, resetStaffScroll, setStaffCompare } from './music/staff.js';
+import { buildComparison, fetchCompareIndex, fetchMoments, fetchPredictions, sameSpelling, type CompareIndex, type Comparison, type Moment } from './compare.js';
+import type { PitchClass } from '../../src/index.js';
 import { initLiveTonnetz } from './panels/liveTonnetz.js';
 import { initSpirals } from './panels/spirals.js';
+import { initKeyboard, type KeyboardStrip } from './panels/keyboard.js';
 import { connectMidi, midiAvailable } from './live.js';
-import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, type Voice } from './audio.js';
+import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, setInstrument, getInstrument, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { mountExpandButtons } from './modal.js';
@@ -67,6 +70,22 @@ function setChordsVisible(v: boolean) {
     chordsVisible = v;
     try { localStorage.setItem(SHOW_CHORDS_KEY, v ? '1' : '0'); } catch { /* storage blocked */ }
     render();
+}
+
+// Piano keyboard strip under the piano roll, above the cards (panels/keyboard.ts): off by default (the desktop layout is already
+// dense; the strip is for the big poster screen), persisted per-browser; `?piano=1` / `?piano=0` overrides.
+const SHOW_KEYBOARD_KEY = 'viz.showKeyboard';
+let keyboard: KeyboardStrip | null = null;
+const readFlag = (key: string) => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
+function setKeyboardOption(key: string, v: boolean) {
+    try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* storage blocked */ }
+    applyKeyboard();
+    window.dispatchEvent(new Event('resize'));   // the bands above changed height: let the canvases re-fit
+}
+function applyKeyboard() {
+    const on = readFlag(SHOW_KEYBOARD_KEY);
+    $<HTMLInputElement>('show-keyboard').checked = on;
+    keyboard?.setVisible(on);
 }
 
 // Heard colouring on the piano roll (unheard notes grey, the look-ahead buffer light blue): on by default.
@@ -345,11 +364,13 @@ function barStart(t: number, early = 0): number {
     return g.t0 + Math.max(0, Math.floor((t - g.t0 + early) / bar)) * bar;
 }
 
-/** The speller that spells the take right now: while playing, look-ahead and two-pass need a future
- *  that does not exist yet, so the real-time speller stands in until the pause. */
+/** The speller that spells the take right now. Look-ahead runs while playing: the newest notes have no
+ *  next note yet, so they are spelled without a direction and revised when it arrives (rung 3's "revise
+ *  the last visible notes"). Falling back to real time made every earlier note flip on each new note.
+ *  Two-pass needs the whole take, so the real-time speller stands in for it until the pause. */
 function liveMode(): Mode {
     const m = effMode();
-    return !takeSettled && (m === 'la' || m === 'tp') ? 'rt' : m;
+    return !takeSettled && m === 'tp' ? 'rt' : m;
 }
 
 function resetTake(tk: Take) {
@@ -808,6 +829,7 @@ function recompute() {
         { ...spiralOpts(), ...(live ? { onsetTolerance: LIVE_ONSET_TOLERANCE } : {}) },
         state.mode === 'tp', effectiveSideOverrides());
     state.step = clampStep(state, state.step);
+    if (compareIndex) updateComparison();   // LOCAL compare: re-score theirs against this replay
     renderStatus();
     render();
 }
@@ -868,13 +890,15 @@ function renderStatusText() {
         + `<span class="correct">${pc(t.correct + t.flipped)}% correct</span>`
         + ` (<span class="exact">exact: ${pc(t.correct)}%</span>, <span class="flipped">flipped: ${pc(t.flipped)}%</span>) · `
         + `<span class="wrong">${pc(t.wrong)}% wrong (${t.wrong})</span>`
-        + (t.unread ? ` · <span class="dim">${t.unread} unread</span>` : '');
+        + (t.unread ? ` · <span class="dim">${t.unread} unread</span>` : '')
+        + (comparison ? ` · <span class="cmp">vs ${esc(comparison.label)}: ${comparison.nDiffer} differ · theirs ${pc(comparison.tally.wrong)}% wrong (${comparison.tally.wrong})</span>` : '');
 }
 
 function render() {
     const snap = current(state);
     $('look-ahead-ctl').style.display = state.mode === 'rt' ? '' : 'none';
     renderScoring($('scoring'), snap, effMode() === 'la' || effMode() === 'tp', effMode() === 'core');
+    if (comparison) renderCompareBlock($('scoring'), snap);
     renderWheel($('wheel'), snap, {
         range: state.spiralRange, center: state.spiralCenter, even: state.spiralEven,
         streaming: state.mode === 'rt' || state.mode === 'la',
@@ -893,6 +917,7 @@ function render() {
         syncTimeLine();
     }
     renderStrip();
+    keyboard?.render(state.replay, state.step, comparison);   // no-op while the strip is hidden
     $('scrub').setAttribute('max', String(Math.max(0, (state.replay?.snapshots.length ?? 1) - 1)));
     ($('scrub') as HTMLInputElement).value = String(state.step);
     $('pos').textContent = `${state.step + 1} / ${state.replay?.snapshots.length ?? 0}`;
@@ -938,6 +963,19 @@ function renderStrip() {
     }
 }
 
+/** Step one note left or right, skipping exact unison duplicates (a voice doubling the same pitch at the
+ *  same instant): in a full score like the Requiem half the notes are such copies, and stepping through
+ *  them replays one pitch several times. Copies follow their first voice (bass-first order), so stepping
+ *  back over a chord lands on that first voice. */
+function stepTo(dir: 1 | -1) {
+    const r = state.replay;
+    if (!r) return;
+    ensureTimeline(r);
+    let i = state.step + dir;
+    while (i > 0 && i < r.notes.length - 1 && dupOnset[i]) i += dir;
+    seek(i, true);
+}
+
 /** Move the playhead. Seeking WHILE PLAYING relocates the playhead and keeps rolling from there:
  *  the transport clock is re-anchored by `play()`, so nothing drifts. `resume` is off for the scrub
  *  slider, which seeks continuously while dragged and resumes once on release instead. */
@@ -958,7 +996,8 @@ function seek(i: number, audible = false, resume = true) {
     }
     if (audible && soundOn) {   // arrow-key stepping auditions the landed note
         const n = state.replay?.notes[state.step];
-        if (n) { audioEnable(); playMidi(n.midi); }
+        // The piano rings its own decay; a held voice sounds the note's written length (capped), not a blip.
+        if (n) { audioEnable(); playMidi(n.midi, getInstrument() !== 'piano' ? Math.min(4, Math.max(0.5, (n.offT - n.onT) / 1000)) : undefined); }
     }
 }
 
@@ -983,6 +1022,11 @@ const MIN_NOTE_SEC = 0.12, MAX_NOTE_SEC = 8;   // floor / ceiling on a single no
 // equal slider travel = equal ratio.
 const TEMPO_SPAN = 4;
 const posToRate = (p: number) => Math.pow(TEMPO_SPAN, p);
+// The tempo is remembered per-browser and, when not 1×, carried in the URL (`tempo=0.6`); a link's tempo
+// wins over the stored one. Rounded to two decimals, as the label shows it.
+const TEMPO_KEY = 'viz.tempo';
+const clampTempo = (r: number) => Math.min(TEMPO_SPAN, Math.max(1 / TEMPO_SPAN, Math.round(r * 100) / 100));
+const parseTempo = (v: string | null): number | null => { const r = Number(v); return v != null && v !== '' && Number.isFinite(r) && r > 0 ? clampTempo(r) : null; };
 const rateToPos = (r: number) => Math.log(r) / Math.log(TEMPO_SPAN);
 
 // Per-note cumulative playback time (ms), each inter-onset gap capped at MAX_GAP_MS: honours the
@@ -992,7 +1036,8 @@ let noteDurMs: number[] = [];
 // Exact unison duplicate per on-index: the same MIDI already struck at this same instant (an earlier
 // note shares its onset time and pitch). Orchestral/choral scores double a pitch across voices, so
 // without this the player stacks N identical oscillators at one `when` — louder, phasey, "played twice".
-// Octave doublings are a different pitch and are NOT flagged. Audio-only; the visuals show every note.
+// Octave doublings are a different pitch and are NOT flagged. The player sounds it once and the arrow keys
+// step past it (stepTo); the roll, staff and tallies still show every note.
 let dupOnset: boolean[] = [];
 let timelineFor: Replay | null = null;
 function ensureTimeline(replay: Replay): number[] {
@@ -1107,7 +1152,7 @@ function frame() {
 
 function togglePlay() { if (raf || pending) stopPlay(); else play(); }
 
-function setTempo(rate: number) {
+function setTempo(rate: number, persist = true) {
     if (raf) {   // re-anchor the clock at the CURRENT position (old rate) before applying the new rate,
         // else the whole elapsed span rescales and the playhead LEAPS. A moving playhead can't be
         // delayed to the speaker instant without stalling, so re-anchor now-to-now (playhead and audio
@@ -1117,6 +1162,10 @@ function setTempo(rate: number) {
         if (soundOn) t0Ctx = audioNow();
     }
     tempoRate = rate;
+    if (persist) {
+        try { localStorage.setItem(TEMPO_KEY, String(rate)); } catch { /* storage blocked */ }
+        syncUrl();
+    }
     ($('tempo') as HTMLInputElement).value = String(rateToPos(rate));
     $('tempo-val').textContent = `${rate.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}×`;
 }
@@ -1165,9 +1214,15 @@ function syncUrl() {
     // experimental key lanes are off by default; only record when enabled
     if (state.showKeyLanes) u.searchParams.set('keys', '1');
     else u.searchParams.delete('keys');
+    // playback tempo: only when it is not 1×
+    if (tempoRate !== 1) u.searchParams.set('tempo', String(tempoRate));
+    else u.searchParams.delete('tempo');
     // the card layout: only when it differs from the default
     if (slots.join() !== DEFAULT_SLOTS.join()) u.searchParams.set('slots', slots.join(','));
     else u.searchParams.delete('slots');
+    // LOCAL compare: the other speller shown (only while comparison data exists)
+    if (compareIndex && state.compare) u.searchParams.set('vs', state.compare);
+    else u.searchParams.delete('vs');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
@@ -1232,6 +1287,154 @@ async function pickFixture(id: string, step = 0, preserveMarkers = false) {
     state.step = step;
     recompute();
     syncUrl();
+    if (compareIndex) { syncCompareUi(); await loadComparePreds(); }
+}
+
+// --- LOCAL-ONLY comparison with other spellers (viz/src/compare.ts) --------------------------------
+// Present only when the build carries `compare/index.json` (tools/viz-compare/sync.mjs, never deployed).
+// Without it every control below stays hidden and nothing else changes.
+let compareIndex: CompareIndex | null = null;
+let comparePreds: { key: string; preds: (PitchClass | null)[] } | null = null;
+let comparison: Comparison | null = null;
+let moments: Moment[] = [];
+// The compare pickers fold into one small "compare" button while no other speller is shown; the button
+// unfolds them, and picking "none" folds them back. A link with `vs=` or a moment opens them.
+let compareOpen = false;
+function syncCompareFold() {
+    if (!compareIndex) return;
+    const open = compareOpen || !!state.compare;
+    $('compare-btn').hidden = open;
+    $('compare-ctl').hidden = !open;
+    $('moments').hidden = !open || !moments.length;
+}
+
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+const compareKey = () => state.fixtureId && state.compare ? `${state.fixtureId}/${state.compare}` : '';
+const compareAvailable = (): string[] => (state.fixtureId && compareIndex?.fixtures[state.fixtureId]) || [];
+
+async function initCompare(ids: string[], urlVs: string | null) {
+    compareIndex = await fetchCompareIndex();
+    if (!compareIndex) return;
+    const idx = compareIndex;
+    state.compare = urlVs && urlVs in idx.algos ? urlVs : null;
+    $('compare-btn').addEventListener('click', () => {
+        compareOpen = true;
+        syncCompareFold();
+        const sel = $<HTMLSelectElement>('compare');
+        sel.focus();
+        try { sel.showPicker(); } catch { /* not supported, or the menu is disabled for this piece */ }
+    });
+    $<HTMLSelectElement>('compare').addEventListener('change', e => {
+        state.compare = (e.target as HTMLSelectElement).value || null;
+        compareOpen = !!state.compare;
+        syncCompareFold();
+        setMoment(null);
+        syncUrl();
+        void loadComparePreds();
+    });
+    moments = await fetchMoments();
+    syncCompareFold();
+    if (!moments.length) return;
+    const sel = $<HTMLSelectElement>('moments');
+    sel.innerHTML = '<option value="">★ moments…</option>' + moments.map((m, i) => {
+        const ok = ids.includes(m.fixture) && (idx.fixtures[m.fixture] ?? []).includes(m.compare);
+        return `<option value="${i}"${ok ? '' : ' disabled'} title="${esc(m.text)}">${esc(m.title)}${ok ? '' : ' (data missing)'}</option>`;
+    }).join('');
+    syncCompareFold();
+    sel.addEventListener('change', () => {
+        const m = moments[Number(sel.value)];
+        sel.value = '';
+        if (m) void jumpToMoment(m);
+    });
+    $('moment-close').addEventListener('click', () => setMoment(null));
+}
+
+/** The compare menu lists only the spellers with aligned predictions for this fixture. */
+function syncCompareUi() {
+    if (!compareIndex) return;
+    const sel = $<HTMLSelectElement>('compare');
+    const avail = compareAvailable();
+    sel.innerHTML = '<option value="">none</option>'
+        + avail.map(a => `<option value="${esc(a)}">${esc(compareIndex!.algos[a] ?? a)}</option>`).join('');
+    sel.disabled = !avail.length;
+    sel.title = avail.length ? 'LOCAL ONLY: show another speller\'s spelling wherever it differs from ours' : 'no other speller\'s output for this piece';
+    sel.value = state.compare && avail.includes(state.compare) ? state.compare : '';
+}
+
+/** Fetch the selected speller's predictions for this fixture (cached for the pair), then redraw. */
+async function loadComparePreds() {
+    const key = compareKey();
+    if (!compareIndex || !key || !compareAvailable().includes(state.compare!)) comparePreds = null;
+    else if (comparePreds?.key !== key) {
+        const preds = await fetchPredictions(state.fixtureId!, state.compare!);
+        if (compareKey() !== key) return;   // the selection moved on while this loaded
+        comparePreds = preds ? { key, preds } : null;
+    }
+    updateComparison();
+    renderStatus();
+    render();
+}
+
+/** Score the loaded predictions against the current replay (a mode change re-runs this via recompute). */
+function updateComparison() {
+    const r = state.replay, key = compareKey();
+    comparison = r && comparePreds && comparePreds.key === key && !isLive() && state.fixtureId !== IMPORTED_ID
+        ? buildComparison(r, comparePreds.preds, rawExpected, state.compare!, compareIndex!.algos[state.compare!] ?? state.compare!)
+        : null;
+    setRollCompare(comparison);
+    setStaffCompare(comparison);
+}
+
+async function jumpToMoment(m: Moment) {
+    state.mode = m.mode;
+    $<HTMLSelectElement>('mode').value = m.mode;
+    if (m.lookAhead !== undefined) { state.lookAhead = m.lookAhead; $<HTMLInputElement>('look-ahead').checked = m.lookAhead; }
+    state.compare = m.compare;
+    compareOpen = true;
+    syncCompareFold();
+    setMoment(m);
+    await pickFixture(m.fixture, m.step - 1);
+}
+
+/** The banner under the transport naming the curated moment on screen. */
+function setMoment(m: Moment | null) {
+    const el = $('moment-note');
+    el.hidden = !m;
+    if (m) $('moment-text').innerHTML = `<b>★ ${esc(m.title)}</b> ${esc(m.text)}`;
+}
+
+/** Scoring panel: their spelling of this note, the struck chord three ways, and the piece summary. */
+function renderCompareBlock(host: HTMLElement, snap: ReturnType<typeof current>) {
+    const c = comparison, r = state.replay;
+    if (!c || !r || !snap) return;
+    const k = snap.onIndex, theirs = c.theirs[k] ?? null;
+    const box = document.createElement('div');
+    box.className = 'cmp-block';
+    const tierTxt = (t: string) => `<span class="cmp-tier ${t}">${t === 'correct' ? 'exact' : t}</span>`;
+    const head = !theirs ? `<span class="dim">no spelling from ${esc(c.label)} here</span>`
+        : c.differ[k] ? `<span class="cmp-sp">${label(theirs)}</span> ${tierTxt(c.tiers[k]!)} <span class="dim">vs ours ${label(snap.committed)}</span>`
+        : `<span class="dim">same as ours (${label(theirs)})</span>`;
+    // Every note struck with this one, low to high: the score, ours, theirs (theirs marked where it differs).
+    const at = r.snapshots.filter(s => s.t === snap.t);
+    const row = (name: string, cls: string, cells: string[]) => `<tr><th class="${cls}">${name}</th>${cells.map(x => `<td>${x}</td>`).join('')}</tr>`;
+    const pcs = (p: PitchClass | null) => p ? label({ step: p.step, alter: p.alter }) : '∅';
+    const chord = `<table class="cmp-chord"><tbody>`
+        + row('score', '', at.map(s => pcs(s.expected)))
+        + row('ours', '', at.map(s => `<span class="${s.tier === 'wrong' ? 'cmp-bad' : ''}">${pcs(s.committed)}</span>`))
+        + row(esc(c.label), 'cmp-name', at.map(s => {
+            const th = c.theirs[s.onIndex] ?? null;
+            const diff = !!th && !!s.committed && !sameSpelling(th, s.committed);
+            return `<span class="${diff ? 'cmp-diff' : ''} ${c.tiers[s.onIndex] === 'wrong' ? 'cmp-bad' : ''}">${pcs(th)}</span>`;
+        }))
+        + `</tbody></table>`;
+    const pct = (x: number, n: number) => n ? (100 * x / n).toFixed(1) : '0.0';
+    box.innerHTML = `<div class="cmp-head"><span class="cmp-name">${esc(c.label)}</span> ${head}</div>`
+        + `<div class="cmp-sub dim">struck together at this onset, low to high (struck wrong notes underlined):</div>${chord}`
+        + `<div class="cmp-sum dim">this piece: ${c.nDiffer} note${c.nDiffer === 1 ? '' : 's'} spelled differently; `
+        + `${esc(c.label)} wrong on ${c.differTheirsWrong}, ours on ${c.differOursWrong}. `
+        + `Overall wrong: ${esc(c.label)} ${pct(c.tally.wrong, c.tally.total)}% (${c.tally.wrong}), ours ${pct(r.tally.wrong, r.tally.total)}% (${r.tally.wrong}).</div>`;
+    const after = host.querySelector('.note-line');
+    if (after) after.after(box); else host.appendChild(box);
 }
 
 function wire() {
@@ -1240,15 +1443,7 @@ function wire() {
     });
     liveTonnetz = initLiveTonnetz($('live-tonnetz'));
     liveTonnetz.model.setInputSink(liveInput);   // keyboard and MIDI notes go to the free take (or the metronome take)
-    // Clear asks twice: the first click arms it for 3 s, the second clears.
-    let clearArmed = 0;
-    const disarmClear = () => { clearTimeout(clearArmed); clearArmed = 0; $('take-clear').textContent = 'clear'; $('take-clear').classList.remove('armed'); };
-    $('take-clear').addEventListener('click', () => {
-        if (clearArmed) { disarmClear(); clearTake(); return; }
-        $('take-clear').textContent = 'click again to clear';
-        $('take-clear').classList.add('armed');
-        clearArmed = window.setTimeout(disarmClear, 3000);
-    });
+    $('take-clear').addEventListener('click', clearTake);
     $('take-export').addEventListener('click', exportTake);
     $('take-export-xml').addEventListener('click', exportMusicXml);
     $('metro-toggle').addEventListener('click', () => rec === 'off' ? startRecording() : stopRecording());
@@ -1265,7 +1460,7 @@ function wire() {
     // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
     SLOT_TABS.forEach((id, i) => $(id).addEventListener('click', () => setMobileSlot(i)));
     MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
-    $<HTMLSelectElement>('fixture').addEventListener('change', e => pickFixture((e.target as HTMLSelectElement).value));
+    $<HTMLSelectElement>('fixture').addEventListener('change', e => { setMoment(null); void pickFixture((e.target as HTMLSelectElement).value); });
     // Import a MusicXML score (button opens the picker; drop works anywhere on the app).
     $('import-btn').addEventListener('click', () => $('import-file').click());
     $<HTMLInputElement>('import-file').addEventListener('change', e => {
@@ -1293,8 +1488,8 @@ function wire() {
         resumeAfterScrub = false;
         if (state.step < (state.replay?.notes.length ?? 0) - 1) play();
     });
-    $('prev').addEventListener('click', () => seek(state.step - 1, true));
-    $('next').addEventListener('click', () => seek(state.step + 1, true));
+    $('prev').addEventListener('click', () => stepTo(-1));
+    $('next').addEventListener('click', () => stepTo(1));
     $('side-sharp').addEventListener('click', () => setSideOverride(1));
     $('side-flat').addEventListener('click', () => setSideOverride(-1));
     $('side-auto').addEventListener('click', () => setSideOverride(0));
@@ -1314,9 +1509,30 @@ function wire() {
         applyVolume();
         try { localStorage.setItem(VOLUME_KEY, volEl.value); } catch { /* storage blocked */ }
     });
+    // Piano ↔ held strings, remembered per-browser.
+    const INSTRUMENT_KEY = 'viz.instrument';
+    const instBtn = $<HTMLButtonElement>('instrument');
+    const applyInstrument = (i: 'piano' | 'winds') => {
+        setInstrument(i);
+        instBtn.textContent = i === 'winds' ? '🎶 clarinet' : '🎹 piano';
+        instBtn.setAttribute('aria-pressed', String(i === 'winds'));
+    };
+    // 'strings' was the earlier held voice; it now opens on the clarinet.
+    applyInstrument((() => { try { const v = localStorage.getItem(INSTRUMENT_KEY); return v === 'winds' || v === 'strings' ? 'winds' : 'piano'; } catch { return 'piano'; } })());
+    instBtn.addEventListener('click', () => {
+        const next = getInstrument() === 'winds' ? 'piano' : 'winds';
+        allNotesOff();   // a note already ringing keeps its old voice; start clean on the new one
+        applyInstrument(next);
+        try { localStorage.setItem(INSTRUMENT_KEY, next); } catch { /* storage blocked */ }
+    });
     $<HTMLInputElement>('show-staff').addEventListener('change', e => setStaffVisible((e.target as HTMLInputElement).checked));
     $<HTMLInputElement>('show-chords').checked = chordsVisible;
     $<HTMLInputElement>('show-chords').addEventListener('change', e => setChordsVisible((e.target as HTMLInputElement).checked));
+    keyboard = initKeyboard($('keyboard'), midi => { if (soundOn) { audioEnable(); playMidi(midi); } });
+    const pianoParam = new URLSearchParams(location.search).get('piano');
+    if (pianoParam === '1' || pianoParam === '0') { try { localStorage.setItem(SHOW_KEYBOARD_KEY, pianoParam); } catch { /* storage blocked */ } }
+    $<HTMLInputElement>('show-keyboard').addEventListener('change', e => setKeyboardOption(SHOW_KEYBOARD_KEY, (e.target as HTMLInputElement).checked));
+    applyKeyboard();
     $<HTMLInputElement>('show-heard').checked = heardVisible;
     setShowHeard(heardVisible);
     $<HTMLInputElement>('show-heard').addEventListener('change', e => setHeardVisible((e.target as HTMLInputElement).checked));
@@ -1328,7 +1544,7 @@ function wire() {
         state.showKeyLanes = (e.target as HTMLInputElement).checked;
         render(); syncUrl();   // display-only: no recompute, just re-render the panels/lanes
     });
-    $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(posToRate(Number((e.target as HTMLInputElement).value))));
+    $<HTMLInputElement>('tempo').addEventListener('input', e => setTempo(clampTempo(posToRate(Number((e.target as HTMLInputElement).value)))));
     const latencyEl = $<HTMLInputElement>('latency');
     latencyEl.value = String(audioOffsetMs);
     $('latency-val').textContent = `${audioOffsetMs}ms`;
@@ -1370,8 +1586,8 @@ function wire() {
         if ((ev.key === 'Backspace' || ev.key === 'Delete') && isLive() && rec === 'off') { ev.preventDefault(); deleteNote(state.step); return; }
         // Shift+X is the clear button (letters alone are notes): the first press arms it, the second clears.
         if (ev.shiftKey && (ev.key === 'X' || ev.key === 'x') && isLive() && rec === 'off') { ev.preventDefault(); $('take-clear').click(); return; }
-        if (ev.key === 'ArrowRight') { ev.preventDefault(); seek(state.step + 1, true); }
-        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); seek(state.step - 1, true); }
+        if (ev.key === 'ArrowRight') { ev.preventDefault(); stepTo(1); }
+        else if (ev.key === 'ArrowLeft') { ev.preventDefault(); stepTo(-1); }
         else if (ev.key === 'Home') { ev.preventDefault(); seek(0); }
         else if (ev.key === 'End') { ev.preventDefault(); seek((state.replay?.snapshots.length ?? 1) - 1); }
     });
@@ -1380,7 +1596,11 @@ function wire() {
 async function boot() {
     wire();
     initRollScale();
-    setTempo(1);
+    {   // a link's tempo, else the stored one, else 1×
+        let stored: string | null = null;
+        try { stored = localStorage.getItem(TEMPO_KEY); } catch { /* storage blocked */ }
+        setTempo(parseTempo(new URLSearchParams(location.search).get('tempo')) ?? parseTempo(stored) ?? 1, false);
+    }
     updatePlayBtn();
     const ids = await listFixtures();
     const localOnly = new Set<string>(await fetch('fixtures/local.json').then(r => r.json()).catch(() => []));
@@ -1389,6 +1609,7 @@ async function boot() {
         : `<option value="${id}">${id}</option>`).join('');
     restoreTakes();
     const p = new URLSearchParams(location.search);
+    await initCompare(ids, p.get('vs'));
     const urlFixture = p.get('fixture');
     const urlMode = p.get('mode');
     const urlStep = p.get('step');

@@ -12,6 +12,9 @@
  * amp envelope keeps the note ringing for its whole length, a gentle lowpass rounds the top, and a
  * master compressor/limiter glues dense chords so a Bach tutti doesn't clip into harshness.
  *
+ * The held voices (no decay while a key is down): sampled winds (a clarinet, a bassoon for the bass; VSCO 2
+ * CE, CC0) and, while those load, a synth string ensemble. See their sections below.
+ *
  * The AudioContext is created lazily and resumed on a user gesture (browsers require that), so
  * {@link enable} must be called from a click/keypress handler.
  */
@@ -19,16 +22,19 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let masterVolume = 0.9;   // 0..1, set by the volume slider; applied to the master bus.
 // Every voice currently scheduled or ringing, so allNotesOff() can silence them ("all notes off").
-export type Instrument = 'piano' | 'epiano';
+export type Instrument = 'piano' | 'epiano' | 'strings' | 'winds';
 export interface Voice { sources: AudioScheduledSourceNode[]; gain: GainNode; kind: Instrument; }
 const voices = new Set<Voice>();
 
 let instrument: Instrument = 'piano';
-/** Pick the voice for notes played from now on: the sampled piano or the FM electric piano. */
+/** Pick the voice for notes played from now on: the sampled piano, the FM electric piano, the sampled
+ *  winds (clarinet, bassoon in the bass), or the synth strings. Winds and strings do not decay while held. */
 export function setInstrument(i: Instrument): void {
     instrument = i;
     if (i === 'piano') loadPiano();
+    if (i === 'winds') loadWinds();
 }
+export function getInstrument(): Instrument { return instrument; }
 
 // Salamander sample names, one every minor third from A0 (midi 21) to C8 (midi 108).
 const SAMPLE_NAMES = ['C', 'Ds', 'Fs', 'A'];
@@ -100,9 +106,8 @@ export function enable(): Promise<void> {
  *  truly started. The sample wait is capped too, so a slow network starts on the FM voice instead. */
 export async function whenPlaying(): Promise<void> {
     const c = ensure();
-    if (instrument === 'piano' && pianoLoad) {
-        await Promise.race([pianoLoad, new Promise(r => setTimeout(r, PIANO_WAIT_MS))]);
-    }
+    const load = instrument === 'piano' ? pianoLoad : instrument === 'winds' ? windLoad : null;
+    if (load) await Promise.race([load, new Promise(r => setTimeout(r, PIANO_WAIT_MS))]);
     const clock = () => c.getOutputTimestamp?.().contextTime || c.currentTime;
     return new Promise(resolve => {
         const started = performance.now();
@@ -143,7 +148,10 @@ export function playMidi(midi: number, durSec = 0.5, gain = 0.28, when?: number)
     const c = ensure();
     const t0 = when != null ? Math.max(when, c.currentTime) : c.currentTime;
     const sample = instrument === 'piano' ? nearestSample(midi) : null;
-    const voice = sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
+    const wind = instrument === 'winds' ? windSample(midi) : null;
+    const voice = wind ? windVoice(c, midi, wind, durSec, gain, t0)
+        : instrument === 'winds' || instrument === 'strings' ? stringsVoice(c, midi, durSec, gain, t0)   // winds still loading
+        : sample != null ? pianoVoice(c, midi, sample, durSec, gain, t0) : fmVoice(c, midi, durSec, gain, t0);
     voices.add(voice);
     voice.sources[0]!.onended = () => voices.delete(voice);
     return voice;
@@ -240,6 +248,191 @@ function fmVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0
     return { sources: [carrier, modBody, modTine], gain: g, kind: 'epiano' };
 }
 
+// --- Sampled winds: a clarinet, with a bassoon for the bass ---------------------------------------------
+// Real sustained recordings from VSCO 2 Community Edition (Versilian Studios, CC0), one dynamic, a sample
+// every three or four semitones (`viz/public/samples/{clarinet,bassoon}/<midi>.mp3`). The clarinet covers
+// its own range (D3 up); below it the bassoon takes over, so a bass line sounds like a bass instrument
+// instead of a clarinet pitched down. Each file is 4 s of steady tone, levelled to the
+// same loudness. Each file starts where its tone reaches its steady level (the breath and swell of the
+// recorded attack, 0.12 to 1.1 s, are cut off), and the note gets a short fade-in of our own instead.
+// A note longer than the file holds by CROSSFADING fresh copies of the steady part over
+// each other (equal-power, 0.3 s), so the tone never decays and no sample-exact loop point is needed
+// (an MP3's encoder padding shifts it differently per browser).
+const CLARINET_MIDIS = [50, 53, 58, 62, 65, 70, 74, 77, 82, 86, 89];
+const BASSOON_MIDIS = [34, 37, 41, 45, 46, 48];
+const CLARINET_LOW = 50;            // the clarinet's lowest sample; below it, the bassoon
+const WIND_ATTACK_END = 3.8;        // buffer seconds where the first copy ends (the file fades at ~3.94 s)
+// The files start on the steady tone (the recorded breath and swell are cut off when they are made), so
+// the onset is shaped here: a short soft fade-in.
+const WIND_ONSET = 0.06;            // seconds
+const WIND_STEADY = [0.7, 3.8] as const;   // buffer seconds of steady tone the held copies repeat
+const WIND_XFADE = 0.3;             // buffer seconds of each crossfade
+const WIND_RELEASE = 0.14;          // the breath stopping
+const WIND_GAIN = 2.0;              // the files sit at -20 dB RMS; this brings them near the piano's level
+const windBuffers = new Map<string, AudioBuffer>();   // "clarinet/62" → buffer
+let windLoad: Promise<void> | null = null;
+
+function loadWinds(): void {
+    if (windLoad || typeof OfflineAudioContext === 'undefined') return;
+    const c = new OfflineAudioContext(1, 1, 44100);
+    const files = [...CLARINET_MIDIS.map(m => `clarinet/${m}`), ...BASSOON_MIDIS.map(m => `bassoon/${m}`)];
+    windLoad = Promise.all(files.map(async f => {
+        try {
+            const res = await fetch(`samples/${f}.mp3`);
+            if (res.ok) windBuffers.set(f, await c.decodeAudioData(await res.arrayBuffer()));
+        } catch { /* missing or undecodable: that note borrows the nearest loaded one */ }
+    })).then(() => undefined);
+}
+
+/** The loaded wind sample to play `midi` from (clarinet from D3 up, else bassoon), or null before any loads. */
+function windSample(midi: number): { key: string; midi: number } | null {
+    const pick = (inst: string, set: number[]) => {
+        let best: number | null = null;
+        for (const m of set) if (windBuffers.has(`${inst}/${m}`) && (best == null || Math.abs(m - midi) < Math.abs(best - midi))) best = m;
+        return best == null ? null : { key: `${inst}/${best}`, midi: best };
+    };
+    return midi >= CLARINET_LOW ? pick('clarinet', CLARINET_MIDIS) ?? pick('bassoon', BASSOON_MIDIS)
+        : pick('bassoon', BASSOON_MIDIS) ?? pick('clarinet', CLARINET_MIDIS);
+}
+
+/** Equal-power fade curves for the crossfades. */
+const FADE_STEPS = 32;
+const fadeIn = Float32Array.from({ length: FADE_STEPS }, (_, i) => Math.sin((i / (FADE_STEPS - 1)) * Math.PI / 2));
+const fadeOut = Float32Array.from({ length: FADE_STEPS }, (_, i) => Math.cos((i / (FADE_STEPS - 1)) * Math.PI / 2));
+
+function windVoice(c: AudioContext, midi: number, sample: { key: string; midi: number }, durSec: number, gain: number, t0: number): Voice {
+    const buf = windBuffers.get(sample.key)!;
+    const rate = Math.pow(2, (midi - sample.midi) / 12);
+    const noteEnd = t0 + Math.max(0.08, durSec);
+    const end = noteEnd + WIND_RELEASE * 4;
+
+    // The note's own envelope: a soft ramp in (the breath of the recorded attack is skipped), held flat, then the release.
+    const level = gain * WIND_GAIN;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(level, t0 + WIND_ONSET);
+    g.gain.setValueAtTime(level, noteEnd);
+    g.gain.setTargetAtTime(0, noteEnd, WIND_RELEASE);
+    g.connect(master!);
+
+    // Copies of the recording, in real (output) time: buffer seconds pass `rate` times faster.
+    const real = (bufSec: number) => bufSec / rate;
+    const xf = real(WIND_XFADE);
+    const sources: AudioBufferSourceNode[] = [];
+    const copy = (start: number, offset: number, bufLen: number, fadeInFirst: boolean) => {
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.playbackRate.value = rate;
+        const sg = c.createGain();
+        const stop = start + real(bufLen);
+        if (fadeInFirst) { sg.gain.setValueAtTime(0, start); sg.gain.setValueCurveAtTime(fadeIn, start, xf); }
+        else sg.gain.setValueAtTime(1, start);
+        if (stop < end) sg.gain.setValueCurveAtTime(fadeOut, stop - xf, xf);   // handing over to the next copy
+        src.connect(sg).connect(g);
+        src.start(start, offset);
+        src.stop(Math.min(stop, end));
+        sources.push(src);
+        return stop;
+    };
+    let stop = copy(t0, 0, WIND_ATTACK_END, false);
+    const steadyLen = WIND_STEADY[1] - WIND_STEADY[0];
+    while (stop < end) stop = copy(stop - xf, WIND_STEADY[0], steadyLen, true);
+    // The copy that ends last goes FIRST: playMidi retires the voice on sources[0]'s `onended`.
+    sources.reverse();
+    return { sources, gain: g, kind: 'winds' };
+}
+
+// --- Held strings: a small bowed ensemble that sustains at full level for as long as the note is held ---
+// Four sawtooth voices a few cents apart (an ensemble, not one player), spread across the stereo field,
+// plus a soft triangle at the fundamental for body. A lowpass that tracks the pitch rounds the saw's top
+// and opens a little as the bow speeds up; vibrato fades in after the attack, as a player's does. No
+// decay stage: the level holds until the key comes up, then a soft release. A shared room reverb (a
+// synthetic decaying-noise impulse) adds air.
+const STRING_DETUNE = [-11, -4, 4, 11];        // cents
+const STRING_PAN = [-0.7, -0.25, 0.25, 0.7];
+const STRING_ATTACK = 0.14, STRING_RELEASE = 0.45;
+const STRING_LEVEL = 0.6;                       // per-voice gain multiplier, near the piano's loudness
+let reverbIn: GainNode | null = null;
+
+/** The room: a stereo impulse of decaying noise (about 2.4 s), built once on the live context. */
+function reverbSend(c: AudioContext): GainNode {
+    if (reverbIn) return reverbIn;
+    const len = Math.floor(c.sampleRate * 2.4);
+    const ir = c.createBuffer(2, len, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    const conv = c.createConvolver();
+    conv.buffer = ir;
+    const wet = c.createGain();
+    wet.gain.value = 0.32;
+    reverbIn = c.createGain();
+    reverbIn.connect(conv).connect(wet).connect(master!);
+    return reverbIn;
+}
+
+function stringsVoice(c: AudioContext, midi: number, durSec: number, gain: number, t0: number): Voice {
+    const f = freqOf(midi);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    const cutoff = Math.min(6500, f * 3.2 + 800);
+    lp.frequency.setValueAtTime(cutoff * 0.55, t0);
+    lp.frequency.linearRampToValueAtTime(cutoff, t0 + STRING_ATTACK * 2);
+    lp.Q.value = 0.5;
+
+    // Vibrato: ~5.3 Hz, ±6 cents, eased in from silence after the attack.
+    const lfo = c.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.3;
+    const depth = c.createGain();
+    depth.gain.setValueAtTime(0, t0);
+    depth.gain.setValueAtTime(0, t0 + 0.25);
+    depth.gain.linearRampToValueAtTime(f * (Math.pow(2, 6 / 1200) - 1), t0 + 0.9);
+    lfo.connect(depth);
+
+    const sources: AudioScheduledSourceNode[] = [];
+    STRING_DETUNE.forEach((cents, k) => {
+        const o = c.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f;
+        o.detune.value = cents;
+        depth.connect(o.frequency);
+        const og = c.createGain();
+        og.gain.value = 0.25;
+        const pan = c.createStereoPanner();
+        pan.pan.value = STRING_PAN[k]!;
+        o.connect(og).connect(pan).connect(lp);
+        sources.push(o);
+    });
+    const body = c.createOscillator();
+    body.type = 'triangle';
+    body.frequency.value = f;
+    const bodyGain = c.createGain();
+    bodyGain.gain.value = 0.35;
+    body.connect(bodyGain).connect(lp);
+    sources.push(body);
+
+    // Bowed attack → hold at level for the note's whole length → soft release. Ends on a linear ramp to
+    // true zero (stopping while audible is a click).
+    const level = gain * STRING_LEVEL;
+    const bodyEnd = t0 + Math.max(STRING_ATTACK, durSec);
+    const end = bodyEnd + STRING_RELEASE;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(level, t0 + STRING_ATTACK);
+    g.gain.setValueAtTime(level, bodyEnd);
+    g.gain.exponentialRampToValueAtTime(0.0008, end);
+    g.gain.linearRampToValueAtTime(0, end + 0.006);
+    lp.connect(g);
+    g.connect(master!);
+    g.connect(reverbSend(c));
+
+    for (const o of [...sources, lfo]) { o.start(t0); o.stop(end + 0.03); }
+    // The LFO goes LAST so sources[0] (whose `onended` retires the voice) is a sounding oscillator.
+    return { sources: [...sources, lfo], gain: g, kind: 'strings' };
+}
+
 /** Release one voice now (a key coming up): the same click-free release tail a timed note ends on
  *  (the damper fade for the piano). */
 export function releaseVoice(v: Voice): void {
@@ -252,7 +445,7 @@ export function releaseVoice(v: Voice): void {
             v.gain.gain.setTargetAtTime(0, t, DAMPER);
             for (const o of v.sources) o.stop(t + DAMPER * 8);
         } else {
-            const release = 0.18;
+            const release = v.kind === 'strings' ? STRING_RELEASE : v.kind === 'winds' ? WIND_RELEASE : 0.18;
             v.gain.gain.exponentialRampToValueAtTime(0.0008, t + release);
             v.gain.gain.linearRampToValueAtTime(0.0, t + release + 0.006);
             for (const o of v.sources) o.stop(t + release + 0.03);

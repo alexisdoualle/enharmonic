@@ -9,9 +9,14 @@
  * Rhythm is a DISPLAY approximation: durations come from onset/offset deltas quantized to the
  * nearest (possibly dotted) note value, not engraving-accurate values; soft voices (Voice.Mode.SOFT)
  * tolerate the resulting rounding instead of throwing on a bar that doesn't sum exactly.
+ *
+ * Beaming: eighths and shorter are beamed within each quarter beat, as engraved music does, grouped by the
+ * notes' NOTATED beat positions (not by summed durations, which the approximation above can throw off);
+ * a rest breaks a beam. Compound meters are still grouped by quarters (the fixture carries no meter).
  */
-import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType } from 'vexflow';
+import { Renderer, Stave, StaveNote, GhostNote, StaveConnector, Accidental, Dot, Formatter, Voice, BarlineType, Annotation, Beam } from 'vexflow';
 import type { Replay, ReplayNote, RespellEvent } from '../replay.js';
+import type { Comparison } from '../compare.js';
 import type { Pitch, Letter, Accidental as Alter } from '../../../src/index.js';
 
 const WINDOW = 4;          // most measures on a page (fewer when dense bars would not fit)
@@ -80,6 +85,18 @@ let builtZoom = 1;
 // Every drawn note head with its note, so a new sounding set can recolour it without engraving again.
 let heads: { sn: StaveNote; i: number; note: ReplayNote }[] = [];
 let headEls: { el: Element; note: ReplayNote }[] = [];
+
+// LOCAL compare (viz/src/compare.ts): under each chord, the other speller's spellings that differ from ours.
+let cmp: Comparison | null = null;
+const COMPARE_INK = '#00798c';   // --compare-on-light: the staff is on a light background
+const GLYPH: Record<number, string> = { [-2]: '𝄫', [-1]: '♭', 0: '♮', 1: '♯', 2: '𝄪' };
+
+/** Show (or with null, hide) another speller's differing spellings under the staff's chords. */
+export function setStaffCompare(c: Comparison | null): void {
+    if (c === cmp) return;
+    cmp = c;
+    builtForReplay = null;   // engrave again on the next render
+}
 
 export function renderStaff(replay: Replay, step: number): void {
     const host = document.getElementById('staff')!;
@@ -337,9 +354,12 @@ function build(host: HTMLElement, start: number, count: number, sounding: Set<nu
     // Pass 1: build each measure's two voices (treble and bass, each with rests filling its gaps so the
     // two hands line up) and measure how wide the bar needs to be. Dense bars need far more than a fixed
     // width; squeezing them makes VexFlow overflow notes into the next measure. So width follows content.
-    type Built = { m: number; voices: [Voice, Voice]; fmt: Formatter; staveW: number; noteArea: number; keySpec: string; prevKey: string };
+    type Built = { m: number; voices: [Voice, Voice]; beams: Beam[]; fmt: Formatter; staveW: number; noteArea: number; keySpec: string; prevKey: string };
+    let beams: Beam[] = [];
     const voiceFor = (clef: string, m: number, keySpec: string): Voice => {
-        let sn = buildMeasureNotes(notes.filter(inStaff(clef)), m, clef, sounding, beatIn(m), numerator);
+        const b = buildMeasureNotes(notes.filter(inStaff(clef)), m, clef, sounding, beatIn(m), numerator);
+        let sn = b.notes;
+        beams.push(...b.beams);
         if (!sn.length) sn = [new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: 'wr', align_center: true })];
         const voice = new Voice({ num_beats: numerator, beat_value: 4 }).setMode(Voice.Mode.SOFT);
         voice.addTickables(sn);
@@ -355,11 +375,12 @@ function build(host: HTMLElement, start: number, count: number, sounding: Set<nu
                Math.max(SHARP_KEYS.indexOf(keySpec), FLAT_KEYS.indexOf(keySpec), 0)) * 11 + 16
             : 0;
         const lead = (mi === 0 ? firstLead : OTHER_LEAD) + keyChangeW;
+        beams = [];
         const voices: [Voice, Voice] = [voiceFor('treble', m, keySpec), voiceFor('bass', m, keySpec)];
         const fmt = new Formatter().joinVoices([voices[0]]).joinVoices([voices[1]]);
         const minW = fmt.preCalculateMinTotalWidth(voices);
         const noteArea = Math.max(MEASURE_W - lead - RIGHT_PAD, Math.ceil(minW));
-        return { m, voices, fmt, staveW: lead + noteArea + RIGHT_PAD, noteArea, keySpec, prevKey };
+        return { m, voices, beams, fmt, staveW: lead + noteArea + RIGHT_PAD, noteArea, keySpec, prevKey };
     });
 
     const totalW = built.reduce((a, b) => a + b.staveW, 0) + 20;
@@ -396,6 +417,7 @@ function build(host: HTMLElement, start: number, count: number, sounding: Set<nu
             b.fmt.format(b.voices, b.noteArea);
             b.voices[0].draw(ctx, staves[0]);
             b.voices[1].draw(ctx, staves[1]);
+            for (const beam of b.beams) beam.setContext(ctx).draw();
         } catch { /* leave this one measure blank rather than blanking the whole staff */ }
         x += b.staveW;
     }
@@ -509,10 +531,10 @@ function spellOf(n: ReplayNote): Pitch {
 // next onset (or the barline), so held notes and dotted rhythms come out roughly right instead of
 // every note snapping to the onset spacing. Accidentals are encoded in the key string (e.g. 'c#/4')
 // so VexFlow's applyAccidentals (called by the caller) can decide whether to draw them.
-function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, sounding: Set<number>, msPerBeat: number, numerator: number): StaveNote[] {
+function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, sounding: Set<number>, msPerBeat: number, numerator: number): { notes: StaveNote[]; beams: Beam[] } {
     const inM = notes.filter(n => n.expected?.measure === measure)
         .sort((a, b) => (a.expected!.beat ?? 0) - (b.expected!.beat ?? 0));
-    if (!inM.length) return [];
+    if (!inM.length) return { notes: [], beams: [] };
 
     const groups: ReplayNote[][] = [];
     for (const n of inM) {
@@ -522,12 +544,15 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
     }
 
     const out: StaveNote[] = [];
+    // For beaming: each entry's quarter-beat (floor of its notated beat) when it is an eighth or shorter, else null.
+    const beamBeat: (number | null)[] = [];
     let cursor = Math.min(1, groups[0]![0]!.expected!.beat ?? 1);   // where the staff has got to, in beats
     const rest = (len: number) => {   // a rest filling a gap, so this staff stays in line with the other
         const r = quantizeDur(len);
         const sn = new StaveNote({ clef, keys: [REST_KEY[clef]!], duration: r.code + 'r' });
         if (r.dots) Dot.buildAndAttach([sn], { all: true });
         out.push(sn);
+        beamBeat.push(null);
         cursor += r.q;
     };
     for (let gi = 0; gi < groups.length; gi++) {
@@ -552,14 +577,36 @@ function buildMeasureNotes(notes: ReplayNote[], measure: number, clef: string, s
         if (dots) Dot.buildAndAttach([sn], { all: true });
         // No manual accidental adding: applyAccidentals in the caller handles it per the key sig.
 
+        // Compare: their spelling of each note in this chord that differs from ours, lowest first, under it.
+        const theirs = cmp ? g.filter(n => cmp!.differ[n.onIndex]).map(n => {
+            const p = cmp!.theirs[n.onIndex]!;
+            return `${p.step}${p.alter ? GLYPH[p.alter] : ''}${cmp!.tiers[n.onIndex] === 'wrong' ? '✗' : ''}`;
+        }) : [];
+        if (theirs.length) {
+            const a = new Annotation(theirs.join(' ')).setVerticalJustification(Annotation.VerticalJustify.BOTTOM).setFont('Arial', 12, 'bold');
+            a.setStyle({ fillStyle: COMPARE_INK, strokeStyle: COMPARE_INK });
+            sn.addModifier(a, 0);
+        }
         g.forEach((n, i) => {
             const color = headColour(n, sounding);
             sn.setKeyStyle(i, { fillStyle: color, strokeStyle: color });
             heads.push({ sn, i, note: n });
         });
         out.push(sn);
+        beamBeat.push(q < 1 ? Math.floor(beat + 1e-6) : null);
     }
-    return out;
+    // Beam each run of consecutive short notes that share a quarter beat (two or more notes).
+    const beams: Beam[] = [];
+    for (let i = 0; i < out.length;) {
+        const b = beamBeat[i];
+        let j = i + 1;
+        if (b != null) while (j < out.length && beamBeat[j] === b) j++;
+        if (b != null && j - i >= 2) {
+            try { beams.push(new Beam(out.slice(i, j), true)); } catch { /* unbeamable (e.g. odd durations): leave flags */ }
+        }
+        i = j;
+    }
+    return { notes: out, beams };
 }
 
 // Nearest note value (in quarter-lengths), including single-dotted values, so 1.5 → dotted quarter

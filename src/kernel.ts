@@ -14,6 +14,12 @@ export interface NoteContext {
     readonly resolveExact?: number;
     /** Event timestamp. Notes sharing a `t` are one onset (a chord); a new `t` starts a new onset. */
     readonly t?: number;
+    /** Augmented-sixth context: the midi of a sounding tone ten semitones away that, with this note, moves
+     *  outward to one pitch class (see `outwardPairs`, which fills this and {@link outwardRole}). Look-ahead
+     *  mode only; omit it to switch the aug6 rule off. */
+    readonly outwardPartner?: number;
+    /** This note's role in that pair: +1 the rising upper tone (the ♯4), −1 the falling lower tone. */
+    readonly outwardRole?: number;
 }
 
 /**

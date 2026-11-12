@@ -11,6 +11,8 @@ export { Speller } from './speller.js';
 export type { SpellerOptions } from './speller.js';
 export { resolveStep, resolveExactStep } from './kernel.js';
 export type { NoteContext } from './kernel.js';
+export { outwardPairs } from './aug6.js';
+export type { OutwardNote, OutwardPairs } from './aug6.js';
 
 export { spellTwoPass } from './two-pass.js';
 export type { TwoPassNote, TwoPassOptions } from './two-pass.js';

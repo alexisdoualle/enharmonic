@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
@@ -74,6 +74,54 @@ suite('Speller smoke', () => {
             if (midi !== 68) s.noteOff(midi);
         }
         assertEq(tok(s.getSpelling(68)), 'Ab');
+    });
+});
+
+suite('aug6 outward convergence', () => {
+    /** Chords one onset apart; the pair (hi, lo) at chord `at` gets its outward context when `ctx`. No
+     *  resolveDir, so only the aug6 rule can tell the ♯4 from the minor seventh. */
+    const run = (chords: number[][], at: number, hi: number, lo: number, ctx: boolean): string => {
+        const s = new Speller({ lookAhead: true });
+        chords.forEach((c, k) => {
+            if (k) for (const m of chords[k - 1]!) s.noteOff(m, { t: k * 500 });
+            for (const m of c) s.noteOn(m, ctx && k === at && (m === hi || m === lo)
+                ? { t: k * 500, outwardPartner: m === hi ? lo : hi, outwardRole: m === hi ? 1 : -1 } : { t: k * 500 });
+        });
+        return chords[chords.length - 1]!.map(m => tok(s.getSpelling(m))).join(' ');
+    };
+    const cMinor = [[48, 60, 63, 67], [53, 60, 65, 68], [55, 59, 62, 67], [48, 60, 63, 67]];
+
+    test('a German sixth in C minor spells its rising tone F♯, and G♭ without the context', () => {
+        const ger6 = [...cMinor, [56, 60, 63, 66]];
+        assertEq(run(ger6, 4, 66, 56, true), 'Ab C Eb F#');
+        assertEq(run(ger6, 4, 66, 56, false), 'Ab C Eb Gb');
+    });
+
+    test('key gate: a dominant seventh whose diatonic seventh rises (E7/D → D♯) keeps D', () => {
+        const aMajor = [[45, 57, 61, 64], [50, 57, 62, 66], [52, 56, 59, 64], [45, 57, 61, 64], [50, 52, 56, 59]];
+        assertEq(run(aMajor, 4, 50, 52, true), 'D E G# B');
+    });
+
+    test('outwardPairs: tones that leave outward and meet on one pitch class pair up', () => {
+        // A♭ C E♭ F♯ → G B D G: F♯ rises to G, A♭ falls to G.
+        const notes = [[56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k, tOff: k + 1 })));
+        const op = outwardPairs(notes);
+        assertEq(op.partner[3], 0); assertEq(op.role[3], 1);     // F♯, rising
+        assertEq(op.partner[0], 3); assertEq(op.role[0], -1);    // A♭, falling
+    });
+
+    test('outwardPairs: no pair when a tone first moves the other way, or without the third', () => {
+        // F♯ first falls to F, then a later onset happens to hold G with G: not a convergence.
+        const fallsFirst = [[56, 60, 63, 66], [56, 60, 63, 65], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k, tOff: k + 1 })));
+        assert(outwardPairs(fallsFirst).partner.every(p => p < 0), 'pair despite a falling first move');
+        const noThird = [[56, 63, 66], [55, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k, tOff: k + 1 })));
+        assert(outwardPairs(noThird).partner.every(p => p < 0), 'pair without the major third above the lower tone');
+    });
+
+    test('spellTwoPass options: the rule and the wedge can be switched off', () => {
+        const notes = [...cMinor, [56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);
+        assertEq(tok({ ...spellTwoPass(notes)[19]!, octave: 4 }), 'F#');
     });
 });
 

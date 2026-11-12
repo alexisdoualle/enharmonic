@@ -2,6 +2,8 @@
   --bg: #14161a; --panel: #1c2027; --ink: #e7e9ee; --dim: #9aa3b2; --line: #2c313b;
   --accent: #6ea8fe; --correct: #57caa0; --flipped: #d8b35a; --wrong: #e06c75;
   --coll: #2a3550; --tonic: #3a5bd0;
+  /* LOCAL compare (another speller's spelling): cyan, apart from the tier palette; a darker teal on the light staff */
+  --compare: #4dd0e1; --compare-on-light: #00798c;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   /* Base UI zoom: the desktop debugger renders at 80% so the whole layout breathes (this was the density
      that read well at 80% browser zoom). Browser zoom still stacks on top. The phone layout resets to 1:1. */
@@ -123,6 +125,45 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 #tonnetz { display: flex; flex-direction: column; min-height: 0; }
 .tonnetz-canvas { position: relative; flex: 1 1 0; min-height: 0; border-radius: 8px; overflow: hidden; background: #1a1a2e; }
 .tonnetz-canvas canvas { position: absolute; inset: 0; display: block; width: 100% !important; height: 100% !important; }
+/* 3D lattice buttons (sym. chords, inactive nodes, z range), one row along the canvas's bottom edge, with
+   the plane caption above them */
+.lattice-ctrls { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--dim); pointer-events: none; }
+.lattice-ctrls > * { pointer-events: auto; }
+.lattice-ctrls[hidden] { display: none; }
+.lattice-btns { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; }
+.lattice-btn { font: inherit; color: var(--dim); background: rgba(20, 22, 26, .78); border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; cursor: pointer; line-height: 1.3; }
+.lattice-btn:hover:not(:disabled), .lattice-btn:focus-visible { color: var(--ink); border-color: var(--accent); }
+.lattice-btn[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 28%, rgba(20, 22, 26, .85)); }
+.lattice-btn:disabled { opacity: .4; cursor: default; }
+.lattice-z { display: inline-flex; align-items: center; gap: 2px; background: rgba(20, 22, 26, .78); border: 1px solid var(--line); border-radius: 5px; padding: 1px; }
+.lattice-z .lattice-btn { border-color: transparent; background: transparent; padding: 2px 8px; font-size: 13px; line-height: 1.1; }
+.lattice-z-val { min-width: 34px; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; }
+.lattice-caption { background: rgba(20, 22, 26, .78); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; color: var(--ink); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+/* torus view: its own canvas over the lattice's, plus the lattice / torus toggle */
+.torus-host { position: absolute; inset: 0; }
+.tonnetz-mode { position: absolute; top: 8px; right: 8px; z-index: 2; padding: 3px 10px; font: inherit; font-size: 11px;
+  color: #dbe9ff; background: rgba(12, 12, 20, .7); border: 1px solid #3a3f5c; border-radius: 5px; cursor: pointer; }
+.tonnetz-mode:hover { background: rgba(40, 44, 70, .85); }
+.torus-controls { position: absolute; left: 10px; bottom: 8px; z-index: 2; display: flex; flex-direction: column; gap: 4px;
+  max-width: calc(100% - 20px); font-size: 10px; letter-spacing: .3px; color: #9aa3c4;
+  opacity: .35; transition: opacity .25s ease; }
+/* quiet until the pointer is over the view */
+.torus-host:hover .torus-controls, .torus-controls:focus-within { opacity: .9; }
+/* hidden while the lattice folds or unfolds; fades in once the torus is closed */
+.torus-controls.waiting { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: none; }
+.torus-controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; }
+.torus-controls label { display: flex; align-items: center; gap: 6px; }
+.torus-controls button { padding: 1px 0; font: inherit; letter-spacing: inherit; color: #6b7394; background: none; border: 0; cursor: pointer; transition: color .15s; }
+.torus-controls button:hover { color: #b9c2e2; }
+.torus-controls button.active { color: #dbe4ff; }
+.torus-controls button[hidden] { display: none; }
+.torus-controls input[type=range] { -webkit-appearance: none; appearance: none; width: 64px; height: 12px; margin: 0; background: none; cursor: pointer; }
+.torus-controls input[type=range]::-webkit-slider-runnable-track { height: 2px; border-radius: 1px; background: rgba(154, 163, 196, .3); }
+.torus-controls input[type=range]::-moz-range-track { height: 2px; border-radius: 1px; background: rgba(154, 163, 196, .3); }
+.torus-controls input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 8px; margin-top: -3px; border-radius: 50%; background: #c8d2f2; border: 0; }
+.torus-controls input[type=range]::-moz-range-thumb { width: 8px; height: 8px; border-radius: 50%; background: #c8d2f2; border: 0; }
+.torus-controls button { padding: 2px 8px; font: inherit; color: #8d93ad; background: transparent; border: 1px solid #3a3f5c; border-radius: 4px; cursor: pointer; }
+.torus-controls button.active { color: #dbe9ff; background: rgba(143, 176, 255, .18); border-color: #8fb0ff; }
 
 /* live coiled Tonnetz: MIDI pc spokes plus persistent speller-selected spellings */
 .live-tonnetz { display: flex; flex-direction: column; min-height: 0; background: #fff; color: #222; border-color: #d6d6d6; }
@@ -149,6 +190,8 @@ body { margin: 0; background: var(--bg); color: var(--ink); font-size: 14px; hei
 .live-reset:hover { border-color: var(--accent); color: #222; }
 /* Top-toolbar MIDI button: override the fixed 34x30 square that #transport button imposes. */
 #transport button.midi-btn { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
+#transport button#instrument { width: auto; padding: 0 10px; font-size: 12px; white-space: nowrap; }
+#transport button#instrument[aria-pressed="true"] { border-color: var(--accent); }
 #transport button.midi-btn:disabled { opacity: .7; cursor: default; border-color: var(--line); }
 #transport button#midi-enable.connected { color: #56d364; border-color: #2f7a3d; background: color-mix(in srgb, #3fb950 12%, var(--panel)); }
 /* The cards that keep their own position for overlays in the corner. */
@@ -378,10 +421,68 @@ footer code, footer b { color: var(--ink); }
 /* Clear the live take: a muted red, brighter on hover. */
 #transport button#take-clear { color: #d98a8f; border-color: #6e3a3f; background: color-mix(in srgb, #e06c75 10%, var(--panel)); }
 #transport button#take-clear:hover { color: #f0a0a5; border-color: #b0545b; }
-#transport button#take-clear.armed { color: #fff; border-color: #c25a62; background: #8f3b42; }
 
 /* Help: shortcut table */
 .help-content .help-keys { border-collapse: collapse; margin: 0 0 14px; font-size: 13px; }
 .help-content .help-keys td { padding: 4px 14px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .help-content .help-keys td:first-child { white-space: nowrap; color: var(--ink); }
 #transport .ctl-val { cursor: pointer; }   /* click resets the roll scale to its default */
+
+/* --- LOCAL-ONLY speller comparison (viz/src/compare.ts); hidden unless compare data was synced --- */
+#compare { width: 130px; }   /* narrower than the longest names; they truncate, the open menu shows them whole */
+#moments { width: 120px; }
+#status .cmp { color: var(--compare); }
+#moment-note { display: flex; align-items: baseline; gap: 10px; margin: 4px 16px 0; padding: 5px 10px; font-size: 12.5px;
+  border-left: 3px solid var(--compare); border-radius: 4px; background: color-mix(in srgb, var(--compare) 10%, var(--panel)); }
+#moment-note[hidden] { display: none; }
+#moment-note b { color: var(--compare); margin-right: 4px; }
+#moment-note #moment-text { flex: 1 1 auto; }
+#moment-note button { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 15px; line-height: 1; }
+#moment-note button:hover { color: var(--ink); }
+.cmp-block { margin: -2px 0 10px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--compare) 45%, var(--line)); border-radius: 6px; font-size: 12px; }
+.cmp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cmp-name { color: var(--compare); font-weight: 700; }
+.cmp-sp { color: var(--compare); font-size: 18px; font-weight: 700; }
+.cmp-tier { font-size: 10px; text-transform: uppercase; letter-spacing: .4px; padding: 0 5px; border-radius: 3px; border: 1px solid currentColor; }
+.cmp-tier.correct { color: var(--correct); } .cmp-tier.flipped { color: var(--flipped); } .cmp-tier.wrong { color: var(--wrong); } .cmp-tier.unread { color: var(--dim); }
+.cmp-sub { margin-top: 5px; font-size: 10.5px; }
+.cmp-chord { border-collapse: collapse; margin: 2px 0 4px; font-size: 13px; }
+.cmp-chord th { text-align: left; font-weight: 500; color: var(--dim); padding: 1px 10px 1px 0; font-size: 11px; white-space: nowrap; }
+.cmp-chord th.cmp-name { color: var(--compare); font-weight: 700; }
+.cmp-chord td { padding: 1px 7px; text-align: center; }
+.cmp-diff { color: var(--compare); font-weight: 700; }
+.cmp-bad { text-decoration: underline wavy var(--wrong); text-underline-offset: 3px; }
+.cmp-sum { font-size: 11px; line-height: 1.4; }
+
+/* --- Piano keyboard strip (panels/keyboard.ts): the sounding notes lit on a compact full keyboard (A0..C8),
+   no labels. Look from the tonnetz app's read-only keyboard: dark rounded case, small gradient keys, lit keys
+   filled with their chord's 3D-lattice shade and glowing; notes outside the chord grey; wrong notes framed
+   red. Off by default (the "piano" toggle). */
+#keyboard { flex: 0 0 auto; padding: 10px 16px 0; position: relative; }   /* between #music and #panels */
+#keyboard[hidden] { display: none; }
+/* never wider than at a 1080 px screen (1080 − 2×16 gutter − 2×5 case = 1038 px of keys, ~20 px per white): the
+   range is already the whole piano, so a wider screen centres the keyboard instead of growing the keys */
+.pk-keys { max-width: 1038px; margin: 0 auto; }
+.pk-keys { position: relative; height: 56px; background: #3a3a3a; border: 5px solid #3a3a3a; border-radius: 8px; box-sizing: content-box; box-shadow: 0 2px 8px rgba(0,0,0,.25); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.pk-key { position: absolute; top: 0; cursor: pointer; transition: background .15s ease, box-shadow .15s ease; box-sizing: border-box; }
+.pk-white { bottom: 0; background: linear-gradient(145deg, #ffffff, #f7fafc); border: 1px solid #cbd5e0; border-radius: 0 0 4px 4px; z-index: 1; }
+.pk-black { height: 58%; background: linear-gradient(145deg, #2d3748, #1a202c); border: 1px solid #1a202c; border-radius: 0 0 3px 3px; transform: translateX(-50%); z-index: 2; }
+.pk-white:hover { background: linear-gradient(145deg, #edf2f7, #e2e8f0); }
+.pk-black:hover { background: linear-gradient(145deg, #4a5568, #2d3748); }
+.pk-key.pk-on { background: var(--pk-bg, var(--pk-fill)); border-color: color-mix(in srgb, var(--pk-fill) 70%, #000); box-shadow: 0 0 8px color-mix(in srgb, var(--pk-fill) 60%, transparent); }
+.pk-black.pk-on { z-index: 3; }   /* lit whites stay under the blacks */
+/* held from an earlier onset: the same colour, paler, no glow */
+.pk-key.pk-on.pk-held { background: color-mix(in srgb, var(--pk-fill) 40%, #f1f2f5); box-shadow: none; }
+.pk-black.pk-on.pk-held { background: color-mix(in srgb, var(--pk-fill) 45%, #2d3748); }
+.pk-key.pk-on.pk-nct { box-shadow: none; }
+.pk-key.pk-cur { box-shadow: inset 0 0 0 2px #0b0d10, 0 0 10px var(--pk-fill); }
+/* wrong (the tier the fill no longer carries): a red inner frame, drawn over the current-note ring */
+.pk-key.pk-wrong::before { content: ''; position: absolute; inset: 2px; border: 3px solid var(--wrong); border-radius: 2px; pointer-events: none; }
+.pk-key.pk-cur.pk-wrong { box-shadow: 0 0 10px var(--pk-fill); }
+/* LOCAL compare: the other speller spelled this sounding note differently (tooltip names both) */
+.pk-key.pk-diff::after { content: ''; position: absolute; left: 15%; right: 15%; bottom: 3px; height: 4px; border-radius: 2px; background: var(--compare); box-shadow: 0 0 0 1px #0b0d10; }
+.pk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 720px) {
+  #keyboard { overflow-x: auto; }
+  .pk-keys { min-width: 640px; }
+}

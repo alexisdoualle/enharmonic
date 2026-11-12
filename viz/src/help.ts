@@ -152,7 +152,8 @@ latency; raise it for Bluetooth headphones.</li>
 <li><b>zoom</b> and <b>time</b>: the piano roll's scale. Pinch on the roll (or &#8984;/Ctrl + scroll) zooms;
 &#8997;/Alt + scroll stretches or compresses time. Click a value to reset it.</li>
 <li><b>&#128266;</b>: plays each onset on a sampled grand piano (Salamander Grand Piano by Alexander Holm,
-CC BY 3.0). <b>&#127929; MIDI</b>: connects a MIDI keyboard
+CC BY 3.0). The button next to it switches to a held clarinet, with a bassoon for the bass, which does
+not decay while a note is held (VSCO 2 Community Edition by Versilian Studios, CC0). <b>&#127929; MIDI</b>: connects a MIDI keyboard
 (see <b>Play live</b>).</li>
 <li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
 agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
