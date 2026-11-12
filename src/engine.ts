@@ -118,6 +118,11 @@ export interface EngineOptions {
     /** COLLISION REPAIR: after a commit, move a non-sounding letter that now spells the same pitch class
      *  as the committed note back to a distinct spelling, keeping 7 distinct pitch classes. */
     collisionRepair?: boolean;
+    /** ONE SPELLING PER PITCH CLASS (diatonic frame + keep-alive): a commit evicts a held alteration that
+     *  spells the same pitch class on ANOTHER letter (A♭ evicts G♯), unless that note is still sounding; the
+     *  evicted letter returns to its collection spelling (G). The diatonic-frame counterpart of
+     *  collisionRepair, which that path never reaches. Default false. */
+    keepAliveOnePc?: boolean;
     /** Drop STALE slots from the CLAMP fold's centre mean: a letter not committed within this many onsets
      *  holds an outdated spelling (a degree the music has not used for a while) that should not anchor the
      *  key centre. Averaging only the recently-sounded letters keeps the fold centre on the live key.
@@ -314,6 +319,7 @@ export class SpellingEngine {
     private readonly doubleAccPenalty: number;
     private readonly verticalWeight: number;
     private readonly collisionRepair: boolean;
+    private readonly keepAliveOnePc: boolean;
     private readonly foldSlotRecency: number;
     private readonly foldRepairScale: boolean;
     private readonly foldEconomyGate: boolean;
@@ -403,6 +409,7 @@ export class SpellingEngine {
         this.doubleAccPenalty = opts.doubleAccPenalty ?? 0;
         this.verticalWeight = opts.verticalWeight ?? 0;
         this.collisionRepair = opts.collisionRepair ?? false;
+        this.keepAliveOnePc = opts.keepAliveOnePc ?? false;
         this.foldSlotRecency = opts.foldSlotRecency ?? 0;
         this.foldRepairScale = opts.foldRepairScale ?? false;
         this.foldEconomyGate = opts.foldEconomyGate ?? false;
@@ -504,6 +511,7 @@ export class SpellingEngine {
                 // Timed from the onset's first note, so a spread chord does not shorten its notes.
                 else if (this.ornamentMs > 0 && t !== undefined) this.pending.set(midi, { n: best, t: this.lastT });
                 else this.kept.set(letter(best), best);
+                this.evictSamePc(best);
             }
             if (this.onsetRevise) this.reviseOnset(midi);
             return;
@@ -618,6 +626,7 @@ export class SpellingEngine {
                 const pend = this.pending.get(m);
                 if (pend) pend.n = best;
                 else if (best !== letterAt(letter(best), this.frameCentre)) this.kept.set(letter(best), best);
+                this.evictSamePc(best);
             }
         }
     }
@@ -791,6 +800,24 @@ export class SpellingEngine {
         const n = this.active.get(midi)
             ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
         return n === undefined ? null : { ...spellingOf(n), octave };
+    }
+
+    /** One spelling per pitch class: drop held alterations (kept or pending) that spell `n`'s pitch class on
+     *  another letter, unless that note is still sounding, and return their letters to the collection. */
+    private evictSamePc(n: number): void {
+        if (!this.keepAliveOnePc) return;
+        const pc = pitchClass(n);
+        const sounding = new Set(this.active.values());
+        for (const [s, k] of [...this.kept]) {
+            if (s === letter(n) || pitchClass(k) !== pc || sounding.has(k)) continue;
+            this.kept.delete(s);
+            this.scale[s] = letterAt(s, this.frameCentre);
+        }
+        for (const [m, p] of [...this.pending]) {
+            if (letter(p.n) === letter(n) || pitchClass(p.n) !== pc || sounding.has(p.n)) continue;
+            this.pending.delete(m);
+            this.scale[letter(p.n)] = letterAt(letter(p.n), this.frameCentre);
+        }
     }
 
     /** Keep a chromatic alive in its letter's slot, unless a later commit has since respelled that letter. */
