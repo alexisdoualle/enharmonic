@@ -6,8 +6,9 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, localKeys, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
+import { SpellingEngine, LA_PRESET } from '../src/engine.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
 const tok = (sp: Pitch | null): string =>
@@ -122,6 +123,57 @@ suite('aug6 outward convergence', () => {
         const notes = [...cMinor, [56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);
         assertEq(tok({ ...spellTwoPass(notes)[19]!, octave: 4 }), 'F#');
+    });
+});
+
+suite('leading-tone gate', () => {
+    const dMinor = [[50, 62, 65, 69], [55, 62, 67, 70], [57, 61, 64, 67], [50, 62, 65, 69]];
+    const notesOf = (chords: number[][]) => chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500 })));
+    /** The look-ahead votes (laDelta) on the last note after `chords`, struck with `ctx`. */
+    const votes = (chords: number[][], midi: number, ctx: { resolveDir: number; key: { tonic: number; minor: boolean } | null }, gate = true): string => {
+        const e = new SpellingEngine({ ...LA_PRESET, leadingToneGate: gate });
+        chords.forEach((c, k) => {
+            if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
+            for (const m of c) e.noteOn(m, k * 500);
+        });
+        e.noteOn(midi, chords.length * 500, ctx.resolveDir, 0, undefined, 0, ctx.key);
+        return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
+    };
+
+    test('localKeys reads D minor around a D-minor cadence, with either table', () => {
+        for (const table of ['temperley', 'tonic-triad'] as const) {
+            const k = localKeys(notesOf(dMinor), { table, radius: 6 });
+            assert(k.every(x => x !== null && x.tonic === 2 && x.minor), `${table}: ${JSON.stringify(k[0])}`);
+        }
+    });
+
+    test('localKeys reads a window of onsets centred on the note', () => {
+        // Four onsets of C major, then four of F♯ major: radius 1 sees only its neighbours.
+        const cMaj = [60, 64, 67], fsMaj = [66, 70, 73];
+        const k = localKeys(notesOf([cMaj, cMaj, cMaj, cMaj, fsMaj, fsMaj, fsMaj, fsMaj]), { radius: 1 });
+        assertEq(k[0]!.tonic, 0); assertEq(k[k.length - 1]!.tonic, 6);
+    });
+
+    test('a falling C♯ in D minor gets no letter-step vote; without the key it votes D♭', () => {
+        // A C-major chord last, so the surface spells C (the falling target) rather than keeping A7's C♯.
+        const dm = { tonic: 2, minor: true }, withC = [...dMinor, [48, 60, 64, 67]];
+        assertEq(votes(withC, 61, { resolveDir: -1, key: dm }), 'B##0 C#0 Db0');
+        assertEq(votes(withC, 61, { resolveDir: -1, key: null }), 'B##0 C#-2 Db2');
+        assertEq(votes(withC, 61, { resolveDir: -1, key: dm }, false), 'B##0 C#-2 Db2');
+    });
+
+    test('rising notes and non-leading tones keep the look-ahead', () => {
+        const dm = { tonic: 2, minor: true };
+        // (Rising into the natural D: the leading-tone boost adds 1 to the step vote.)
+        assertEq(votes(dMinor, 61, { resolveDir: 1, key: dm }), 'B##0 C#3 Db-3');
+        // E♭ falling in D minor is not one of its leading tones (♯4 G♯, raised 6th B, raised 7th C♯).
+        assert(votes(dMinor, 63, { resolveDir: -1, key: dm }).includes('2'), 'E♭/D♯ lost its look-ahead vote');
+    });
+
+    test('spellTwoPass: the gate can be switched off', () => {
+        const notes = [...dMinor, [53, 61], [53, 60], [58, 62, 65]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        assertEq(spellTwoPass(notes, { leadingToneGate: false }).length, notes.length);
+        assertEq(spellTwoPass(notes).length, notes.length);
     });
 });
 

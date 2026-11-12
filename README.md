@@ -40,11 +40,12 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule |
-| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries (aug6 rule in both passes) |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone gate |
+| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries (aug6 rule and leading-tone gate in both passes) |
 
 Frameless and key-signature-free: the side a passage settles on is a statistic of the notes
-committed so far, never a detected key.
+committed so far, never a detected key. (A local key, read from the notes around each note, is used
+only to name a falling leading tone; see below.)
 
 ### Timing
 
@@ -80,6 +81,14 @@ pass each note's partner midi and role (+1 rising, −1 falling) when it has one
 only when the meeting pitch is in the key and the rising tone is not, so a dominant seventh whose diatonic
 seventh rises chromatically (D→D♯ in E7) keeps its spelling. `spellTwoPass` does this itself (`aug6Outward: false` turns it off).
 
+`localKey` names a leading tone of the local key (its ♯4 leading to the dominant; in minor also the raised
+6th and 7th): a falling chromatic line from it cancels it, so C♯→C in D minor stays C♯ instead of the
+look-ahead's letter step D♭→C. `localKeys(notes)` reads each note's key from `{ midi, tOn }` notes, on the
+onsets from 6 before to 6 after the note's own, by correlation with Temperley's key profiles (*Music and
+Probability*, 2007); pass it as `localKey`. Rising notes are untouched. `spellTwoPass` does this itself with a
+key table from theory instead (a key is its tonic triad inside its seven-note collection, no fitted numbers)
+on ±12 onsets (`leadingToneGate: false` turns it off).
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -107,8 +116,8 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.77% | 99.82% | 99.72% | 99.75% |
-| + two-pass | 99.88% | 99.88% | 99.83% | 99.84% |
+| + look-ahead | 99.79% | 99.84% | 99.74% | 99.77% |
+| + two-pass | 99.89% | 99.89% | 99.84% | 99.86% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
@@ -120,12 +129,13 @@ time only (driver and speller; parsing and scoring excluded):
 
 | mode | clean | notes/s (clean) | noisy | notes/s (noisy) |
 |---|--:|--:|--:|--:|
-| core | 0.11 s | 1,740,000 | 0.11 s | 1,720,000 |
-| real-time | 0.84 s | 232,000 | 0.68 s | 290,000 |
-| look-ahead | 1.02 s | 192,000 | 0.84 s | 233,000 |
-| two-pass | 1.79 s | 109,000 | 1.86 s | 105,000 |
+| core | 0.14 s | 1,400,000 | 0.14 s | 1,400,000 |
+| real-time | 0.92 s | 213,000 | 0.75 s | 261,000 |
+| look-ahead | 1.21 s | 162,000 | 1.03 s | 190,000 |
+| two-pass | 2.08 s | 94,000 | 2.08 s | 94,000 |
 
-Look-ahead and two-pass include finding the aug6 outward pairs (`outwardPairs`). Timings vary by CPU and
+Look-ahead and two-pass include finding the aug6 outward pairs (`outwardPairs`) and the local keys
+(`localKeys`). Timings vary by CPU and
 machine load; reproduce with `npm run meredith -- --time` (add `--noisy` for the
 noisy set).
 

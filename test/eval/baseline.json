@@ -13,9 +13,9 @@
       "total": 535
     },
     "la": {
-      "correct": 533,
+      "correct": 532,
       "flipped": 0,
-      "wrong": 2,
+      "wrong": 3,
       "total": 535
     },
     "tp": {
@@ -65,9 +65,9 @@
       "total": 604
     },
     "la": {
-      "correct": 574,
+      "correct": 584,
       "flipped": 0,
-      "wrong": 30,
+      "wrong": 20,
       "total": 604
     },
     "tp": {
@@ -117,15 +117,15 @@
       "total": 606
     },
     "la": {
-      "correct": 605,
+      "correct": 596,
       "flipped": 0,
-      "wrong": 1,
+      "wrong": 10,
       "total": 606
     },
     "tp": {
-      "correct": 600,
+      "correct": 596,
       "flipped": 0,
-      "wrong": 6,
+      "wrong": 10,
       "total": 606
     }
   },

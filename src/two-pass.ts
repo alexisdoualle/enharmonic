@@ -17,13 +17,15 @@
  *     is the chord's point, not a wolf.
  *
  * Both passes are the shipped engine at its two-pass preset (letter look-ahead plus vertical guard, over
- * the accidental-economy fold). The reconciliation is pure array logic. This is the highest-accuracy tier;
- * see the README for benchmark figures.
+ * the accidental-economy fold). Both read each note's local key (the theory table on ±12 onsets centred on
+ * the note, {@link localKeys}) for the leading-tone gate. The reconciliation is pure array logic. This is the
+ * highest-accuracy tier; see the README for benchmark figures.
  */
 
 import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
 import { outwardPairs } from './aug6.js';
+import { localKeys, type LocalKey } from './key.js';
 import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
 
@@ -69,6 +71,12 @@ export interface TwoPassOptions {
      *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
      *  one pitch class, not a misspelling. Default `true`. */
     aug6Wedge?: boolean;
+    /** Feed both passes each note's local key, so the engine's `leadingToneGate` keeps a falling leading tone
+     *  of the key (C♯→C in D minor) instead of the look-ahead's letter step. The key is read with the
+     *  `'tonic-triad'` table (a key is its tonic triad inside its seven-note collection; no fitted numbers) on
+     *  ±12 onsets centred on the note ({@link localKeys}); the backward pass reads the same keys. Default
+     *  `true`. */
+    leadingToneGate?: boolean;
 }
 
 /** One pass's engine state right after it committed a note (introspection / visualiser only). */
@@ -134,10 +142,13 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
 /** Aug6 outward context per note, in a pass's note order: the partner's midi (undefined: none) and role. */
 interface Outward { partner: (number | undefined)[]; role: number[] }
 
+/** The leading-tone gate's key table and window in the two-pass tier. */
+const TP_KEY_TABLE = 'tonic-triad', TP_KEY_RADIUS = 12;
+
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
  *  With `frames`, also record the engine state right after each note-on (read-only, no effect on spellings). */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[], outward?: Outward): number[] {
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[], outward?: Outward, keys?: (LocalKey | null)[]): number[] {
     const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
@@ -148,7 +159,7 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
         if (e.on) {
-            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0, outward?.partner[e.i], outward?.role[e.i] ?? 0);
+            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0, outward?.partner[e.i], outward?.role[e.i] ?? 0, keys?.[e.i]);
             (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
             if (frames) frames[e.i] = { surface: s.getResolvedScale(), foldCentre: s.getFoldCentre(), decision: s.decision() };
         }
@@ -207,7 +218,9 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         const op = outwardPairs(N);
         outF = { partner: op.partner.map(y => (y >= 0 ? N[y]!.midi : undefined)), role: op.role };
     }
-    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF);
+    // The local keys are read in forward time on onsets centred on each note; the backward pass reads them too.
+    const keysF = (opts.leadingToneGate ?? true) ? localKeys(N, { table: TP_KEY_TABLE, radius: TP_KEY_RADIUS }) : undefined;
+    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF, keysF);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
@@ -217,7 +230,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
     // The aug6 pairs are found in forward time (the resolution is what follows); the backward pass reads them too.
     const outB: Outward | undefined = outF && { partner: outF.partner.slice().reverse(), role: outF.role.slice().reverse() };
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames, outB);
+    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames, outB, keysF?.slice().reverse());
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
     if (bFrames) bFrames.reverse();

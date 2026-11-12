@@ -1,6 +1,7 @@
 /**
  * SpellingEngine: the shipped speller. One engine; the latency modes are presets over it
- * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). No key detection anywhere.
+ * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). The engine detects no key; the look-ahead
+ * caller may pass a local key (key.ts), used only by the leading-tone gate.
  *
  * Two principles do the base work:
  *   1. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the resolved
@@ -15,6 +16,7 @@
  *   DIATONIC-ANCHOR LEASH: penalise a candidate far outside the recent collection's centre. Resists side
  *     drift continuously, where the fold only reacts after it.
  *   LOOK-AHEAD: given a note's resolution direction, spell the step toward it (an F♯-bound note spells E♯, not F).
+ *     The LEADING-TONE GATE withholds it for a falling note that is a leading tone of the supplied local key.
  *   DOUBLE-ACC PENALTY, VERTICAL GUARD, COLLISION REPAIR: smaller correctness levers.
  *
  * Frameless: every centre is a statistic of committed notes, never a detected key. Shares only the
@@ -25,6 +27,7 @@
 import type { Pitch, PitchClass } from './pitch.js';
 import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
+import { isLeadingTone, type LocalKey } from './key.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -218,6 +221,13 @@ export interface EngineOptions {
      *  in E7 → B/D♯), not a ♯4; a chromatic tone rising into the key takes its letter from its goal. Default
      *  false. */
     aug6Outward?: boolean;
+    /** LEADING-TONE GATE (look-ahead only). A leading tone of the local key (its ♯4 leading to the dominant; in
+     *  minor also its raised 6th and 7th) is named by the key, and a falling chromatic line from it cancels it:
+     *  C♯→C in D minor is C♯, not D♭. So when a note falls a semitone (`resolveDir` −1) and its pitch class is a
+     *  leading tone of `localKey`, the look-ahead's letter-step vote (D♭→C) is withheld and the other scores
+     *  decide. Rising notes are untouched. The key comes from the caller (`NoteContext.localKey`, read by
+     *  `localKeys` on onsets centred on the note); without one the gate does nothing. Default false. */
+    leadingToneGate?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -252,7 +262,7 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
-    aug6Outward: true,
+    aug6Outward: true, leadingToneGate: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
@@ -273,7 +283,7 @@ export const TP_PASS_PRESET: EngineOptions = {
     // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
-    aug6Outward: true,
+    aug6Outward: true, leadingToneGate: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
     // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
     // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
@@ -364,6 +374,7 @@ export class SpellingEngine {
     private readonly ornamentMs: number;
     private readonly verticalPcTriad: boolean;
     private readonly aug6Outward: boolean;
+    private readonly leadingToneGate: boolean;
     /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
     private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
@@ -374,6 +385,8 @@ export class SpellingEngine {
     private curOnsetExact = new Map<number, number>();
     /** The current onset's aug6 outward partner per midi (partner midi, role +1 rising / −1 falling). */
     private curOnsetOutward = new Map<number, { partner: number; role: number }>();
+    /** The current onset's local key per midi (the leading-tone gate's), for the same. */
+    private curOnsetKey = new Map<number, LocalKey>();
     /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
      *  own first spelling is not exempt from the guard. */
     private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
@@ -457,15 +470,17 @@ export class SpellingEngine {
         this.ornamentMs = opts.ornamentMs ?? 0;
         this.verticalPcTriad = opts.verticalPcTriad ?? false;
         this.aug6Outward = opts.aug6Outward ?? false;
+        this.leadingToneGate = opts.leadingToneGate ?? false;
     }
 
     /**
      * Commit a spelling for `midi`: the candidate whose combined score (interval fit plus every enabled
      * mechanism's delta) is highest; then run the fold check. `t`, when given, groups co-struck notes
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
-     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule.
+     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule and
+     * `localKey` the leading-tone gate.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison
@@ -478,6 +493,7 @@ export class SpellingEngine {
             this.curOnsetDirs.clear();
             this.curOnsetExact.clear();
             this.curOnsetOutward.clear();
+            this.curOnsetKey.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -497,6 +513,7 @@ export class SpellingEngine {
         this.curOnsetExact.set(midi, resolveExact);
         // A unison doubling without a pair of its own keeps its twin's (both are the same tone).
         if (outwardPartner !== undefined && outwardRole !== 0) this.curOnsetOutward.set(midi, { partner: outwardPartner, role: outwardRole });
+        if (localKey) this.curOnsetKey.set(midi, localKey); else this.curOnsetKey.delete(midi);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -568,7 +585,9 @@ export class SpellingEngine {
     private decide(midi: number, resolveDir: number, resolveExact: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
-        const laOn = this.lookAheadOn && resolveDir !== 0;
+        // LEADING-TONE GATE: a falling note that is a leading tone of the local key keeps the key's name.
+        const key = this.leadingToneGate && resolveDir === -1 ? this.curOnsetKey.get(midi) : undefined;
+        const laOn = this.lookAheadOn && resolveDir !== 0 && !(key && isLeadingTone(((midi % 12) + 12) % 12, key));
         let laStep: number | null = null, laTarget: number | null = null, laWeight = this.lookAheadWeight;
         if (laOn) {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;

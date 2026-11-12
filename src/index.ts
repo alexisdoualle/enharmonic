@@ -13,6 +13,8 @@ export { resolveStep, resolveExactStep } from './kernel.js';
 export type { NoteContext } from './kernel.js';
 export { outwardPairs } from './aug6.js';
 export type { OutwardNote, OutwardPairs } from './aug6.js';
+export { localKeys } from './key.js';
+export type { LocalKey, KeyNote, KeyTable, LocalKeyOptions } from './key.js';
 
 export { spellTwoPass } from './two-pass.js';
 export type { TwoPassNote, TwoPassOptions } from './two-pass.js';

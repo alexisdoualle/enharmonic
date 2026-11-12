@@ -4,6 +4,8 @@
  * {@link SpellingEngine} in engine.ts.
  */
 
+import type { LocalKey } from './key.js';
+
 /** Per-note context passed to the speller. */
 export interface NoteContext {
     /** Look-ahead resolution direction (+1 up, −1 down, 0 none), supplied from a small forward buffer.
@@ -20,6 +22,10 @@ export interface NoteContext {
     readonly outwardPartner?: number;
     /** This note's role in that pair: +1 the rising upper tone (the ♯4), −1 the falling lower tone. */
     readonly outwardRole?: number;
+    /** The local key around the note (see `localKeys`, which reads it on onsets centred on the note): a
+     *  falling note that is one of its leading tones keeps the key's name instead of the look-ahead's letter
+     *  step. Look-ahead mode only; omit it to switch the leading-tone gate off. */
+    readonly localKey?: LocalKey | null;
 }
 
 /**

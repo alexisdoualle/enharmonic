@@ -14,6 +14,7 @@ import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
 import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import { outwardPairs } from '../../src/aug6.js';
+import { localKeys, type LocalKey } from '../../src/key.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -217,6 +218,16 @@ function onsetOutward(events: RawEvent[]): Map<number, { partner: number; role: 
     return out;
 }
 
+/** Each on-event's local key (Temperley's profile on ±6 onsets centred on it), keyed by event index: the
+ *  leading-tone gate's context, fed alongside the resolution directions. */
+function onsetKeys(events: RawEvent[]): Map<number, LocalKey | null> {
+    const notes: { midi: number; tOn: number }[] = [], at: number[] = [];
+    events.forEach((e, i) => { if (e.type === 'on') { at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms }); } });
+    const out = new Map<number, LocalKey | null>();
+    localKeys(notes).forEach((k, j) => out.set(at[j]!, k));
+    return out;
+}
+
 /** Build a replay for one fixture in the given latency mode. `spiral` overrides the streaming
  *  engine's spiral depth/centre (rt/la); the shipped default is range 6, centre +1. */
 export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[], spiral: SpiralOpts = {}, twoPassSideMemory = true, sideOverrides: readonly TwoPassSideOverride[] = []): Replay {
@@ -280,6 +291,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     const dirs = onsetDirs(events);
     const exactDirs = onsetDirs(events, LA_HORIZON, true);
     const outward = mode === 'la' ? onsetOutward(events) : new Map<number, { partner: number; role: number }>();
+    const keys = mode === 'la' ? onsetKeys(events) : new Map<number, LocalKey | null>();
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -362,7 +374,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
             const ow = outward.get(i);
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0);
+            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i));
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
             // ringing notes so the lattice shows the engine's current spellings, not their first ones.
