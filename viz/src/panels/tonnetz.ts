@@ -75,16 +75,28 @@ let torusOn = false;
 let lastScaleSig = '';
 
 // A row of buttons along the canvas's bottom edge, all at the panel's default when untouched. Read from /
-// written to the page URL (`planes=1`, `ghosts=1`, `z=0..3`) so a view can be linked; nothing is stored.
+// written to the page URL (`planes=1`, `ghosts=1`, `lt=1`, `z=0..3`) so a view can be linked; nothing is stored.
 //   • PLANES (toggle): the sheet a symmetric chord's enharmonic continuation forms in the lattice
 //     (symmetricPlanes.ts), for any augmented triad / dim7 whose pitch classes are all ringing (the main
 //     sheet bright, its parallel copies faint).
 //   • GHOSTS (toggle): the scene's "All Notes" mode: every lattice cell in the window, not only the 7-note surface.
+//   • LEADING TONES (toggle): the tonnetz app's semitone-resolution arrows. Each tritone of the surface marks
+//     its two tendency notes, the upper resolving up a semitone and the lower down (B→C, F→E in C major),
+//     drawn from scale node to target across an accidental layer. An arrow lights while its source sounds
+//     and goes out once the target is struck after it (the resolution happened).
 //   • Z RANGE (− / +): how many accidental layers each side of the naturals the lattice spans (the chromatic
 //     depth, z), symmetric: ±1 by default (♭ · ♮ · ♯), 0 = the naturals' layer only, up to ±3.
 const Z_MIN = 0, Z_MAX = 3, Z_DEFAULT = 1;
 let showPlanes = false;
 let showGhosts = false;
+let showLeadingTones = false;
+const noteOnTimes = new Map<number, number>();   // pc → wall time it last started sounding (arrow logic)
+// The arrows' fifth check: an arrow is withheld when its target does not sit in a perfect fifth with the
+// surface. A note that is itself one end of a SOUNDING tritone is a tendency tone on its way out, not part
+// of the target's harmony, so it is left out of that check. E minor's vii°7 D♯–F♯–A–C holds two tritones,
+// D♯–A and F♯–C, and resolves by three semitones: D♯→E, F♯→G, C→B. Counted as G's fifth, the leaving D♯
+// would make G the root of an augmented fifth (G–D♯) and hide F♯→G. Same for D minor's C♯–E–G–B♭ → D, F, A.
+const leavingTone = (pc: number): boolean => soundingPCs.has(pc) && soundingPCs.has((pc + 6) % 12);
 let zRange = Z_DEFAULT;
 let soundingSpelled = new Set<string>();   // `letter:accidental` of the ringing notes, as committed
 let lastPlanesSig = '';
@@ -109,6 +121,17 @@ export function initTonnetz(container: HTMLElement): void {
         // makes a full triad flare bright the instant all three notes sound, then fade over CHORD_DECAY_TAU
         // as the chord decays, while a diatonic triad whose notes only idle at the scale floor stays faint.
         getResonanceActivation: pc => res[pc] ?? 0,
+        getNoteOnTimestamps: () => noteOnTimes,
+        // letter index (C=0 … B=6) → pitch class of that letter on the surface, for the arrows' P5 check;
+        // null (no constraint) for a letter whose note is a leaving tendency tone (see leavingTone)
+        getResolvedMidi: () => {
+            const byLetter: (number | null)[] = [null, null, null, null, null, null, null];
+            for (const p of scale) {
+                const pc = ((p.midiValue % 12) + 12) % 12;
+                byLetter[LETTER_ORDER.indexOf(p.letterName)] = leavingTone(pc) ? null : pc;
+            }
+            return (i: number) => byLetter[i] ?? null;
+        },
         freeMode: () => false,
         cols: () => COLS,
         rows: () => ROWS,
@@ -130,14 +153,12 @@ export function initTonnetz(container: HTMLElement): void {
     // reads as a mesh triangle bridging accidental layers: the depth cue, no ghost nodes needed.
     scene.setTrianglePattern(true);
     scene.setMeshTiltedNonPerfect(true);
-    // Hide the leading-tone / semitone resolution arrows: that overlay is driven by the app's
-    // accumulator (note-on timestamps + resolved-midi logic) we don't feed, so it isn't meaningful here.
-    scene.setShowArrows(false);
     // The vendored scene hardcodes a debug (x, y, z) label under every node; hide them: the note names
     // are the labels that matter here.
     scene.setShowCoords(false);
     mountLatticeControls(container);
     if (showGhosts) scene.setShowGhostNodes(true);
+    scene.setShowArrows(showLeadingTones);   // leading-tone arrows: off unless the button / `lt=1` asks
     lastScaleSig = scaleSig(scale);
     // Render loop: advance the decay accumulator on the wall clock, then let the scene smooth toward it.
     const loop = () => {
@@ -210,6 +231,8 @@ export function renderTonnetzLive(state: LiveState): void {
 function applyScene(surface: PitchClass[], sounding: Set<number>, spelled: Set<string>): void {
     if (!scene) return;
     soundingSpelled = spelled;
+    const now = performance.now();
+    for (const pc of sounding) if (!soundingPCs.has(pc)) noteOnTimes.set(pc, now);
     const sig = scaleSig(surface);
     const scaleChanged = sig !== lastScaleSig;
     scale = surface;
@@ -283,6 +306,7 @@ function mountLatticeControls(container: HTMLElement): void {
     const p = params.get('planes');
     showPlanes = p === '1' || p === 'sounding';
     showGhosts = params.get('ghosts') === '1';
+    showLeadingTones = params.get('lt') === '1';
     const z = Number(params.get('z'));
     zRange = params.has('z') && Number.isInteger(z) ? Math.max(Z_MIN, Math.min(Z_MAX, z)) : Z_DEFAULT;
 
@@ -293,6 +317,7 @@ function mountLatticeControls(container: HTMLElement): void {
         <div class="lattice-btns" role="toolbar" aria-label="3D lattice display">
             <button type="button" class="lattice-btn lattice-planes" title="Draw the sheet a sounding symmetric chord forms across the lattice: every cell on it is the same augmented triad (stacked major thirds) or diminished seventh (stacked minor thirds), spelled a comma further each cycle">sym. chords</button>
             <button type="button" class="lattice-btn lattice-ghosts" title="Show every lattice cell in view, not only the 7-note collection">inactive nodes</button>
+            <button type="button" class="lattice-btn lattice-lt" title="Leading tones: arrows from each tendency note of the collection's tritone to the note a semitone away it resolves to (B→C and F→E in C major), lit while the source sounds">leading tones</button>
             <span class="lattice-z" title="Chromatic range (z): how many accidental layers each side of the naturals">
                 <button type="button" class="lattice-btn lattice-z-dec" aria-label="fewer accidental layers">−</button>
                 <span class="lattice-z-val" aria-live="polite"></span>
@@ -303,12 +328,14 @@ function mountLatticeControls(container: HTMLElement): void {
     captionEl = box.querySelector<HTMLElement>('.lattice-caption');
     const planesBtn = box.querySelector<HTMLButtonElement>('.lattice-planes')!;
     const ghostsBtn = box.querySelector<HTMLButtonElement>('.lattice-ghosts')!;
+    const ltBtn = box.querySelector<HTMLButtonElement>('.lattice-lt')!;
     const dec = box.querySelector<HTMLButtonElement>('.lattice-z-dec')!;
     const inc = box.querySelector<HTMLButtonElement>('.lattice-z-inc')!;
     const zVal = box.querySelector<HTMLElement>('.lattice-z-val')!;
     const paint = () => {
         planesBtn.setAttribute('aria-pressed', String(showPlanes));
         ghostsBtn.setAttribute('aria-pressed', String(showGhosts));
+        ltBtn.setAttribute('aria-pressed', String(showLeadingTones));
         zVal.textContent = `z ±${zRange}`;
         dec.disabled = zRange <= Z_MIN;
         inc.disabled = zRange >= Z_MAX;
@@ -329,6 +356,12 @@ function mountLatticeControls(container: HTMLElement): void {
         writeParam('ghosts', showGhosts ? '1' : null);
         paint();
         scene?.setShowGhostNodes(showGhosts);
+    });
+    ltBtn.addEventListener('click', () => {
+        showLeadingTones = !showLeadingTones;
+        writeParam('lt', showLeadingTones ? '1' : null);
+        paint();
+        scene?.setShowArrows(showLeadingTones);
     });
     const stepZ = (d: number) => {
         const next = Math.max(Z_MIN, Math.min(Z_MAX, zRange + d));
