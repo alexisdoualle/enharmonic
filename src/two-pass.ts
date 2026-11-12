@@ -13,7 +13,8 @@
  *     it, backward after) minimising local WOLF-cost (|ΔLoF| ≥ 6 intervals, a dim4/aug2 misspelling
  *     tell; pairs inside a diminished seventh are skipped). A COHERENT flip makes no wolves, so every
  *     change-point ties at 0; break that tie toward the side nearer the piece's committed line-of-fifths
- *     CENTRE (an emergent statistic, never a detected key).
+ *     CENTRE (an emergent statistic, never a detected key). An augmented sixth whose tones move outward
+ *     is the chord's point, not a wolf.
  *
  * Both passes are the shipped engine at its two-pass preset (letter look-ahead plus vertical guard, over
  * the accidental-economy fold). The reconciliation is pure array logic. This is the highest-accuracy tier;
@@ -22,6 +23,7 @@
 
 import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
+import { outwardPairs } from './aug6.js';
 import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
 
@@ -60,6 +62,13 @@ export interface TwoPassOptions {
     /** Group notes starting within this many `t` units of an onset's first note into that onset, in both
      *  passes (the backward pass sees reversed note-offs as its onsets). Default 0 (exact `t`). */
     onsetTolerance?: number;
+    /** Feed both passes the aug6 outward pairs ({@link outwardPairs}), so the engine's `aug6Outward` rule
+     *  spells a converging augmented sixth's rising tone as the ♯4. Default `true`. */
+    aug6Outward?: boolean;
+    /** In the merge's wolf-cost, an augmented sixth (ten fifths) whose sharper tone rises a semitone and whose
+     *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
+     *  one pitch class, not a misspelling. Default `true`. */
+    aug6Wedge?: boolean;
 }
 
 /** One pass's engine state right after it committed a note (introspection / visualiser only). */
@@ -122,10 +131,13 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
     return d;
 }
 
+/** Aug6 outward context per note, in a pass's note order: the partner's midi (undefined: none) and role. */
+interface Outward { partner: (number | undefined)[]; role: number[] }
+
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
  *  With `frames`, also record the engine state right after each note-on (read-only, no effect on spellings). */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[]): number[] {
+function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[], outward?: Outward): number[] {
     const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
@@ -136,7 +148,8 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
         if (e.on) {
-            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0); (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
+            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0, outward?.partner[e.i], outward?.role[e.i] ?? 0);
+            (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
             if (frames) frames[e.i] = { surface: s.getResolvedScale(), foldCentre: s.getFoldCentre(), decision: s.decision() };
         }
         // Read the note's committed spelling (before release); the engine counts note-ons per pitch and drops it only once its LAST overlapping
@@ -180,6 +193,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const backwardLA = opts.backwardLookAhead ?? 'forward';
     const centreTiebreak = opts.centreTiebreak ?? true;
     const centreMargin = opts.centreMargin ?? 0;
+    const wedge = opts.aug6Wedge ?? true;
     const N = sortedNotes;
     const n = N.length;
     if (n === 0) return { spellings: [], forward: [], backward: [], agrees: [], firstStable: 0, lastStable: -1 };
@@ -188,7 +202,12 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const exactF = resolveDirsExact(N);
     const fFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
     const bFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
-    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames);
+    let outF: Outward | undefined;
+    if (opts.aug6Outward ?? true) {
+        const op = outwardPairs(N);
+        outF = { partner: op.partner.map(y => (y >= 0 ? N[y]!.midi : undefined)), role: op.role };
+    }
+    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
@@ -196,7 +215,9 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     // Backward look-ahead uses the note's FORWARD resolveDir: processing in reverse, the resolution target
     // is already committed. bNotes[k] = original n-1-k.
     const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames);
+    // The aug6 pairs are found in forward time (the resolution is what follows); the backward pass reads them too.
+    const outB: Outward | undefined = outF && { partner: outF.partner.slice().reverse(), role: outF.role.slice().reverse() };
+    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames, outB);
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
     if (bFrames) bFrames.reverse();
@@ -252,7 +273,14 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
             for (let t = Math.max(1, i); t <= Math.min(n - 1, j); t++) {
                 if (inDim7(t - 1, t)) continue;
                 const a = pick(t - 1), b = pick(t);
-                if (a !== undefined && b !== undefined && Math.abs(a - b) >= 6) cost++;
+                if (a !== undefined && b !== undefined && Math.abs(a - b) >= 6) {
+                    // The aug6 WEDGE: ten fifths, the sharper tone rising and the flatter falling a semitone.
+                    if (wedge && Math.abs(a - b) === 10) {
+                        const hi = a > b ? t - 1 : t, lo = a > b ? t : t - 1;
+                        if (exactF[hi] === 1 && exactF[lo] === -1) continue;
+                    }
+                    cost++;
+                }
             }
             return cost;
         };

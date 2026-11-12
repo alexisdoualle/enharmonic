@@ -13,6 +13,7 @@ import type { Pitch, PitchClass } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
 import { resolveStep, resolveExactStep } from '../../src/kernel.js';
+import { outwardPairs } from '../../src/aug6.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -202,6 +203,19 @@ function onsetDirs(events: RawEvent[], horizon = LA_HORIZON, exact = false): Map
     return dir;
 }
 
+/** Each on-event's aug6 outward partner (its midi) and role, keyed by event index: the look-ahead context a
+ *  near-real-time caller feeds alongside the resolution directions. */
+function onsetOutward(events: RawEvent[]): Map<number, { partner: number; role: number }> {
+    const notes: { midi: number; tOn: number; tOff: number }[] = [], at: number[] = [];
+    const open = new Map<number, number[]>();
+    events.forEach((e, i) => {
+        if (e.type === 'on') { open.set(e.midi!, [...(open.get(e.midi!) ?? []), notes.length]); at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms }); }
+        else if (e.type === 'off') { const q = open.get(e.midi!); if (q?.length) notes[q.shift()!]!.tOff = e.t_ms; }
+    });
+    const op = outwardPairs(notes), out = new Map<number, { partner: number; role: number }>();
+    op.partner.forEach((y, k) => { if (y >= 0) out.set(at[k]!, { partner: notes[y]!.midi, role: op.role[k]! }); });
+    return out;
+}
 
 /** Build a replay for one fixture in the given latency mode. `spiral` overrides the streaming
  *  engine's spiral depth/centre (rt/la); the shipped default is range 6, centre +1. */
@@ -265,6 +279,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         : null;
     const dirs = onsetDirs(events);
     const exactDirs = onsetDirs(events, LA_HORIZON, true);
+    const outward = mode === 'la' ? onsetOutward(events) : new Map<number, { partner: number; role: number }>();
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -346,7 +361,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         } else {
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0);
+            const ow = outward.get(i);
+            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0);
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
             // ringing notes so the lattice shows the engine's current spellings, not their first ones.

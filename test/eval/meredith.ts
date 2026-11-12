@@ -23,7 +23,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { Speller, spellTwoPass, type Pitch } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs, type Pitch } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import type { StreamingSpeller } from './fixtures.js';
@@ -108,11 +108,16 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
         : new Speller({ lookAhead: mode === 'la' });
     const dirs = mode === 'la' ? resolveDirs(notes) : null;
     const exact = mode === 'la' ? resolveDirs(notes, true) : null;
+    const pairs = mode === 'la' ? outwardPairs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
     for (const e of events(notes)) {
         if (e.on) {
-            s.noteOn(e.midi, { t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0 });
+            const y = pairs ? pairs.partner[e.i]! : -1;
+            s.noteOn(e.midi, {
+                t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0,
+                ...(y >= 0 ? { outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[e.i]! } : {}),
+            });
             (pend.get(e.midi) ?? pend.set(e.midi, []).get(e.midi)!).push(e.i);
         } else {
             const q = pend.get(e.midi);
