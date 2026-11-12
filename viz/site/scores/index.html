@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-PQXHVN83KN"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-PQXHVN83KN');
+</script>
+<title>enharmonic: scoreboard</title>
+<link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="../favicon-32.png" sizes="32x32" type="image/png" />
+<link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+<meta name="description" content="How the enharmonic pitch spellers compare with published pitch-spelling algorithms, dataset by dataset: exact, flipped and wrong notes." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #fbfaf8; --ink: #1c1b19; --muted: #6c6860; --accent: #345a7d; --line: #e7e3dc; --card: #ffffff;
+    --ours: #2f6aa8; --base: #a8a296; --tip: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16161a; --ink: #e9e6e0; --muted: #9c988f; --accent: #93b6d8; --line: #2a2a30; --card: #1d1d22;
+      --ours: #5f9ad6; --base: #6b675e; --tip: #24242a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16161a; --ink: #e9e6e0; --muted: #9c988f; --accent: #93b6d8; --line: #2a2a30; --card: #1d1d22;
+    --ours: #5f9ad6; --base: #6b675e; --tip: #24242a;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Newsreader', Georgia, serif;
+         font-size: 18px; line-height: 1.6; font-optical-sizing: auto; }
+  .wrap { max-width: 50rem; margin: 0 auto; padding: 0 16px; }
+  header { padding: 8vh 0 1.5rem; }
+  .crumb { font-size: .95rem; margin: 0 0 1rem; }
+  h1 { font-weight: 500; font-size: clamp(2.2rem, 6vw, 3.1rem); letter-spacing: -0.02em; margin: 0 0 .4rem; line-height: 1.05; }
+  .tagline { color: var(--muted); font-size: 1.1rem; margin: 0; font-style: italic; }
+  h2 { font-weight: 600; font-size: .95rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 2.6rem 0 .8rem; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  a:hover { border-bottom-color: var(--accent); }
+  .mono, .num, table { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  .tiers { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; margin: 0 0 1rem; }
+  .tiers dt { font-weight: 600; }
+  .tiers dd { margin: 0; }
+  .picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 1rem; }
+  .picker button { font: inherit; font-size: .95rem; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line);
+                   background: var(--card); color: var(--ink); cursor: pointer; }
+  .picker button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .about { color: var(--muted); font-size: .98rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; position: relative; }
+  .legend { font-size: .9rem; color: var(--muted); margin: 0 0 .6rem; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 6px 0 0; vertical-align: -1px; }
+  .legend span + span { margin-left: 1.2rem; }
+  svg text { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; fill: var(--ink); }
+  svg .lab-ours { font-weight: 600; }
+  svg .grid { stroke: var(--line); }
+  svg .axis { fill: var(--muted); font-size: 11px; }
+  .tip { position: absolute; pointer-events: none; background: var(--tip); border: 1px solid var(--line); border-radius: 6px;
+         padding: 6px 10px; font: 12px/1.45 'IBM Plex Mono', monospace; box-shadow: 0 4px 14px rgba(0,0,0,.12); display: none;
+         max-width: min(320px, 90%); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 500; }
+  th:first-child, td:first-child { text-align: left; }
+  td.note, th.note { text-align: left; white-space: normal; min-width: 14rem; font-family: 'Newsreader', Georgia, serif; font-size: .9rem; color: var(--muted); }
+  tr.ours td:first-child { font-weight: 600; color: var(--ours); }
+  .small { font-size: .92rem; color: var(--muted); }
+  ul { padding-left: 1.2rem; }
+  footer { padding: 2rem 0 4rem; color: var(--muted); font-size: .92rem; border-top: 1px solid var(--line); margin-top: 3rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="crumb"><a href="../">enharmonic</a> · <a href="../viz/">visualiser</a> · <a href="https://github.com/alexisdoualle/enharmonic">GitHub</a></p>
+  <h1>Scoreboard</h1>
+  <p class="tagline">How enharmonic's spellers compare with published pitch spellers, dataset by dataset. Lab results, snapshot of 12 November 2026; the numbers are still moving.</p>
+</header>
+<main>
+  <p>Every speller gets the same MIDI notes, without key signatures, and every note is scored by the same three-tier scorer:</p>
+  <dl class="tiers">
+    <dt>Exact</dt><dd>spelled as the composer wrote it.</dd>
+    <dt>Flipped</dt><dd>part of a passage spelled consistently on the other enharmonic side (D♭ major read as C♯ major). Coherent, so not an error.</dd>
+    <dt>Wrong</dt><dd>breaks the spelling of the notes around it (C♯–F–G♯ for C♯–E♯–G♯). The bars below rank by this.</dd>
+  </dl>
+
+  <h2 id="by-dataset">By dataset</h2>
+  <div class="picker" id="picker" role="group" aria-label="Dataset"></div>
+  <div class="card" id="chart-card">
+    <p class="legend"><span><i style="background:var(--ours)"></i>enharmonic (ours)</span><span><i style="background:var(--base)"></i>other spellers</span></p>
+    <div id="chart"></div>
+    <div class="tip" id="tip" role="tooltip"></div>
+  </div>
+  <div class="scroll" style="margin-top:1rem">
+    <table id="table" aria-label="Scores for the selected dataset">
+      <thead><tr><th>Speller</th><th>Exact %</th><th>Flipped %</th><th>Wrong %</th><th>Wrong notes</th><th class="note">Note</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="about" id="about" style="margin-top:1rem"></p>
+
+  <h2 id="across">Across datasets</h2>
+  <p id="lead-line"></p>
+  <div class="scroll">
+    <table id="summary" aria-label="Two-pass against the best other speller on each dataset">
+      <thead><tr><th>Dataset</th><th>Two-pass wrong %</th><th>Best other speller</th><th>its wrong %</th><th>Two-pass rank</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <h2 id="ours">Our four spellers</h2>
+  <p>A ladder: each rung adds one idea to the one before.</p>
+  <ul>
+    <li><b>Core</b>: seven letter slots and interval scoring that penalises augmented and diminished intervals. Real time, about a hundred lines.</li>
+    <li><b>Real-time</b>: adds a diatonic frame that holds the enharmonic side of a passage. Zero latency, for live MIDI.</li>
+    <li><b>Look-ahead</b>: also reads where the next notes resolve, up to 16 notes ahead. Near real time.</li>
+    <li><b>Two-pass</b>: a forward and a backward pass over the whole piece, then a merge. Offline.</li>
+  </ul>
+
+  <h2 id="caveats">Read with care</h2>
+  <ul class="small">
+    <li>The other spellers' rows are our own runs of the implementations we could obtain or rebuild (music21, partitura's ps13, PKSpell, MuseScore, and reimplementations of the rest), scored with our scorer. They are not the authors' published figures.</li>
+    <li>Meredith's corpus (216 movements, clean and with human-performance timing) is the standard held-out benchmark. The lab corpus is our own curated set, so treat it as development data.</li>
+    <li>The stitched WTC datasets play each book as one unbroken stream. They test how a speller recovers from key changes, not its accuracy on a single piece; the per-movement datasets are the control.</li>
+    <li>PKSpell was trained on part of the lab corpus and on WTC, so its rows there are not a fair comparison.</li>
+  </ul>
+</main>
+<footer>
+  enharmonic is open source (Apache-2.0): <a href="https://github.com/alexisdoualle/enharmonic">github.com/alexisdoualle/enharmonic</a> · <span class="mono">npm install enharmonic</span><br />
+  ISMIR 2026 late-breaking demo #661.
+</footer>
+</div>
+
+<script>
+const DATA = {"datasets": [{"name": "Meredith (clean)", "pieces": "216 movements", "notes": 195972, "scored": "2026-10-13", "about": "Meredith 8x25000, the standard held-out pitch-spelling benchmark."}, {"name": "Lab corpus (50 shared)", "pieces": "50 fixtures", "notes": null, "scored": "2026-11-08", "about": "Our curated tonal corpus, restricted to the fixtures every baseline covers (paper chart rules)."}, {"name": "Meredith (noisy)", "pieces": "216 movements", "notes": 195972, "scored": "2026-10-13", "about": "Same corpus with human-performance timing noise."}, {"name": "Debussy manuscripts", "pieces": "101 pages, 37 documents", "notes": 44598, "scored": "2026-11-09", "about": "Debussy's autograph manuscripts, hand-transcribed. Each page scored separately (cold start per page). Exploratory."}, {"name": "WTC I (stitched)", "pieces": "48 movements, one stream", "notes": 42381, "scored": "2026-11-12", "about": "All 24 preludes and fugues of Book I (48 movements) played as one continuous stream, no reset between pieces and no key signatures: tests how a speller adapts across key changes. PKSpell was trained on WTC, so its row is not a fair comparison. PSE left out (run timed out, no predictions). Uses the corrected Fugue 13 fixture. Most of the baselines' extra errors here come from the stitching itself (ps13 fixes tonic spellings from the first note, Chew & Chen averages since the start, Temperley drifts a comma and never returns): see the per-movement dataset, where ps13 and Temperley tie our look-ahead."}, {"name": "WTC II (stitched)", "pieces": "48 movements, one stream", "notes": 51699, "scored": "2026-11-12", "about": "All 24 preludes and fugues of Book II (48 movements) played as one continuous stream, no reset between pieces and no key signatures: tests how a speller adapts across key changes. PKSpell was trained on WTC, so its row is not a fair comparison. PSE left out (run timed out, no predictions). Most of the baselines' extra errors here come from the stitching itself (ps13 fixes tonic spellings from the first note, Chew & Chen averages since the start, Temperley drifts a comma and never returns): see the per-movement dataset, where ps13 and Temperley tie our look-ahead."}, {"name": "WTC I (per movement)", "pieces": "48 movements, each from a cold start", "notes": 42381, "scored": "2026-11-11", "about": "The same Book I notes, but every speller restarts cold at each of the 48 movements; the joined predictions are scored on the stitched ground truth. Control for the stitched dataset: it shows how much of each speller's stitched score is the stitching. PSE left out (13 of 96 movements time out)."}, {"name": "WTC II (per movement)", "pieces": "48 movements, each from a cold start", "notes": 51699, "scored": "2026-11-11", "about": "The same Book II notes, but every speller restarts cold at each of the 48 movements; the joined predictions are scored on the stitched ground truth. Control for the stitched dataset: it shows how much of each speller's stitched score is the stitching. PSE left out (13 of 96 movements time out)."}], "scores": [{"ds": "Meredith (clean)", "speller": "Core", "ours": true, "exact": 99.37, "flipped": 0.09, "wrong": 0.54, "coherent": 99.46, "wrongNotes": 1062, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Real-time", "ours": true, "exact": 99.57, "flipped": 0.05, "wrong": 0.38, "coherent": 99.62, "wrongNotes": 739, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Look-ahead", "ours": true, "exact": 99.75, "flipped": 0.05, "wrong": 0.21, "coherent": 99.79, "wrongNotes": 402, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Two-pass", "ours": true, "exact": 99.87, "flipped": 0.0, "wrong": 0.13, "coherent": 99.87, "wrongNotes": 259, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Cambouropoulos", "ours": false, "exact": 98.85, "flipped": 0.24, "wrong": 0.91, "coherent": 99.09, "wrongNotes": 1782, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Chew & Chen", "ours": false, "exact": 99.0, "flipped": 0.14, "wrong": 0.86, "coherent": 99.14, "wrongNotes": 1682, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "music21", "ours": false, "exact": 95.53, "flipped": 0.12, "wrong": 4.36, "coherent": 95.64, "wrongNotes": 8535, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Longuet-Higgins", "ours": false, "exact": 92.96, "flipped": 6.42, "wrong": 0.62, "coherent": 99.38, "wrongNotes": 1220, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "PKSpell", "ours": false, "exact": 99.83, "flipped": 0.0, "wrong": 0.17, "coherent": 99.83, "wrongNotes": 335, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "ps13", "ours": false, "exact": 99.28, "flipped": 0.32, "wrong": 0.4, "coherent": 99.6, "wrongNotes": 775, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (clean)", "speller": "Temperley", "ours": false, "exact": 94.92, "flipped": 4.78, "wrong": 0.3, "coherent": 99.7, "wrongNotes": 580, "notes": 195972, "coverage": 99.8, "note": "all flips one comma"}, {"ds": "Lab corpus (50 shared)", "speller": "Core", "ours": true, "exact": 94.99, "flipped": 2.91, "wrong": 2.1, "coherent": 97.9, "wrongNotes": 3144, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Real-time", "ours": true, "exact": 95.17, "flipped": 3.2, "wrong": 1.64, "coherent": 98.36, "wrongNotes": 2448, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Look-ahead", "ours": true, "exact": 95.42, "flipped": 3.19, "wrong": 1.39, "coherent": 98.61, "wrongNotes": 2075, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Two-pass", "ours": true, "exact": 97.87, "flipped": 0.92, "wrong": 1.21, "coherent": 98.79, "wrongNotes": 1803, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Chew & Chen", "ours": false, "exact": 94.59, "flipped": 3.21, "wrong": 2.2, "coherent": 97.8, "wrongNotes": 3297, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Longuet-Higgins", "ours": false, "exact": 87.76, "flipped": 9.99, "wrong": 2.26, "coherent": 97.74, "wrongNotes": 3374, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Cambouropoulos", "ours": false, "exact": 96.1, "flipped": 1.28, "wrong": 2.62, "coherent": 97.38, "wrongNotes": 3920, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "ps13", "ours": false, "exact": 95.77, "flipped": 2.39, "wrong": 1.84, "coherent": 98.16, "wrongNotes": 2749, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "Temperley", "ours": false, "exact": 76.93, "flipped": 21.54, "wrong": 1.53, "coherent": 98.47, "wrongNotes": 2283, "notes": null, "coverage": null, "note": "29% of its flips (9,346 notes, 6.3% of all) are two commas off (over-rotated), all in two pieces; the scorer credits them as flips. Every other speller flips by exactly one comma."}, {"ds": "Lab corpus (50 shared)", "speller": "PKSpell", "ours": false, "exact": 97.56, "flipped": 1.18, "wrong": 1.26, "coherent": 98.74, "wrongNotes": 1881, "notes": null, "coverage": null, "note": "PKSpell trained on part of it"}, {"ds": "Lab corpus (50 shared)", "speller": "music21 (key-aware)", "ours": false, "exact": 83.56, "flipped": 5.87, "wrong": 10.57, "coherent": 89.43, "wrongNotes": 15809, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "music21", "ours": false, "exact": 92.02, "flipped": 0.76, "wrong": 7.22, "coherent": 92.78, "wrongNotes": 10802, "notes": null, "coverage": null, "note": ""}, {"ds": "Lab corpus (50 shared)", "speller": "MuseScore", "ours": false, "exact": 95.64, "flipped": 0.73, "wrong": 3.63, "coherent": 96.37, "wrongNotes": 4492, "notes": null, "coverage": null, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Core", "ours": true, "exact": 99.28, "flipped": 0.18, "wrong": 0.54, "coherent": 99.46, "wrongNotes": 1067, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Real-time", "ours": true, "exact": 99.55, "flipped": 0.04, "wrong": 0.41, "coherent": 99.59, "wrongNotes": 808, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Look-ahead", "ours": true, "exact": 99.72, "flipped": 0.03, "wrong": 0.25, "coherent": 99.75, "wrongNotes": 490, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Two-pass", "ours": true, "exact": 99.82, "flipped": 0.02, "wrong": 0.16, "coherent": 99.84, "wrongNotes": 317, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Cambouropoulos", "ours": false, "exact": 98.82, "flipped": 0.3, "wrong": 0.87, "coherent": 99.13, "wrongNotes": 1714, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Chew & Chen", "ours": false, "exact": 98.86, "flipped": 0.23, "wrong": 0.91, "coherent": 99.09, "wrongNotes": 1787, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "music21", "ours": false, "exact": 95.47, "flipped": 0.22, "wrong": 4.3, "coherent": 95.7, "wrongNotes": 8431, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Longuet-Higgins", "ours": false, "exact": 93.75, "flipped": 5.68, "wrong": 0.57, "coherent": 99.43, "wrongNotes": 1110, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "PKSpell", "ours": false, "exact": 99.87, "flipped": 0.0, "wrong": 0.13, "coherent": 99.87, "wrongNotes": 264, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "ps13", "ours": false, "exact": 99.25, "flipped": 0.34, "wrong": 0.41, "coherent": 99.59, "wrongNotes": 801, "notes": 195972, "coverage": 100.0, "note": ""}, {"ds": "Meredith (noisy)", "speller": "Temperley", "ours": false, "exact": 91.28, "flipped": 8.39, "wrong": 0.33, "coherent": 99.67, "wrongNotes": 633, "notes": 195972, "coverage": 98.8, "note": "all flips one comma"}, {"ds": "Debussy manuscripts", "speller": "Temperley", "ours": false, "exact": 63.3, "flipped": 30.81, "wrong": 5.89, "coherent": 94.11, "wrongNotes": 2592, "notes": 44598, "coverage": 98.7, "note": "leaves some notes unspelled; 0.9% of its flips (118 notes) are two commas off (B as D♭♭♭), credited as flips"}, {"ds": "Debussy manuscripts", "speller": "Two-pass", "ours": true, "exact": 87.27, "flipped": 6.8, "wrong": 5.93, "coherent": 94.07, "wrongNotes": 2645, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "Look-ahead", "ours": true, "exact": 82.04, "flipped": 11.83, "wrong": 6.12, "coherent": 93.88, "wrongNotes": 2730, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "Longuet-Higgins", "ours": false, "exact": 66.64, "flipped": 26.72, "wrong": 6.65, "coherent": 93.35, "wrongNotes": 2964, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "Real-time", "ours": true, "exact": 81.62, "flipped": 11.64, "wrong": 6.74, "coherent": 93.26, "wrongNotes": 3007, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "PKSpell", "ours": false, "exact": 86.99, "flipped": 6.17, "wrong": 6.84, "coherent": 93.16, "wrongNotes": 3051, "notes": 44598, "coverage": 100.0, "note": "trained on ASAP, which includes Debussy"}, {"ds": "Debussy manuscripts", "speller": "Cambouropoulos", "ours": false, "exact": 86.28, "flipped": 6.39, "wrong": 7.33, "coherent": 92.67, "wrongNotes": 3268, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "Core", "ours": true, "exact": 81.37, "flipped": 11.26, "wrong": 7.37, "coherent": 92.63, "wrongNotes": 3285, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "Chew & Chen", "ours": false, "exact": 75.79, "flipped": 16.33, "wrong": 7.88, "coherent": 92.12, "wrongNotes": 3516, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "ps13", "ours": false, "exact": 73.72, "flipped": 18.24, "wrong": 8.04, "coherent": 91.96, "wrongNotes": 3584, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "ps13 (Lisp)", "ours": false, "exact": 73.76, "flipped": 18.13, "wrong": 8.11, "coherent": 91.89, "wrongNotes": 3616, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "Debussy manuscripts", "speller": "music21", "ours": false, "exact": 81.11, "flipped": 2.85, "wrong": 16.04, "coherent": 83.96, "wrongNotes": 7152, "notes": 44598, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Core", "ours": true, "exact": 84.63, "flipped": 14.88, "wrong": 0.5, "coherent": 99.5, "wrongNotes": 211, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Real-time", "ours": true, "exact": 88.03, "flipped": 11.55, "wrong": 0.42, "coherent": 99.58, "wrongNotes": 178, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Look-ahead", "ours": true, "exact": 88.26, "flipped": 11.45, "wrong": 0.29, "coherent": 99.71, "wrongNotes": 125, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Two-pass", "ours": true, "exact": 88.92, "flipped": 10.71, "wrong": 0.38, "coherent": 99.62, "wrongNotes": 160, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Longuet-Higgins", "ours": false, "exact": 67.23, "flipped": 32.15, "wrong": 0.62, "coherent": 99.38, "wrongNotes": 262, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Temperley", "ours": false, "exact": 7.4, "flipped": 91.02, "wrong": 1.57, "coherent": 98.43, "wrongNotes": 666, "notes": 42381, "coverage": 99.93, "note": "drifts 1-2 commas flatward over the stitched stream and never folds back; coherent, so scored flipped"}, {"ds": "WTC I (stitched)", "speller": "PKSpell", "ours": false, "exact": 77.38, "flipped": 21.42, "wrong": 1.19, "coherent": 98.81, "wrongNotes": 506, "notes": 42381, "coverage": 100.0, "note": "trained on WTC; not a fair comparison"}, {"ds": "WTC I (stitched)", "speller": "Cambouropoulos", "ours": false, "exact": 86.83, "flipped": 10.18, "wrong": 2.99, "coherent": 97.01, "wrongNotes": 1266, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "ps13", "ours": false, "exact": 70.19, "flipped": 25.75, "wrong": 4.06, "coherent": 95.94, "wrongNotes": 1720, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "Chew & Chen", "ours": false, "exact": 43.13, "flipped": 52.03, "wrong": 4.83, "coherent": 95.17, "wrongNotes": 2049, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "MuseScore", "ours": false, "exact": 86.96, "flipped": 4.6, "wrong": 8.44, "coherent": 91.56, "wrongNotes": 3455, "notes": 42381, "coverage": 96.58, "note": "abstains on some notes; % of committed"}, {"ds": "WTC I (stitched)", "speller": "music21 (default)", "ours": false, "exact": 80.9, "flipped": 4.57, "wrong": 14.53, "coherent": 85.47, "wrongNotes": 6157, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (stitched)", "speller": "music21 (Krumhansl key)", "ours": false, "exact": 65.17, "flipped": 19.37, "wrong": 15.46, "coherent": 84.54, "wrongNotes": 6553, "notes": 42381, "coverage": 100.0, "note": "music21's other key finders are within one point"}, {"ds": "WTC II (stitched)", "speller": "Core", "ours": true, "exact": 80.32, "flipped": 18.95, "wrong": 0.73, "coherent": 99.27, "wrongNotes": 378, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Real-time", "ours": true, "exact": 90.56, "flipped": 8.88, "wrong": 0.56, "coherent": 99.44, "wrongNotes": 288, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Look-ahead", "ours": true, "exact": 90.85, "flipped": 8.83, "wrong": 0.32, "coherent": 99.68, "wrongNotes": 165, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Two-pass", "ours": true, "exact": 85.54, "flipped": 13.93, "wrong": 0.53, "coherent": 99.47, "wrongNotes": 273, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Longuet-Higgins", "ours": false, "exact": 66.93, "flipped": 32.18, "wrong": 0.89, "coherent": 99.11, "wrongNotes": 461, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Temperley", "ours": false, "exact": 6.37, "flipped": 92.21, "wrong": 1.42, "coherent": 98.58, "wrongNotes": 732, "notes": 51699, "coverage": 99.5, "note": "drifts 1-2 commas flatward over the stitched stream and never folds back; coherent, so scored flipped"}, {"ds": "WTC II (stitched)", "speller": "PKSpell", "ours": false, "exact": 91.67, "flipped": 3.17, "wrong": 5.16, "coherent": 94.84, "wrongNotes": 2670, "notes": 51699, "coverage": 100.0, "note": "trained on WTC; not a fair comparison"}, {"ds": "WTC II (stitched)", "speller": "Cambouropoulos", "ours": false, "exact": 84.91, "flipped": 11.16, "wrong": 3.93, "coherent": 96.07, "wrongNotes": 2034, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "ps13", "ours": false, "exact": 64.32, "flipped": 31.35, "wrong": 4.33, "coherent": 95.67, "wrongNotes": 2240, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "Chew & Chen", "ours": false, "exact": 37.12, "flipped": 58.95, "wrong": 3.93, "coherent": 96.07, "wrongNotes": 2032, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "MuseScore", "ours": false, "exact": 88.78, "flipped": 3.04, "wrong": 8.18, "coherent": 91.82, "wrongNotes": 4113, "notes": 51699, "coverage": 97.25, "note": "abstains on some notes; % of committed"}, {"ds": "WTC II (stitched)", "speller": "music21 (default)", "ours": false, "exact": 77.11, "flipped": 5.96, "wrong": 16.93, "coherent": 83.07, "wrongNotes": 8754, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (stitched)", "speller": "music21 (Krumhansl key)", "ours": false, "exact": 27.54, "flipped": 56.78, "wrong": 15.68, "coherent": 84.32, "wrongNotes": 8107, "notes": 51699, "coverage": 100.0, "note": "music21's other key finders are within one point"}, {"ds": "WTC I (per movement)", "speller": "Core", "ours": true, "exact": 88.6, "flipped": 10.69, "wrong": 0.71, "coherent": 99.29, "wrongNotes": 301, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Real-time", "ours": true, "exact": 88.78, "flipped": 10.66, "wrong": 0.55, "coherent": 99.44, "wrongNotes": 235, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Look-ahead", "ours": true, "exact": 88.96, "flipped": 10.71, "wrong": 0.33, "coherent": 99.67, "wrongNotes": 140, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Two-pass", "ours": true, "exact": 88.2, "flipped": 11.51, "wrong": 0.28, "coherent": 99.71, "wrongNotes": 119, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Longuet-Higgins", "ours": false, "exact": 78.99, "flipped": 20.41, "wrong": 0.6, "coherent": 99.4, "wrongNotes": 256, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Temperley", "ours": false, "exact": 72.94, "flipped": 26.64, "wrong": 0.42, "coherent": 99.58, "wrongNotes": 173, "notes": 42381, "coverage": 98.07, "note": "Melisma skipped some notes; % of committed"}, {"ds": "WTC I (per movement)", "speller": "PKSpell", "ours": false, "exact": 89.26, "flipped": 10.03, "wrong": 0.71, "coherent": 99.29, "wrongNotes": 299, "notes": 42381, "coverage": 100.0, "note": "trained on WTC; not a fair comparison"}, {"ds": "WTC I (per movement)", "speller": "Cambouropoulos", "ours": false, "exact": 87.16, "flipped": 10.0, "wrong": 2.84, "coherent": 97.16, "wrongNotes": 1203, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "ps13", "ours": false, "exact": 92.77, "flipped": 6.92, "wrong": 0.31, "coherent": 99.69, "wrongNotes": 131, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "Chew & Chen", "ours": false, "exact": 89.28, "flipped": 9.79, "wrong": 0.92, "coherent": 99.07, "wrongNotes": 391, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "MuseScore", "ours": false, "exact": 96.74, "flipped": 2.03, "wrong": 1.23, "coherent": 98.77, "wrongNotes": 502, "notes": 42381, "coverage": 96.59, "note": "reads each movement's key signature (key-informed, unlike the others)"}, {"ds": "WTC I (per movement)", "speller": "music21 (default)", "ours": false, "exact": 80.9, "flipped": 4.57, "wrong": 14.53, "coherent": 85.47, "wrongNotes": 6157, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC I (per movement)", "speller": "music21 (Krumhansl key)", "ours": false, "exact": 88.08, "flipped": 6.24, "wrong": 5.68, "coherent": 94.32, "wrongNotes": 2407, "notes": 42381, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Core", "ours": true, "exact": 85.1, "flipped": 14.07, "wrong": 0.84, "coherent": 99.17, "wrongNotes": 433, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Real-time", "ours": true, "exact": 93.55, "flipped": 5.88, "wrong": 0.56, "coherent": 99.43, "wrongNotes": 292, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Look-ahead", "ours": true, "exact": 93.75, "flipped": 5.88, "wrong": 0.37, "coherent": 99.63, "wrongNotes": 191, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Two-pass", "ours": true, "exact": 84.88, "flipped": 14.61, "wrong": 0.51, "coherent": 99.49, "wrongNotes": 262, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Longuet-Higgins", "ours": false, "exact": 73.61, "flipped": 25.43, "wrong": 0.96, "coherent": 99.04, "wrongNotes": 497, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Temperley", "ours": false, "exact": 70.47, "flipped": 29.25, "wrong": 0.28, "coherent": 99.72, "wrongNotes": 144, "notes": 51699, "coverage": 99.56, "note": "Melisma skipped some notes; % of committed"}, {"ds": "WTC II (per movement)", "speller": "PKSpell", "ours": false, "exact": 88.32, "flipped": 11.16, "wrong": 0.53, "coherent": 99.48, "wrongNotes": 272, "notes": 51699, "coverage": 100.0, "note": "trained on WTC; not a fair comparison"}, {"ds": "WTC II (per movement)", "speller": "Cambouropoulos", "ours": false, "exact": 84.84, "flipped": 11.17, "wrong": 3.99, "coherent": 96.01, "wrongNotes": 2063, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "ps13", "ours": false, "exact": 90.65, "flipped": 8.96, "wrong": 0.39, "coherent": 99.61, "wrongNotes": 202, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "Chew & Chen", "ours": false, "exact": 87.62, "flipped": 11.32, "wrong": 1.06, "coherent": 98.94, "wrongNotes": 546, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "MuseScore", "ours": false, "exact": 98.58, "flipped": 0.01, "wrong": 1.41, "coherent": 98.59, "wrongNotes": 706, "notes": 51699, "coverage": 96.97, "note": "reads each movement's key signature (key-informed, unlike the others)"}, {"ds": "WTC II (per movement)", "speller": "music21 (default)", "ours": false, "exact": 77.11, "flipped": 5.96, "wrong": 16.93, "coherent": 83.07, "wrongNotes": 8754, "notes": 51699, "coverage": 100.0, "note": ""}, {"ds": "WTC II (per movement)", "speller": "music21 (Krumhansl key)", "ours": false, "exact": 86.32, "flipped": 7.12, "wrong": 6.56, "coherent": 93.44, "wrongNotes": 3394, "notes": 51699, "coverage": 100.0, "note": ""}]};
+const $ = (s) => document.querySelector(s);
+const pct = (v) => v.toFixed(2);
+const int = (v) => v.toLocaleString('en-US');
+let current = DATA.datasets[0].name;
+const hashName = decodeURIComponent(location.hash.slice(1));
+if (DATA.datasets.some((d) => d.name === hashName)) current = hashName;
+
+function el(tag, attrs = {}, text) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function picker() {
+  const p = $('#picker');
+  p.replaceChildren(...DATA.datasets.map((d) => {
+    const b = el('button', { type: 'button', 'aria-pressed': String(d.name === current) }, d.name);
+    b.onclick = () => { current = d.name; history.replaceState(null, '', '#' + encodeURIComponent(d.name)); render(); };
+    return b;
+  }));
+}
+
+function rows() { return DATA.scores.filter((r) => r.ds === current).sort((a, b) => a.wrong - b.wrong); }
+
+function chart() {
+  const host = $('#chart'), tip = $('#tip'), card = $('#chart-card');
+  const rs = rows();
+  const W = Math.max(280, host.clientWidth);
+  const labW = Math.min(200, Math.max(120, W * 0.32)), valW = 52, rowH = 26, top = 6, bottom = 22;
+  const plotW = W - labW - valW;
+  // fixed height (the largest dataset) so switching datasets never moves what is below
+  const maxRows = Math.max(...DATA.datasets.map((d) => DATA.scores.filter((r) => r.ds === d.name).length));
+  const H = top + maxRows * rowH + bottom;
+  const want = plotW < 260 ? 2 : 4, raw = (Math.max(...rs.map((r) => r.wrong)) || 1) / want;
+  const mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const ticks = Math.ceil((Math.max(...rs.map((r) => r.wrong)) || 1) / step), max = ticks * step;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `Wrong-note rate per speller on ${current}`);
+  const mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; };
+  for (let i = 0; i <= ticks; i++) {
+    const v = (max * i) / ticks, x = labW + (plotW * i) / ticks;
+    mk('line', { x1: x, x2: x, y1: top, y2: top + rs.length * rowH, class: 'grid' });
+    const t = mk('text', { x, y: top + rs.length * rowH + 16, 'text-anchor': i === 0 ? 'start' : 'middle', class: 'axis' }); t.textContent = +v.toFixed(2) + '%';
+  }
+  rs.forEach((r, i) => {
+    const y = top + i * rowH, bh = 14, by = y + (rowH - bh) / 2;
+    const w = Math.max(2, (plotW * r.wrong) / max);
+    const name = mk('text', { x: labW - 8, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: r.ours ? 'lab-ours' : '' });
+    name.textContent = r.speller.length > 24 ? r.speller.slice(0, 23) + '…' : r.speller;
+    // bar with a rounded data end anchored at the baseline
+    const rad = Math.min(4, w / 2);
+    mk('path', { d: `M${labW},${by} h${w - rad} a${rad},${rad} 0 0 1 ${rad},${rad} v${bh - 2 * rad} a${rad},${rad} 0 0 1 ${-rad},${rad} h${-(w - rad)} z`,
+                 fill: r.ours ? 'var(--ours)' : 'var(--base)' });
+    const val = mk('text', { x: labW + w + 6, y: y + rowH / 2 + 4 }); val.textContent = pct(r.wrong);
+    const hit = mk('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' });
+    const show = (ev) => {
+      tip.replaceChildren(
+        el('div', { style: 'font-weight:600' }, r.speller),
+        el('div', {}, `exact ${pct(r.exact)}%  flipped ${pct(r.flipped)}%`),
+        el('div', {}, `wrong ${pct(r.wrong)}% (${int(r.wrongNotes)} notes)`),
+        ...(r.note ? [el('div', { style: 'white-space:normal;color:var(--muted)' }, r.note)] : []));
+      tip.style.display = 'block';
+      const cb = card.getBoundingClientRect();
+      const px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - cb.left, py = y + rowH + 16 + 40;
+      tip.style.left = Math.max(8, Math.min(px + 12, cb.width - tip.offsetWidth - 8)) + 'px';
+      tip.style.top = py + 'px';
+    };
+    hit.addEventListener('mousemove', show); hit.addEventListener('touchstart', show, { passive: true });
+    hit.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+  host.replaceChildren(svg);
+}
+
+function table() {
+  $('#table tbody').replaceChildren(...rows().map((r) => {
+    const tr = el('tr', { class: r.ours ? 'ours' : '' });
+    tr.append(el('td', {}, r.speller), el('td', {}, pct(r.exact)), el('td', {}, pct(r.flipped)), el('td', {}, pct(r.wrong)),
+              el('td', {}, int(r.wrongNotes)), el('td', { class: 'note' }, r.note));
+    return tr;
+  }));
+}
+
+function about() {
+  const d = DATA.datasets.find((x) => x.name === current);
+  $('#about').textContent = `${d.about} ${d.pieces}${d.notes ? ', ' + int(d.notes) + ' notes' : ''}. Scored ${d.scored}.`;
+}
+
+function summary() {
+  let leads = 0;
+  const trs = DATA.datasets.map((d) => {
+    const rs = DATA.scores.filter((r) => r.ds === d.name);
+    const tp = rs.find((r) => r.speller === 'Two-pass');
+    const best = rs.filter((r) => !r.ours).sort((a, b) => a.wrong - b.wrong)[0];
+    const rank = 1 + rs.filter((r) => r.wrong < tp.wrong).length;
+    if (rank === 1) leads++;
+    const tr = el('tr');
+    tr.append(el('td', {}, d.name), el('td', {}, pct(tp.wrong)), el('td', {}, best.speller), el('td', {}, pct(best.wrong)), el('td', {}, `${rank} of ${rs.length}`));
+    return tr;
+  });
+  $('#summary tbody').replaceChildren(...trs);
+  $('#lead-line').textContent = `Our two-pass speller has the lowest wrong-note rate on ${leads} of ${DATA.datasets.length} datasets.`;
+}
+
+function render() { picker(); about(); chart(); table(); }
+render(); summary();
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(chart, 120); });
+</script>
+</body>
+</html>
