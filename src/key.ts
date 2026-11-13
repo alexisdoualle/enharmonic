@@ -13,11 +13,12 @@
  * Two tables:
  *   - `'temperley'`: Temperley's key profiles, pitch-class distributions of the Kostka–Payne textbook corpus
  *     (D. Temperley, *Music and Probability*, MIT Press 2007, ch. 4; the same numbers as music21's
- *     `TemperleyKostkaPayne`). A fitted profile; the look-ahead tier reads it on ±6 onsets.
+ *     `TemperleyKostkaPayne`). A fitted profile, kept for comparison; no tier reads it by default.
  *   - `'tonic-triad'`: from theory, no fitted numbers. "A key is its tonic triad inside its seven-note
  *     collection": tonic-triad tones 3, the collection's other tones 2, the rest 0; major uses the diatonic
  *     collection, minor the harmonic minor (the minor collection whose leading tone is a scale tone).
- *     The two-pass tier reads it on ±12 onsets.
+ *     Both look-ahead and two-pass read it on ±12 onsets (the default). At ±6 it ties Temperley; the wider
+ *     window reads the surrounding key instead of a brief tonicization.
  * Pearson correlation ignores a table's scale and offset, so only the ratio of the gaps between levels matters.
  *
  * The key-degree gate ({@link isKeyDegree}, engine option `keyDegreeGate`) reads its own key, the tonic-triad
@@ -40,9 +41,9 @@ export interface KeyNote {
 export type KeyTable = 'temperley' | 'tonic-triad';
 
 export interface LocalKeyOptions {
-    /** The key table. Default `'temperley'` (the look-ahead tier's). */
+    /** The key table. Default `'tonic-triad'`. */
     table?: KeyTable;
-    /** Onsets on each side of the note's own onset in the window (co-struck notes are one onset). Default 6. */
+    /** Onsets on each side of the note's own onset in the window (co-struck notes are one onset). Default 12. */
     radius?: number;
     /** What `radius` counts: `'onsets'` (default) or `'notes'`, the notes of the input order on each side of
      *  the note itself (the input must then be in onset order, co-struck notes in any fixed order). */
@@ -105,8 +106,8 @@ function bestKey(h: readonly number[], table: KeyTable): LocalKey | null {
  * values. Notes need not be sorted, unless `unit` is `'notes'`.
  */
 export function localKeys(notes: readonly KeyNote[], opts: LocalKeyOptions = {}): (LocalKey | null)[] {
-    const table = opts.table ?? 'temperley';
-    const radius = opts.radius ?? 6;
+    const table = opts.table ?? 'tonic-triad';
+    const radius = opts.radius ?? 12;
     const n = notes.length;
     if (opts.unit === 'notes') {
         const pre: number[][] = [new Array<number>(12).fill(0)];

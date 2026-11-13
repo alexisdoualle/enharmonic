@@ -218,7 +218,7 @@ function onsetOutward(events: RawEvent[]): Map<number, { partner: number; role: 
     return out;
 }
 
-/** Each on-event's local key (default Temperley's profile on ±6 onsets centred on it; `degreeKeys` for the
+/** Each on-event's local key (default the tonic-triad table on ±12 onsets centred on it; `degreeKeys` for the
  *  key-degree gate), keyed by event index: the gates' context, fed alongside the resolution directions. */
 function onsetKeys(events: RawEvent[], read: (notes: { midi: number; tOn: number }[]) => (LocalKey | null)[] = localKeys): Map<number, LocalKey | null> {
     const notes: { midi: number; tOn: number }[] = [], at: number[] = [];

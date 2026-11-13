@@ -86,10 +86,10 @@ seventh rises chromatically (D→D♯ in E7) keeps its spelling. `spellTwoPass` 
 `localKey` names a leading tone of the local key (its ♯4 leading to the dominant; in minor also the raised
 6th and 7th): a falling chromatic line from it cancels it, so C♯→C in D minor stays C♯ instead of the
 look-ahead's letter step D♭→C. `localKeys(notes)` reads each note's key from `{ midi, tOn }` notes, on the
-onsets from 6 before to 6 after the note's own, by correlation with Temperley's key profiles (*Music and
-Probability*, 2007); pass it as `localKey`. Rising notes are untouched. `spellTwoPass` does this itself with a
-key table from theory instead (a key is its tonic triad inside its seven-note collection, no fitted numbers)
-on ±12 onsets (`leadingToneGate: false` turns it off).
+onsets from 12 before to 12 after the note's own, by correlation with a key table from theory (a key is its
+tonic triad inside its seven-note collection: tonic-triad tones 3, other collection tones 2, the rest 0; no
+fitted numbers); pass it as `localKey`. `spellTwoPass` reads the same key itself (`leadingToneGate: false` turns
+it off). Temperley's profiles (*Music and Probability*, 2007) remain available as `{ table: 'temperley' }`.
 
 `degreeKey` is the key-degree gate's key: a semitone resolution is a letter step only into a degree of the
 local key (major: its seven degrees; minor: natural minor plus the raised 6th and 7th), and a move into a
