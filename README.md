@@ -77,7 +77,9 @@ shape how later notes are spelled; without `t` every note counts.
 `outwardPartner` and `outwardRole` name an augmented sixth by where its tones go: two tones ten semitones
 apart that move outward onto one pitch class (A♭–C–E♭–F♯ → G) make the rising tone the ♯4, spelled F♯
 against A♭, not G♭. `outwardPairs(notes)` finds the pairs from `{ midi, tOn, tOff }` notes sorted by onset;
-pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
+the tones meet when one of the next 8 onsets strikes both goals, or when their first moves (re-strikes skipped)
+land on one onset, so a German sixth repeated across a bar still pairs (`{ firstMoveMeet: false }` turns that
+off; in `spellTwoPass`, `aug6FirstMoveMeet: false`). Pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
 only when the meeting pitch is in the key and the rising tone is not, so a dominant seventh whose diatonic
 seventh rises chromatically (D→D♯ in E7) keeps its spelling. `spellTwoPass` does this itself (`aug6Outward: false` turns it off).
 
@@ -116,7 +118,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.79% | 99.84% | 99.74% | 99.77% |
+| + look-ahead | 99.80% | 99.85% | 99.74% | 99.77% |
 | + two-pass | 99.89% | 99.89% | 99.84% | 99.86% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the

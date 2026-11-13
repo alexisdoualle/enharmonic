@@ -24,6 +24,15 @@ export interface OutwardPairs {
     readonly role: number[];
 }
 
+/** Options for {@link outwardPairs}. */
+export interface OutwardOptions {
+    /** MEETING BY FIRST MOVES. The two tones of an augmented sixth also meet when their first moves (re-strikes
+     *  skipped, {@link firstExactMoves}) land on one onset, however far away: a German sixth repeated across many
+     *  onsets (Haydn Sym. 99/ii) resolves past the look window, but both tones still move at once. Default
+     *  `true`. */
+    firstMoveMeet?: boolean;
+}
+
 const pcOf = (m: number) => ((m % 12) + 12) % 12;
 
 /** How many onsets after a note the onset finder looks for its first semitone move. */
@@ -37,8 +46,9 @@ const SOUNDING_NOTES = 64;
  * holding a note a semitone away in any octave. +1 if that onset has the semitone above at the exact pitch
  * (and not the one below), −1 for the one below, 0 otherwise. Note-offs are never read, so the finder
  * survives performance timing. Notes must be sorted by onset; co-struck notes share an exact `tOn`.
+ * `at` receives, per note, the index of the first note of the onset its move lands on (−1: no move).
  */
-function firstExactMoves(notes: readonly OutwardNote[]): number[] {
+function firstExactMoves(notes: readonly OutwardNote[], at: number[]): number[] {
     const n = notes.length;
     const exact = new Array<number>(n).fill(0);
     const clusterOf = new Array<number>(n);
@@ -71,6 +81,7 @@ function firstExactMoves(notes: readonly OutwardNote[]): number[] {
             const x = up && !dn ? 1 : dn && !up ? -1 : 0;
             if ((conflict ? 0 : bd) === 0 && x === 0) continue;
             exact[a] = x;
+            at[a] = cStart[g]!;
             break;
         }
     }
@@ -83,17 +94,19 @@ function firstExactMoves(notes: readonly OutwardNote[]): number[] {
  *   - the major third above y sounds too (the chord's third: C in A♭–C–E♭–F♯);
  *   - each tone's first move ({@link firstExactMoves}) is outward: x up a semitone, y down a semitone;
  *   - one onset among the next `look` onsets after x's strikes both x+1 and y−1 at the exact pitch, so the
- *     two tones meet on one pitch class at once.
+ *     two tones meet on one pitch class at once; or (`firstMoveMeet`) both first moves land on one onset.
  * x gets role +1 (rising) and y role −1 (falling); a note keeps its first pair. Whether the convergence is
  * an augmented sixth or a dominant seventh whose seventh happens to rise is left to the engine's key gate.
  *
  * Notes must be sorted by onset (co-struck notes share an exact `tOn`, in any order). Note-offs are read
  * only to know what is sounding at x's onset.
  */
-export function outwardPairs(notes: readonly OutwardNote[], look = 8): OutwardPairs {
+export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: OutwardOptions = {}): OutwardPairs {
+    const firstMoveMeet = opts.firstMoveMeet ?? true;
     const n = notes.length;
     const partner = new Array<number>(n).fill(-1), role = new Array<number>(n).fill(0);
-    const moves = firstExactMoves(notes);
+    const moveAt = new Array<number>(n).fill(-1);
+    const moves = firstExactMoves(notes, moveAt);
     for (let x = 0; x < n; x++) {
         const t = notes[x]!.tOn;
         const sounding: number[] = [];
@@ -114,6 +127,8 @@ export function outwardPairs(notes: readonly OutwardNote[], look = 8): OutwardPa
                 }
                 if (up && dn) { met = true; break; }
             }
+            // "The two tones meet when their first moves, re-strikes skipped, land on one onset."
+            if (!met && firstMoveMeet && moveAt[x]! >= 0 && moveAt[x] === moveAt[y]) met = true;
             if (!met) continue;
             if (partner[x]! < 0) { partner[x] = y; role[x] = 1; }
             if (partner[y]! < 0) { partner[y] = x; role[y] = -1; }

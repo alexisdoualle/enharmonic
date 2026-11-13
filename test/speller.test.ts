@@ -119,6 +119,17 @@ suite('aug6 outward convergence', () => {
         assert(outwardPairs(noThird).partner.every(p => p < 0), 'pair without the major third above the lower tone');
     });
 
+    test('outwardPairs: a German sixth repeated past the window still meets by its first moves', () => {
+        // A♭ C E♭ F♯ struck ten times, then G B D G: the meeting onset is beyond the 8-onset window, but the
+        // first moves of F♯ and A♭ (re-strikes skipped) land on that one onset.
+        const ger6 = [56, 60, 63, 66];
+        const chords = [...Array.from({ length: 10 }, () => ger6), [55, 59, 62, 67]];
+        const notes = chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k, tOff: k + 1 })));
+        const op = outwardPairs(notes);
+        assertEq(op.partner[3], 0); assertEq(op.role[3], 1);
+        assert(outwardPairs(notes, 8, { firstMoveMeet: false }).partner.slice(0, 4).every(p => p < 0), 'met inside the window without first moves');
+    });
+
     test('spellTwoPass options: the rule and the wedge can be switched off', () => {
         const notes = [...cMinor, [56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);
