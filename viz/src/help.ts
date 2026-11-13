@@ -157,6 +157,11 @@ not decay while a note is held (VSCO 2 Community Edition by Versilian Studios, C
 (see <b>Play live</b>).</li>
 <li><b>&#8984;/Ctrl+C</b>: copies the current onset as text (settings, state, scoring) to paste to an
 agent. <b>&#8984;/Ctrl+&#8679;+C</b> copies the whole run.</li>
+<li><b>&#8679;/Shift + drag</b> on the piano roll draws a box: its width is a span of onsets, its height a
+band of pitches. <b>&#8984;C</b> (Ctrl+C) while a box is drawn, or the <b>copy passage</b> button, copies a text report
+of the box: a text piano roll, the voices, the harmony, the decision behind each wrong or flipped note, and
+pattern flags. <b>Esc</b> clears the box. The link keeps it (<code>box=&lt;first onset&gt;-&lt;last onset&gt;:&lt;low midi&gt;-&lt;high midi&gt;</code>,
+on-indices from 0).</li>
 </ul>
 `,
     },

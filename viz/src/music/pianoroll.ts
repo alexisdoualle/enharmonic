@@ -19,6 +19,7 @@ import type { Letter, Accidental } from '../../../src/index.js';
 import { label, LETTER_COLOR } from '../format.js';
 import { chordColor, chordSegments, chordText } from '../chord.js';
 import type { Comparison } from '../compare.js';
+import type { PassageBox } from '../passage.js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const PX_PER_SEC = 90;
@@ -275,6 +276,83 @@ export function setRollCompare(c: Comparison | null): void {
     builtForReplay = null;   // rebuild the layouts on the next render
 }
 
+// ── Box select (passage export, viz/src/passage.ts) ────────────────────────────
+// Shift-drag on the roll draws a box: its width is a span of onsets, its height a band of pitches. The box
+// stays (redrawn on every rebuild) until the caller clears it; the caller is told each new box.
+let box: PassageBox | null = null;
+let boxRect: SVGRectElement | null = null;
+let builtLo = 0, builtHi = 127;
+let suppressClick = false;   // the click that ends a drag must not seek
+let onBox: (b: PassageBox | null) => void = () => {};
+export function initRollBox(cb: (b: PassageBox | null) => void): void { onBox = cb; }
+/** Show (or with null, hide) the box. */
+export function setRollBox(b: PassageBox | null): void { box = b; if (builtForReplay) drawBox(builtForReplay); }
+
+function boxEl(): SVGRectElement {
+    if (!boxRect) {
+        boxRect = svgEl('rect', { fill: 'rgba(110,168,254,0.10)', stroke: '#6ea8fe', 'stroke-width': 1.5, 'stroke-dasharray': '5 3', 'pointer-events': 'none', rx: 2 }) as SVGRectElement;
+        svg!.appendChild(boxRect);
+    }
+    return boxRect;
+}
+function placeBox(x0: number, y0: number, x1: number, y1: number): void {
+    const r = boxEl();
+    r.setAttribute('x', String(Math.min(x0, x1))); r.setAttribute('y', String(Math.min(y0, y1)));
+    r.setAttribute('width', String(Math.abs(x1 - x0))); r.setAttribute('height', String(Math.abs(y1 - y0)));
+    r.setAttribute('visibility', 'visible');
+}
+/** Draw the current box over the notes it holds: from its first onset to the last end among its notes. */
+function drawBox(replay: Replay): void {
+    if (!svg) return;
+    if (!box || box.onFrom >= replay.notes.length) { boxRect?.setAttribute('visibility', 'hidden'); return; }
+    const from = box.onFrom, to = Math.min(box.onTo, replay.notes.length - 1);
+    let end = replay.notes[to]!.onT;
+    for (let i = from; i <= to; i++) { const n = replay.notes[i]!; if (n.midi >= box.midiLo && n.midi <= box.midiHi) end = Math.max(end, n.offT); }
+    const hiM = Math.min(box.midiHi, builtHi), loM = Math.max(box.midiLo, builtLo);
+    placeBox(PAD + replay.notes[from]!.onT * pxPerMs - 2, PAD + (builtHi - hiM) * rowH - 1, PAD + end * pxPerMs + 2, PAD + (builtHi - loM + 1) * rowH + 1);
+}
+/** Turn a dragged rectangle (svg px) into a box: the onsets whose start lies inside, the pitch rows it covers. */
+function boxFromDrag(replay: Replay, x0: number, y0: number, x1: number, y1: number): PassageBox | null {
+    const t0 = (Math.min(x0, x1) - PAD) / pxPerMs, t1 = (Math.max(x0, x1) - PAD) / pxPerMs;
+    const row = (y: number) => Math.floor((y - PAD) / rowH);
+    const midiHi = clamp(builtHi - row(Math.min(y0, y1)), builtLo, builtHi), midiLo = clamp(builtHi - row(Math.max(y0, y1)), builtLo, builtHi);
+    let onFrom = -1, onTo = -1;
+    for (const n of replay.notes) {
+        if (n.onT < t0 || n.onT > t1) continue;
+        if (onFrom < 0) onFrom = n.onIndex;
+        onTo = n.onIndex;
+    }
+    return onFrom < 0 ? null : { onFrom, onTo, midiLo, midiHi };
+}
+/** Wire Shift-drag on a freshly built roll. */
+function wireBoxDrag(replay: Replay, width: number, height: number): void {
+    const at = (e: PointerEvent | MouseEvent) => {
+        const r = svg!.getBoundingClientRect();   // map through the on-screen size: the page's CSS zoom skews client px
+        return { x: (e.clientX - r.left) * (width / r.width), y: (e.clientY - r.top) * (height / r.height) };
+    };
+    svg!.addEventListener('pointerdown', e => {
+        suppressClick = false;
+        if (!e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        const el = svg!, p0 = at(e);
+        el.setPointerCapture(e.pointerId);
+        const move = (ev: PointerEvent) => { const p = at(ev); placeBox(p0.x, p0.y, p.x, p.y); };
+        const up = (ev: PointerEvent) => {
+            el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+            const p = at(ev);
+            suppressClick = true;
+            if (Math.abs(p.x - p0.x) < 3 && Math.abs(p.y - p0.y) < 3) { drawBox(replay); return; }   // a Shift-click: keep the old box
+            const b = boxFromDrag(replay, p0.x, p0.y, p.x, p.y);
+            box = b ?? box;
+            drawBox(replay);
+            if (b) onBox(b);
+        };
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    });
+    // Swallow the click that ends a drag, before the note rects and the background seek see it.
+    svg!.addEventListener('click', e => { if (suppressClick) { suppressClick = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+}
+
 export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = false, grid: Grid | null = null, showChords = true): void {
     if (replay !== builtForReplay || showKeyLanes !== builtWithKeyLanes || isMobile() !== builtMobile || grid !== builtGrid || showChords !== builtWithChords) {
         builtWithChords = showChords;
@@ -286,9 +364,10 @@ export function renderPianoRoll(replay: Replay, step: number, showKeyLanes = fal
 function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     const host = document.getElementById('pianoroll')!;
     host.innerHTML = '';
-    rects = []; cmpTexts = []; rendered = new Set(); prevActive = []; shownFill = [];
+    rects = []; cmpTexts = []; rendered = new Set(); prevActive = []; shownFill = []; boxRect = null;
     laneItems = []; laneChunks = []; laneShown = new Set();
     const lo = Math.min(replay.minMidi, replay.maxMidi), hi = Math.max(replay.minMidi, replay.maxMidi);
+    builtLo = lo; builtHi = hi;
     const sc = (isMobile() ? 0.6 : 1) * zoom;  // phones start zoomed out (time + pitch axes together)
     pxPerMs = (PX_PER_SEC / 1000) * sc * stretch;
     rowH = ROW_H * sc;
@@ -390,6 +469,8 @@ function build(replay: Replay, showKeyLanes: boolean, grid: Grid | null): void {
     timeLine.setAttribute('pointer-events', 'none');
     svg.appendChild(timeLine);
     setTimeLine(timeLineAt, timeLineMoving, timeLineKind);
+    wireBoxDrag(replay, width, height);
+    drawBox(replay);
 
     host.appendChild(svg);
     if (!scrollBound) {

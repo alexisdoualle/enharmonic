@@ -21,7 +21,7 @@ const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 const LOF_ORDER = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
 const keyName = (lof: number) => LOF_ORDER[((lof + 1) % 7 + 7) % 7] + ((a) => a > 0 ? '#'.repeat(a) : a < 0 ? 'b'.repeat(-a) : '')(Math.floor((lof + 1) / 7));
 // "major/relminor" pair for a tonic LoF, e.g. -6 → "Gb/Ebm".
-const keyPair = (lof: number) => `${keyName(lof)}/${keyName(lof + 3)}m`;
+export const keyPair = (lof: number) => `${keyName(lof)}/${keyName(lof + 3)}m`;
 const MODE_LONG: Record<Mode, string> = {
     core: 'Core speller',
     rt: 'real-time',
@@ -31,14 +31,14 @@ const MODE_LONG: Record<Mode, string> = {
 };
 const MAX_ROWS = 300;   // a badly-failing fixture shouldn't paste thousands of lines into a chat
 
-const pitch = (p: Pitch | PitchClass | null | undefined): string =>
+export const pitch = (p: Pitch | PitchClass | null | undefined): string =>
     p ? ascii(p) + ('octave' in p ? p.octave : '') : '—';
 const sgn = (n: number) => (n > 0 ? '+' + n : String(n));
 const pad = (s: string, w: number) => s.padEnd(w);
 const padL = (s: string, w: number) => s.padStart(w);
 
 /** Settings header: shared by both reports, so a paste always says what produced it. */
-function header(s: AppState): string[] {
+export function header(s: AppState): string[] {
     const r = s.replay;
     const out = [
         `fixture: ${s.fixtureId === '__free__' ? 'free take (computer keyboard / MIDI)' : s.fixtureId === '__rec__' ? 'metronome take (computer keyboard / MIDI)' : s.fixtureId}`,
@@ -112,7 +112,7 @@ export function contextReport(s: AppState): string {
     return L.join('\n');
 }
 
-function decisionLines(snap: Snapshot, laActive: boolean): string[] {
+export function decisionLines(snap: Snapshot, laActive: boolean): string[] {
     const dec = snap.decision;
     if (!dec) return ['(batch two-pass: no per-onset scoring trace)'];
     const total = candidateTotal;

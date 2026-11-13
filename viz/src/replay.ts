@@ -92,7 +92,19 @@ export interface Snapshot {
     twoPass: TwoPassNoteTrace | null; // forward/backward evidence + offline reconciliation (batch only)
     localColl: CollectionRead | null;  // LOCAL collection lane (chases tonicizations); display-only
     stableColl: CollectionRead | null; // STABLE collection lane (home key); display-only
+    /** The look-ahead context the engine was fed for this note (la only; display/report only): the
+     *  resolution directions, the gates' local key and key-degree key, and the aug6 outward partner. */
+    la?: LaContext;
     tier: Tier;
+}
+
+/** What the look-ahead tier is told about one note besides its pitch (see `SpellingEngine.noteOn`). */
+export interface LaContext {
+    resolveDir: number;              // +1 / −1: next onset a semitone up / down (any octave) within LA_HORIZON; 0 none
+    exactDir: number;                // the same at the exact pitch
+    localKey: LocalKey | null;       // leading-tone gate + held-letter target key
+    degreeKey: LocalKey | null;      // key-degree gate key
+    outward: { partner: number; role: number } | null;   // aug6 outward pair (partner midi, +1 rising / −1 falling)
 }
 
 /** A note as a time span, for the piano roll (time→x, pitch→y) and the staff (grouped by measure/beat).
@@ -417,6 +429,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             expected: exp ? { step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'], octave } : null,
             resolvedScale, frame, frameLofTonic, frameMeanTonic, keyCenterLof, frameKeyLof, decision, twoPass,
             localColl, stableColl,
+            ...(mode === 'la' ? { la: { resolveDir: dirs.get(i) ?? 0, exactDir: exactDirs.get(i) ?? 0, localKey: keys.get(i) ?? null, degreeKey: degKeys.get(i) ?? null, outward: outward.get(i) ?? null } } : {}),
             sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch, onT: soundingOnT.get(midi)! })).sort((a, b) => a.midi - b.midi),
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
         });

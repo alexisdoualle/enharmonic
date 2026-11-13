@@ -7,7 +7,7 @@ import {
 } from './state.js';
 import { renderWheel } from './panels/wheel.js';
 import { renderScoring } from './panels/scoring.js';
-import { initPianoRoll, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying, setRollCompare } from './music/pianoroll.js';
+import { initPianoRoll, initRollBox, setRollBox, initRollScale, renderPianoRoll, setTimeLine, setPlayheadHidden, setPlayheadTime, setShowHeard, setRollPlaying, setRollCompare } from './music/pianoroll.js';
 import { renderStaff, renderLiveStaff, resetStaffScroll, setStaffCompare } from './music/staff.js';
 import { buildComparison, fetchCompareIndex, fetchMoments, fetchPredictions, sameSpelling, type CompareIndex, type Comparison, type Moment } from './compare.js';
 import type { PitchClass } from '../../src/index.js';
@@ -17,6 +17,7 @@ import { initKeyboard, type KeyboardStrip } from './panels/keyboard.js';
 import { connectMidi, midiAvailable } from './live.js';
 import { enable as audioEnable, whenPlaying as audioReady, playMidi, releaseVoice, allNotesOff, audioNow, scheduleAnchor, ctxTimeAt, setVolume as audioSetVolume, setInstrument, getInstrument, type Voice } from './audio.js';
 import { contextReport, runReport, copyText, flash } from './copy.js';
+import { passageReport, parseBox, formatBox, clampBox, type PassageBox } from './passage.js';
 import { initHelp, mountInfoButtons, isHelpOpen } from './help.js';
 import { mountExpandButtons } from './modal.js';
 import { VIEWS, VIEW_PANEL, VIEW_LABEL, DEFAULT_SLOTS, assign, parseSlots, slotColumns, type View, type Slots } from './slots.js';
@@ -1178,15 +1179,32 @@ document.addEventListener('visibilitychange', () => {
     if (rec !== 'off') stopRecording();   // background timers are throttled: the clicks would drift
 });
 
-/** ⌘/Ctrl+C dumps the current onset (⇧ adds the whole run) as agent-pasteable text. A real text
+/** ⌘/Ctrl+C dumps the current onset, or the boxed passage when a box is drawn (⇧ adds the whole run) as agent-pasteable text. A real text
  *  selection still copies natively; the shortcut only claims the keystroke when nothing is selected. */
 function copyContext(ev: KeyboardEvent) {
     if (!state.replay) return;
     if ((window.getSelection()?.toString() ?? '').trim()) return;
     ev.preventDefault();
     const whole = ev.shiftKey;
+    // With a box drawn, plain ⌘C copies the boxed passage; ⇧ still copies the whole run.
+    if (!whole && passageBox) { copyPassage(); return; }
     const text = whole ? runReport(state) : contextReport(state);
     void copyText(text).then(ok => flash(ok ? (whole ? 'run copied' : 'copied') : 'copy failed'));
+}
+
+/** The box drawn on the piano roll (Shift-drag), for the passage report; Esc clears it. Kept in the link. */
+let passageBox: PassageBox | null = null;
+function setPassageBox(b: PassageBox | null) {
+    passageBox = b;
+    setRollBox(b);
+    $('copy-passage').hidden = !b;
+    syncUrl();
+}
+/** ⌘/Ctrl+⌥/Alt+C (or the toolbar button): copy the boxed passage as agent-pasteable text. */
+function copyPassage() {
+    if (!state.replay) return;
+    if (!passageBox) { flash('no box: Shift-drag on the piano roll'); return; }
+    void copyText(passageReport(state, passageBox)).then(ok => flash(ok ? 'passage copied' : 'copy failed'));
 }
 
 function syncUrl() {
@@ -1225,6 +1243,8 @@ function syncUrl() {
     else u.searchParams.delete('vs');
     u.searchParams.delete('so');   // drop the retired packed-marker param if an old link is pasted in
     writeSideOverrides(u.searchParams, state.sideOverrides);
+    if (passageBox) u.searchParams.set('box', formatBox(passageBox));
+    else u.searchParams.delete('box');
     history.replaceState(null, '', `${u.pathname}${readableSearch(u.searchParams)}${u.hash}`);
 }
 
@@ -1438,6 +1458,8 @@ function renderCompareBlock(host: HTMLElement, snap: ReturnType<typeof current>)
 }
 
 function wire() {
+    initRollBox(b => { setPassageBox(b); if (b) flash('box set: ⌘C copies it, Esc clears'); });
+    $('copy-passage').addEventListener('click', copyPassage);
     initPianoRoll(seek, t => {   // empty space on the roll: the record start goes to that bar
         if (onRecording() && recTake.grid && rec === 'off') { recTake.recHead = barStart(t); syncTimeLine(); }
     });
@@ -1460,7 +1482,7 @@ function wire() {
     // Mobile panel switcher + re-apply visibility when crossing the phone breakpoint.
     SLOT_TABS.forEach((id, i) => $(id).addEventListener('click', () => setMobileSlot(i)));
     MOBILE_MQ.addEventListener('change', () => { applyPanelVisibility(); render(); });
-    $<HTMLSelectElement>('fixture').addEventListener('change', e => { setMoment(null); void pickFixture((e.target as HTMLSelectElement).value); });
+    $<HTMLSelectElement>('fixture').addEventListener('change', e => { setMoment(null); setPassageBox(null); void pickFixture((e.target as HTMLSelectElement).value); });
     // Import a MusicXML score (button opens the picker; drop works anywhere on the app).
     $('import-btn').addEventListener('click', () => $('import-file').click());
     $<HTMLInputElement>('import-file').addEventListener('change', e => {
@@ -1566,7 +1588,10 @@ function wire() {
     window.addEventListener('keydown', ev => {
         if (isHelpOpen()) return;   // the help overlay owns the keyboard while it is up (Esc closes it)
         const target = ev.target as HTMLElement | null;
+        // ⌘⌥C: on a Mac the Option key turns ev.key into 'ç', so match the physical key.
+        if ((ev.metaKey || ev.ctrlKey) && ev.altKey && ev.code === 'KeyC') { ev.preventDefault(); copyPassage(); return; }
         if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'c' || ev.key === 'C')) { copyContext(ev); return; }
+        if (ev.key === 'Escape' && passageBox && !ev.defaultPrevented) { ev.preventDefault(); setPassageBox(null); return; }
         if ((ev.metaKey || ev.ctrlKey) && !ev.shiftKey && (ev.key === 'z' || ev.key === 'Z') && isLive() && !isTextField(target)) { ev.preventDefault(); undo(); return; }
         if (ev.metaKey || ev.ctrlKey || ev.altKey) return;   // leave every other browser shortcut alone
         if (isTextField(target)) return;                     // literal typing wins; otherwise keys are global
@@ -1632,6 +1657,8 @@ async function boot() {
     if (id) {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
+        const b = parseBox(p.get('box'));
+        if (b && state.replay) setPassageBox(clampBox(b, state.replay));
     }
     // Apply panel visibility (3D/2D choice + mobile tab) and the staff toggle now that a fixture is loaded.
     applyStaffVisible();
