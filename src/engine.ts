@@ -17,7 +17,8 @@
  *     drift continuously, where the fold only reacts after it.
  *   LOOK-AHEAD: given a note's resolution direction, spell the step toward it (an F♯-bound note spells E♯, not F).
  *     The LEADING-TONE GATE withholds it for a falling note that is a leading tone of the supplied local key;
- *     the KEY-DEGREE GATE withholds it for a move into a pitch outside the local key.
+ *     the KEY-DEGREE GATE withholds it for a move into a pitch outside the local key; the HELD-LETTER TARGET
+ *     finds a rising leading tone's target when the note's own other spelling holds the target's letter.
  *   DOUBLE-ACC PENALTY, VERTICAL GUARD, COLLISION REPAIR: smaller correctness levers.
  *
  * Frameless: every centre is a statistic of committed notes, never a detected key. Shares only the
@@ -28,7 +29,7 @@
 import type { Pitch, PitchClass } from './pitch.js';
 import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
-import { isKeyDegree, isLeadingTone, type LocalKey } from './key.js';
+import { isKeyDegree, isLeadingTone, isWideLeadingTone, type LocalKey } from './key.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -237,6 +238,13 @@ export interface EngineOptions {
      *  (`NoteContext.degreeKey`, read by `degreeKeys`: the tonic-triad table on ±12 notes); without one the gate
      *  does nothing. Default false. */
     keyDegreeGate?: boolean;
+    /** HELD-LETTER TARGET (look-ahead only). A rising note whose target letter is held by the note's own other
+     *  spelling is still the target's leading tone, when the local key names it one. F♯ rising to G while the
+     *  G slot holds G♭ (F♯'s own other name) finds no target in the surface, so the look-ahead gave no vote;
+     *  now the target takes the collection's letter (G) and F♯ the step below it, when `localKey` (the
+     *  leading-tone gate's) names F♯ a leading tone (`isWideLeadingTone`: major ♮7, ♯4, ♯1, ♯5 and the 2nd;
+     *  minor ♯7, ♯4, ♯6, ♯1 and the 2nd). Default false. */
+    heldLetterTarget?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -271,7 +279,7 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true,
+    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
@@ -292,7 +300,7 @@ export const TP_PASS_PRESET: EngineOptions = {
     // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true,
+    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
     // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
     // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
@@ -385,6 +393,7 @@ export class SpellingEngine {
     private readonly aug6Outward: boolean;
     private readonly leadingToneGate: boolean;
     private readonly keyDegreeGate: boolean;
+    private readonly heldLetterTarget: boolean;
     /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
     private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
@@ -484,6 +493,7 @@ export class SpellingEngine {
         this.aug6Outward = opts.aug6Outward ?? false;
         this.leadingToneGate = opts.leadingToneGate ?? false;
         this.keyDegreeGate = opts.keyDegreeGate ?? false;
+        this.heldLetterTarget = opts.heldLetterTarget ?? false;
     }
 
     /**
@@ -613,6 +623,14 @@ export class SpellingEngine {
         if (laOn) {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;
             laTarget = LETTER_ORDER.find(s => pitchClass(this.scale[s]!) === targetPc) ?? null;
+            // HELD-LETTER TARGET: the target's letter is held by this note's own other spelling (the G slot holds
+            // G♭ while F♯ rises to G); if the key names the note a leading tone, take the collection's letter.
+            if (laTarget === null && this.heldLetterTarget && resolveDir === 1) {
+                const c = this.frameMode === 'diatonic' ? this.frameCentre : this.surfaceCollectionCentre();
+                const s0 = LETTER_ORDER.find(s => pitchClass(letterAt(s, c)) === targetPc);
+                const own = ((midi % 12) + 12) % 12, k = this.curOnsetKey.get(midi);
+                if (s0 !== undefined && k && isWideLeadingTone(own, k) && pitchClass(this.scale[s0]!) === own) laTarget = s0;
+            }
             // The step letter: one letter below the target for an up-resolution, above for down. A letter
             // step is 2 slots on the line of fifths (C=1, D=3).
             if (laTarget !== null) laStep = ((laTarget - 2 * resolveDir) % 7 + 7) % 7;

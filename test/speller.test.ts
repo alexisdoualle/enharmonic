@@ -7,7 +7,7 @@
 
 import { assert, assertEq, suite, test } from './framework.js';
 import { Speller, degreeKeys, localKeys, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
-import { isKeyDegree } from '../src/key.js';
+import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
@@ -221,6 +221,34 @@ suite('key-degree gate', () => {
         assertEq(degreeKeys(notes).length, notes.length);
         assertEq(spellTwoPass(notes, { keyDegreeGate: false }).length, notes.length);
         assertEq(spellTwoPass(notes).length, notes.length);
+    });
+});
+
+suite('held-letter target', () => {
+    /** The look-ahead votes on F♯/G♭ rising (resolveDir +1) after `chords`, with the leading-tone gate's key. */
+    const votes = (chords: number[][], key: { tonic: number; minor: boolean } | null, held = true): string => {
+        const e = new SpellingEngine({ ...LA_PRESET, heldLetterTarget: held });
+        chords.forEach((c, k) => {
+            if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
+            for (const m of c) e.noteOn(m, k * 500);
+        });
+        e.noteOn(66, chords.length * 500, 1, 1, undefined, 0, key);
+        return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
+    };
+    // C major, then E♭–G♭–B♭–D♭ over it: the G slot holds G♭, so F♯ rising to G finds no G in the surface.
+    const cM = [48, 60, 64, 67], ctx = [cM, cM, [51, 54, 58, 61]];
+
+    test('F♯ rising to G while G♭ holds the G slot votes the step when the key names F♯ a leading tone', () => {
+        assertEq(votes(ctx, { tonic: 7, minor: false }), 'E##0 F#2 Gb-2');            // G major: F♯ is its ♮7
+        assertEq(votes(ctx, { tonic: 7, minor: false }, false), 'E##0 F#0 Gb0');
+        assertEq(votes(ctx, { tonic: 1, minor: false }), 'E##0 F#0 Gb0');             // D♭ major: G♭ is its 4th
+        assertEq(votes(ctx, null), 'E##0 F#0 Gb0');
+    });
+
+    test('isWideLeadingTone: major ♮7 ♯4 ♯1 ♯5 2; minor ♯7 ♯4 ♯6 ♯1 2', () => {
+        const c = { tonic: 0, minor: false }, am = { tonic: 9, minor: true };
+        assertEq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(p => isWideLeadingTone(p, c)).join(','), '1,2,6,8,11');
+        assertEq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(p => isWideLeadingTone(p, am)).join(','), '3,6,8,10,11');
     });
 });
 

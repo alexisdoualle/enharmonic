@@ -162,3 +162,11 @@ export function isKeyDegree(pc: number, key: LocalKey): boolean {
     const d = (((pc - key.tonic) % 12) + 12) % 12;
     return key.minor ? d !== 1 && d !== 4 && d !== 6 : d === 0 || d === 2 || d === 4 || d === 5 || d === 7 || d === 9 || d === 11;
 }
+
+/** Whether the local key names pitch class `pc` a leading tone in the wide sense, the reading the engine's
+ *  held-letter target uses. By semitones above the tonic: major 11 (♮7), 6 (♯4), 1 (♯1), 8 (♯5) and 2 (the 2nd,
+ *  a semitone under ♭3); minor 11 (♯7), 6 (♯4), 9 (♯6), 1 (♯1) and 2 (the 2nd, leading to ♭3). */
+export function isWideLeadingTone(pc: number, key: LocalKey): boolean {
+    const d = (((pc - key.tonic) % 12) + 12) % 12;
+    return key.minor ? d === 11 || d === 6 || d === 9 || d === 1 || d === 2 : d === 11 || d === 6 || d === 1 || d === 2 || d === 8;
+}

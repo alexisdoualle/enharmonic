@@ -98,6 +98,11 @@ the same rise is E♯→F♯. `degreeKeys(notes)` reads it with the theory table
 note (notes in onset order); pass it as `degreeKey`. `spellTwoPass` does this itself (`keyDegreeGate: false`
 turns it off).
 
+With `localKey`, the look-ahead also finds a rising leading tone's target when the note's own other spelling
+holds the target's letter: F♯ rising to G while the G slot holds G♭ is still G's leading tone (the look-ahead votes F♯) when
+the local key names F♯ a leading tone (in G major or E minor, not in D♭ major). Engine option
+`heldLetterTarget`, on in both look-ahead and two-pass.
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -125,8 +130,8 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.80% | 99.85% | 99.74% | 99.76% |
-| + two-pass | 99.89% | 99.89% | 99.84% | 99.86% |
+| + look-ahead | 99.82% | 99.87% | 99.75% | 99.77% |
+| + two-pass | 99.89% | 99.90% | 99.86% | 99.87% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
