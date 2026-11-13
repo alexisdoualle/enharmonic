@@ -1,5 +1,5 @@
 /**
- * The local key around a note: the context the engine's leading-tone gate reads.
+ * The local key around a note: the context the engine's leading-tone and key-degree gates read.
  *
  * Proposition: a leading tone of the local key (its ♯7, or the ♯4 leading to its dominant) is named by the
  * key, and a falling chromatic line from it cancels it (C♯→C in D minor stays C♯, not D♭). The look-ahead
@@ -19,6 +19,9 @@
  *     collection, minor the harmonic minor (the minor collection whose leading tone is a scale tone).
  *     The two-pass tier reads it on ±12 onsets.
  * Pearson correlation ignores a table's scale and offset, so only the ratio of the gaps between levels matters.
+ *
+ * The key-degree gate ({@link isKeyDegree}, engine option `keyDegreeGate`) reads its own key, the tonic-triad
+ * table on ±12 NOTES centred on the note ({@link degreeKeys}), on both look-ahead and two-pass.
  */
 
 /** A local key: its tonic's pitch class (C = 0) and mode. */
@@ -41,6 +44,9 @@ export interface LocalKeyOptions {
     table?: KeyTable;
     /** Onsets on each side of the note's own onset in the window (co-struck notes are one onset). Default 6. */
     radius?: number;
+    /** What `radius` counts: `'onsets'` (default) or `'notes'`, the notes of the input order on each side of
+     *  the note itself (the input must then be in onset order, co-struck notes in any fixed order). */
+    unit?: 'onsets' | 'notes';
 }
 
 /** Twelve weights per mode, by interval above the tonic: [major, minor]. */
@@ -96,12 +102,20 @@ function bestKey(h: readonly number[], table: KeyTable): LocalKey | null {
 /**
  * Each note's local key (same order as the input): the best key of the pitch classes struck in the onsets
  * from `radius` before the note's onset to `radius` after it, one count per note. Onsets are exact `tOn`
- * values. Notes need not be sorted.
+ * values. Notes need not be sorted, unless `unit` is `'notes'`.
  */
 export function localKeys(notes: readonly KeyNote[], opts: LocalKeyOptions = {}): (LocalKey | null)[] {
     const table = opts.table ?? 'temperley';
     const radius = opts.radius ?? 6;
     const n = notes.length;
+    if (opts.unit === 'notes') {
+        const pre: number[][] = [new Array<number>(12).fill(0)];
+        for (const x of notes) { const h = pre[pre.length - 1]!.slice(); h[((x.midi % 12) + 12) % 12]!++; pre.push(h); }
+        return notes.map((_, i) => {
+            const a = Math.max(0, i - radius), b = Math.min(n, i + radius + 1);
+            return bestKey(pre[b]!.map((v, q) => v - pre[a]![q]!), table);
+        });
+    }
     const idx = notes.map((_, i) => i).sort((a, b) => notes[a]!.tOn - notes[b]!.tOn);
     // Onsets in time order: their pc counts, and each note's onset.
     const counts: number[][] = [];
@@ -131,4 +145,20 @@ export function localKeys(notes: readonly KeyNote[], opts: LocalKeyOptions = {})
 export function isLeadingTone(pc: number, key: LocalKey): boolean {
     const d = (((pc - key.tonic) % 12) + 12) % 12;
     return key.minor ? d === 6 || d === 9 || d === 11 : d === 6;
+}
+
+/**
+ * Each note's key for the key-degree gate (same order as the input, which must be in onset order): the
+ * tonic-triad table (from theory, no fitted numbers) on the 12 notes on each side of the note. Both the
+ * look-ahead and the two-pass tier read it.
+ */
+export function degreeKeys(notes: readonly KeyNote[]): (LocalKey | null)[] {
+    return localKeys(notes, { table: 'tonic-triad', radius: 12, unit: 'notes' });
+}
+
+/** Whether pitch class `pc` is a degree of `key`: in major its seven diatonic degrees; in minor the natural
+ *  minor plus the raised 6th and 7th. */
+export function isKeyDegree(pc: number, key: LocalKey): boolean {
+    const d = (((pc - key.tonic) % 12) + 12) % 12;
+    return key.minor ? d !== 1 && d !== 4 && d !== 6 : d === 0 || d === 2 || d === 4 || d === 5 || d === 7 || d === 9 || d === 11;
 }

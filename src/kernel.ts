@@ -26,6 +26,10 @@ export interface NoteContext {
      *  falling note that is one of its leading tones keeps the key's name instead of the look-ahead's letter
      *  step. Look-ahead mode only; omit it to switch the leading-tone gate off. */
     readonly localKey?: LocalKey | null;
+    /** The key-degree gate's local key (see `degreeKeys`: the tonic-triad table on ±12 notes centred on the
+     *  note): a semitone resolution into a pitch outside it keeps the note's letter instead of the look-ahead's
+     *  letter step. Look-ahead mode only; omit it to switch the key-degree gate off. */
+    readonly degreeKey?: LocalKey | null;
 }
 
 /**

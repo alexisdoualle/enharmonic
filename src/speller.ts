@@ -5,13 +5,15 @@
  *   - `new Speller()`                    → real-time (recency guard + spiral fold + diatonic-anchor leash)
  *   - `new Speller({ lookAhead: true })` → near-real-time (adds letter-aware look-ahead + vertical guard, the
  *                                          aug6 outward rule when the caller supplies `outwardPartner`, and the
- *                                          leading-tone gate when it supplies `localKey`)
+ *                                          leading-tone gate when it supplies `localKey`, and the key-degree
+ *                                          gate when it supplies `degreeKey`)
  *
  * For offline use with the whole piece in hand, see {@link spellTwoPass} (highest accuracy).
  *
  * The speller is frameless and detects no key: the side/orientation it settles on is an emergent
  * statistic of the notes it has committed, never a detected key signature. (The look-ahead caller may
- * pass a local key, read by `localKeys`; the engine uses it only to name a falling leading tone.)
+ * pass local keys, read by `localKeys` and `degreeKeys`; the engine uses them only to name a falling leading
+ * tone and to keep a note's letter on a move into a chromatic pitch.)
  */
 
 import type { Pitch, PitchClass } from './pitch.js';
@@ -69,7 +71,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
-        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0, ctx.outwardPartner, ctx.outwardRole ?? 0, ctx.localKey);
+        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0, ctx.outwardPartner, ctx.outwardRole ?? 0, ctx.localKey, ctx.degreeKey);
     }
 
     noteOff(midi: number, ctx: { t?: number } = {}): void {

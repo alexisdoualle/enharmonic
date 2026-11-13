@@ -40,12 +40,12 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone gate |
-| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries (aug6 rule and leading-tone gate in both passes) |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates |
+| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries (aug6 rule and both key gates in both passes) |
 
 Frameless and key-signature-free: the side a passage settles on is a statistic of the notes
 committed so far, never a detected key. (A local key, read from the notes around each note, is used
-only to name a falling leading tone; see below.)
+only to name a falling leading tone and to keep a note's letter on a move into a chromatic pitch; see below.)
 
 ### Timing
 
@@ -91,6 +91,13 @@ Probability*, 2007); pass it as `localKey`. Rising notes are untouched. `spellTw
 key table from theory instead (a key is its tonic triad inside its seven-note collection, no fitted numbers)
 on ±12 onsets (`leadingToneGate: false` turns it off).
 
+`degreeKey` is the key-degree gate's key: a semitone resolution is a letter step only into a degree of the
+local key (major: its seven degrees; minor: natural minor plus the raised 6th and 7th), and a move into a
+chromatic pitch keeps the note's letter. In C major F rising to F♯ stays F (F♯ is not in the key); in A major
+the same rise is E♯→F♯. `degreeKeys(notes)` reads it with the theory table on the 12 notes on each side of the
+note (notes in onset order); pass it as `degreeKey`. `spellTwoPass` does this itself (`keyDegreeGate: false`
+turns it off).
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -118,7 +125,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.80% | 99.85% | 99.74% | 99.77% |
+| + look-ahead | 99.80% | 99.85% | 99.74% | 99.76% |
 | + two-pass | 99.89% | 99.89% | 99.84% | 99.86% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
@@ -137,7 +144,7 @@ time only (driver and speller; parsing and scoring excluded):
 | two-pass | 2.08 s | 94,000 | 2.08 s | 94,000 |
 
 Look-ahead and two-pass include finding the aug6 outward pairs (`outwardPairs`) and the local keys
-(`localKeys`). Timings vary by CPU and
+(`localKeys`, `degreeKeys`). Timings vary by CPU and
 machine load; reproduce with `npm run meredith -- --time` (add `--noisy` for the
 noisy set).
 

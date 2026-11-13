@@ -1,7 +1,7 @@
 /**
  * SpellingEngine: the shipped speller. One engine; the latency modes are presets over it
  * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). The engine detects no key; the look-ahead
- * caller may pass a local key (key.ts), used only by the leading-tone gate.
+ * caller may pass local keys (key.ts), used only by the leading-tone and key-degree gates.
  *
  * Two principles do the base work:
  *   1. INTERVAL SCORING. Among a pitch's candidates, pick the one most consonant with the resolved
@@ -16,7 +16,8 @@
  *   DIATONIC-ANCHOR LEASH: penalise a candidate far outside the recent collection's centre. Resists side
  *     drift continuously, where the fold only reacts after it.
  *   LOOK-AHEAD: given a note's resolution direction, spell the step toward it (an F♯-bound note spells E♯, not F).
- *     The LEADING-TONE GATE withholds it for a falling note that is a leading tone of the supplied local key.
+ *     The LEADING-TONE GATE withholds it for a falling note that is a leading tone of the supplied local key;
+ *     the KEY-DEGREE GATE withholds it for a move into a pitch outside the local key.
  *   DOUBLE-ACC PENALTY, VERTICAL GUARD, COLLISION REPAIR: smaller correctness levers.
  *
  * Frameless: every centre is a statistic of committed notes, never a detected key. Shares only the
@@ -27,7 +28,7 @@
 import type { Pitch, PitchClass } from './pitch.js';
 import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
-import { isLeadingTone, type LocalKey } from './key.js';
+import { isKeyDegree, isLeadingTone, type LocalKey } from './key.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -228,6 +229,14 @@ export interface EngineOptions {
      *  decide. Rising notes are untouched. The key comes from the caller (`NoteContext.localKey`, read by
      *  `localKeys` on onsets centred on the note); without one the gate does nothing. Default false. */
     leadingToneGate?: boolean;
+    /** KEY-DEGREE GATE (look-ahead only). A semitone resolution is a letter step only into a degree of the local
+     *  key (major: its seven degrees; minor: natural minor plus the raised 6th and 7th); a move into a chromatic
+     *  pitch keeps the note's letter. In C major F rising to F♯ stays F, not E♯ (F♯ is not in the key); in A
+     *  major the same rise is E♯→F♯. So when the target `resolveDir` points at is not a degree of `degreeKey`,
+     *  the look-ahead's vote is withheld (both directions). The key comes from the caller
+     *  (`NoteContext.degreeKey`, read by `degreeKeys`: the tonic-triad table on ±12 notes); without one the gate
+     *  does nothing. Default false. */
+    keyDegreeGate?: boolean;
 }
 
 /** REAL-TIME tier (`new Speller()`): recency guard, spiral-CLAMP fold, and diatonic-anchor leash. The fold
@@ -262,7 +271,7 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2, collisionRepair: true,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true,
+    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8, anchorWindow: 32,
@@ -283,7 +292,7 @@ export const TP_PASS_PRESET: EngineOptions = {
     // better side fixer.
     lookAhead: true, lookAheadWeight: 2,
     doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true,
+    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true,
     // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
     // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
     // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
@@ -375,6 +384,7 @@ export class SpellingEngine {
     private readonly verticalPcTriad: boolean;
     private readonly aug6Outward: boolean;
     private readonly leadingToneGate: boolean;
+    private readonly keyDegreeGate: boolean;
     /** midi → a chromatic committed within the ornament window, not yet kept: its spelling and onset time. */
     private pending = new Map<number, { n: number; t: number }>();
     /** The current onset's strike time per midi, to tell a unison doubling from a re-strike. */
@@ -387,6 +397,8 @@ export class SpellingEngine {
     private curOnsetOutward = new Map<number, { partner: number; role: number }>();
     /** The current onset's local key per midi (the leading-tone gate's), for the same. */
     private curOnsetKey = new Map<number, LocalKey>();
+    /** The current onset's key-degree-gate key per midi, for the same. */
+    private curOnsetDegreeKey = new Map<number, LocalKey>();
     /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
      *  own first spelling is not exempt from the guard. */
     private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
@@ -471,16 +483,17 @@ export class SpellingEngine {
         this.verticalPcTriad = opts.verticalPcTriad ?? false;
         this.aug6Outward = opts.aug6Outward ?? false;
         this.leadingToneGate = opts.leadingToneGate ?? false;
+        this.keyDegreeGate = opts.keyDegreeGate ?? false;
     }
 
     /**
      * Commit a spelling for `midi`: the candidate whose combined score (interval fit plus every enabled
      * mechanism's delta) is highest; then run the fold check. `t`, when given, groups co-struck notes
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
-     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule and
-     * `localKey` the leading-tone gate.
+     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule,
+     * `localKey` the leading-tone gate and `degreeKey` the key-degree gate.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null, degreeKey?: LocalKey | null): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison
@@ -494,6 +507,7 @@ export class SpellingEngine {
             this.curOnsetExact.clear();
             this.curOnsetOutward.clear();
             this.curOnsetKey.clear();
+            this.curOnsetDegreeKey.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -514,6 +528,7 @@ export class SpellingEngine {
         // A unison doubling without a pair of its own keeps its twin's (both are the same tone).
         if (outwardPartner !== undefined && outwardRole !== 0) this.curOnsetOutward.set(midi, { partner: outwardPartner, role: outwardRole });
         if (localKey) this.curOnsetKey.set(midi, localKey); else this.curOnsetKey.delete(midi);
+        if (degreeKey) this.curOnsetDegreeKey.set(midi, degreeKey); else this.curOnsetDegreeKey.delete(midi);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -587,7 +602,13 @@ export class SpellingEngine {
         // diatonic-STEP letter toward it and penalise the target's own letter.
         // LEADING-TONE GATE: a falling note that is a leading tone of the local key keeps the key's name.
         const key = this.leadingToneGate && resolveDir === -1 ? this.curOnsetKey.get(midi) : undefined;
-        const laOn = this.lookAheadOn && resolveDir !== 0 && !(key && isLeadingTone(((midi % 12) + 12) % 12, key));
+        let laOn = this.lookAheadOn && resolveDir !== 0 && !(key && isLeadingTone(((midi % 12) + 12) % 12, key));
+        // KEY-DEGREE GATE: a semitone resolution is a letter step only into a degree of the local key; a move into
+        // a chromatic pitch keeps the note's letter.
+        if (laOn && this.keyDegreeGate) {
+            const dk = this.curOnsetDegreeKey.get(midi);
+            if (dk && !isKeyDegree((((midi + resolveDir) % 12) + 12) % 12, dk)) laOn = false;
+        }
         let laStep: number | null = null, laTarget: number | null = null, laWeight = this.lookAheadWeight;
         if (laOn) {
             const targetPc = (((midi + resolveDir) % 12) + 12) % 12;

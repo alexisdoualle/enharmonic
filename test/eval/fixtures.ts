@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
-import { Speller, spellTwoPass, outwardPairs, localKeys, type LocalKey } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, type LocalKey } from '../../src/index.js';
 import { resolveStep, resolveExactStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
@@ -60,14 +60,14 @@ export function loadExpected(id: string): Expected[] {
  * semitone away in ANY octave within `horizon` upcoming onsets: the small forward
  * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored. Look-ahead mode
  * also gets each note's aug6 outward partner ({@link outwardPairs}) and its local key ({@link localKeys}:
- * Temperley's profile on ±6 onsets centred on the note).
+ * Temperley's profile on ±6 onsets centred on the note) and its key-degree key ({@link degreeKeys}).
  */
 export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
     const out: (Pitch | null)[] = [];
     const pending = new Map<number, number[]>();
     let notes: { midi: number }[] = [], pairs: { partner: number[]; role: number[] } | null = null;
-    let keys: (LocalKey | null)[] | null = null;
-    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); }
+    let keys: (LocalKey | null)[] | null = null, degKeys: (LocalKey | null)[] | null = null;
+    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); degKeys = degreeKeys(on); }
     let onIdx = 0;
     for (let i = 0; i < events.length; i++) {
         const e = events[i]!;
@@ -84,10 +84,10 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
                 }
             }
             const y = pairs ? pairs.partner[onIdx]! : -1;
-            const localKey = keys ? keys[onIdx] : null;
+            const localKey = keys ? keys[onIdx] : null, degreeKey = degKeys ? degKeys[onIdx] : null;
             s.noteOn(e.midi, y >= 0
-                ? { t: e.t, resolveDir: dir, resolveExact: exact, outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[onIdx]!, localKey }
-                : { t: e.t, resolveDir: dir, resolveExact: exact, localKey });
+                ? { t: e.t, resolveDir: dir, resolveExact: exact, outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[onIdx]!, localKey, degreeKey }
+                : { t: e.t, resolveDir: dir, resolveExact: exact, localKey, degreeKey });
             onIdx++;
             const idx = out.length; out.push(null);
             (pending.get(e.midi) ?? pending.set(e.midi, []).get(e.midi)!).push(idx);

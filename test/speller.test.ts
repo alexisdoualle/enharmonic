@@ -6,7 +6,8 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, localKeys, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, degreeKeys, localKeys, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { isKeyDegree } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
@@ -184,6 +185,41 @@ suite('leading-tone gate', () => {
     test('spellTwoPass: the gate can be switched off', () => {
         const notes = [...dMinor, [53, 61], [53, 60], [58, 62, 65]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         assertEq(spellTwoPass(notes, { leadingToneGate: false }).length, notes.length);
+        assertEq(spellTwoPass(notes).length, notes.length);
+    });
+});
+
+suite('key-degree gate', () => {
+    /** The look-ahead votes on the last note after `chords`, struck with `resolveDir` and the key-degree key. */
+    const votes = (chords: number[][], midi: number, resolveDir: number, key: { tonic: number; minor: boolean } | null, gate = true): string => {
+        const e = new SpellingEngine({ ...LA_PRESET, keyDegreeGate: gate });
+        chords.forEach((c, k) => {
+            if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
+            for (const m of c) e.noteOn(m, k * 500);
+        });
+        e.noteOn(midi, chords.length * 500, resolveDir, 0, undefined, 0, null, key);
+        return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
+    };
+    // C major, then D major: the surface spells F♯, so F rising to F♯ has a letter-step target.
+    const ctx = [[48, 60, 64, 67], [50, 62, 66, 69]];
+
+    test('in C major F rising to F♯ keeps F (F♯ is not in the key); in A major it votes E♯', () => {
+        assertEq(votes(ctx, 65, 1, { tonic: 0, minor: false }), 'E#0 F0 Gbb0');
+        assertEq(votes(ctx, 65, 1, { tonic: 9, minor: false }), 'E#2 F-2 Gbb0');
+        assertEq(votes(ctx, 65, 1, null), 'E#2 F-2 Gbb0');
+        assertEq(votes(ctx, 65, 1, { tonic: 0, minor: false }, false), 'E#2 F-2 Gbb0');
+    });
+
+    test('isKeyDegree: major degrees, and natural minor with the raised 6th and 7th', () => {
+        const c = { tonic: 0, minor: false }, am = { tonic: 9, minor: true };
+        assertEq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(p => isKeyDegree(p, c)).join(','), '0,2,4,5,7,9,11');
+        assertEq([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].filter(p => isKeyDegree(p, am)).join(','), '0,2,4,5,6,7,8,9,11');
+    });
+
+    test('degreeKeys counts notes, not onsets; spellTwoPass: the gate can be switched off', () => {
+        const notes = [...ctx, [53, 65], [54, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        assertEq(degreeKeys(notes).length, notes.length);
+        assertEq(spellTwoPass(notes, { keyDegreeGate: false }).length, notes.length);
         assertEq(spellTwoPass(notes).length, notes.length);
     });
 });
