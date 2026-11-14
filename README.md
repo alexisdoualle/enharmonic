@@ -122,7 +122,7 @@ look-ahead legal: the key of the last 96 onsets plus the next 16 notes (a primar
 the old key's, and deepened along the spiral up to 7 accidentals. It returns the relative major's tonic on the
 line of fifths (NaN for the F♯/G♭ tie); pass it as `sideKey` and the speller re-centres its fold there whenever
 it changes (as `setKey`), seeding the frame on the first note. It moves whole passages to the composer's side
-(fewer flips, higher exact); it does not lower the wrong count. Two-pass does not use it.
+(fewer flips, higher exact); it does not lower the wrong count. Two-pass reads its own, offline key (below).
 
 `dominant` is the rule "a dominant names its tendency tones": when a major triad or dominant seventh sounds and
 the next chord with a different root has its root a fifth below, its third (the leading tone of the target) and
@@ -155,6 +155,15 @@ run give it (32 notes each way; the rule abstains if the two sides disagree). WT
 dyads and triangle-free three-note sets get Bach's sharps from the sharp context, where the backward pass wrote
 C, G♭, B♭, A♭. Option `triangleFreeContext`, default on.
 
+Two-pass reads the side from an offline local key: a passage is written on the side of its local key's
+conventional signature, so both passes count accidentals from that signature, not from C. `centredSideKeys(notes)`
+reads each note's key on the 48 onsets on each side of it (the `sideKeys` table and deepening, no confirmation
+step) and returns the relative major's tonic on the line of fifths. A key with six or seven accidentals (the
+F♯/G♭ tie, or a key deepened past five) is written either way and does not choose: the passes count from C there.
+Debussy, *Clair de lune* m44–47 (D♭ major): the passes keep Debussy's G♭, D♭, E♭, A♭ where they wrote F♯, C♯, D♯,
+G♯. Without the six-accidental limit Chopin's Sonata No. 2/ii (E♭ minor, six flats) would come out in D♯ minor.
+Option `keySide`, default on.
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -183,7 +192,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
 | + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
-| + two-pass | 99.89% | 99.91% | 99.86% | 99.89% |
+| + two-pass | 99.90% | 99.92% | 99.89% | 99.89% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.

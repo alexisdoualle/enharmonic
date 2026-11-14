@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, centredSideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
@@ -199,6 +199,16 @@ suite('aug6 outward convergence', () => {
         assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);
         assertEq(tok({ ...spellTwoPass(notes)[19]!, octave: 4 }), 'F#');
         assertEq(spellTwoPass(notes, { triangleFreeContext: false }).length, notes.length);
+        assertEq(spellTwoPass(notes, { keySide: false }).length, notes.length);
+    });
+
+    test('centredSideKeys reads the offline side key on centred onsets', () => {
+        // D♭ major, I–IV–V–I (D♭ F A♭ / G♭ B♭ D♭ / A♭ C E♭ / D♭ F A♭): the side key is D♭ (−5) at every note.
+        const chords = [[61, 65, 68], [66, 70, 73], [68, 72, 75], [61, 65, 68]];
+        const notes = chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500 })));
+        const x = centredSideKeys(notes);
+        assertEq(x.length, notes.length);
+        assert(x.every(v => v === -5), `D♭ major reads −5, got ${x.join(',')}`);
     });
 });
 

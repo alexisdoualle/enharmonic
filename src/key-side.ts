@@ -61,12 +61,8 @@ const xOf = (k: Key): number => PC_TO_X[(k.tonic + (k.minor ? 3 : 0)) % 12]!;
 /** Look-ahead window: onsets behind, notes ahead; confirmation span; deepening limit. */
 const BEHIND_ONSETS = 96, AHEAD_NOTES = 16, CONFIRM_NOTES = 16, DEEPEN = 7;
 
-/**
- * Each note's side key (same order as the input): the relative major's tonic on the line of fifths, NaN for
- * the F♯/G♭ tie, null before any key can be read. Notes must be in onset order (co-struck notes share `tOn`).
- * Pass it as `NoteContext.sideKey`.
- */
-export function sideKeys(notes: readonly KeyNote[]): (number | null)[] {
+/** Pitch-class histograms over note ranges (prefix sums), and each note's onset (first note, exclusive end). */
+function scan(notes: readonly KeyNote[]) {
     const n = notes.length;
     const pc = notes.map(x => ((x.midi % 12) + 12) % 12);
     const pre: Int32Array[] = [new Int32Array(12)];
@@ -76,12 +72,42 @@ export function sideKeys(notes: readonly KeyNote[]): (number | null)[] {
         const h: number[] = []; for (let q = 0; q < 12; q++) h.push(b > a ? pre[b]![q]! - pre[a]![q]! : 0);
         return h;
     };
-    // Onsets: first note index and end (exclusive) of each, and each note's onset.
     const onsetOf: number[] = [], first: number[] = [], end: number[] = [];
     for (let i = 0; i < n; i++) {
         if (i === 0 || notes[i]!.tOn !== notes[i - 1]!.tOn) { first.push(i); end.push(i); }
         end[end.length - 1] = i + 1; onsetOf.push(first.length - 1);
     }
+    return { n, pc, hist, onsetOf, first, end };
+}
+
+/** DEEPENING: each new key goes along the spiral from the current side, within ±7 accidentals. */
+function deepen(keys: readonly (Key | null)[]): (number | null)[] {
+    let prev: number | null = null, lastRaw: number | null = null, lastOut: number | null = null;
+    return keys.map(k => {
+        if (!k) return null;
+        const x = xOf(k);
+        if (x === lastRaw) return lastOut;
+        lastRaw = x;
+        let out: number;
+        if (prev === null) out = x;
+        else {
+            const cands = Number.isNaN(x) ? [6, -6] : [x, x + 12, x - 12];
+            const ok = cands.filter(c => Math.abs(c) <= DEEPEN);
+            out = (ok.length ? ok : cands).reduce((a, c) => (Math.abs(c - prev!) < Math.abs(a - prev!) ? c : a));
+        }
+        if (!Number.isNaN(out)) prev = out;
+        lastOut = out;
+        return out;
+    });
+}
+
+/**
+ * Each note's side key (same order as the input): the relative major's tonic on the line of fifths, NaN for
+ * the F♯/G♭ tie, null before any key can be read. Notes must be in onset order (co-struck notes share `tOn`).
+ * Pass it as `NoteContext.sideKey`.
+ */
+export function sideKeys(notes: readonly KeyNote[]): (number | null)[] {
+    const { n, pc, hist, onsetOf, first, end } = scan(notes);
     // KEY on the last 96 onsets, the note's own onset, and the next 16 notes.
     const read: (Key | null)[] = new Array(n);
     for (let i = 0; i < n; i++) {
@@ -103,22 +129,25 @@ export function sideKeys(notes: readonly KeyNote[]): (number | null)[] {
         if (score > 0) cur = r;
         keys.push(cur);
     }
-    // DEEPENING: each new key goes along the spiral from the current side, within ±7 accidentals.
-    let prev: number | null = null, lastRaw: number | null = null, lastOut: number | null = null;
-    return keys.map(k => {
-        if (!k) return null;
-        const x = xOf(k);
-        if (x === lastRaw) return lastOut;
-        lastRaw = x;
-        let out: number;
-        if (prev === null) out = x;
-        else {
-            const cands = Number.isNaN(x) ? [6, -6] : [x, x + 12, x - 12];
-            const ok = cands.filter(c => Math.abs(c) <= DEEPEN);
-            out = (ok.length ? ok : cands).reduce((a, c) => (Math.abs(c - prev!) < Math.abs(a - prev!) ? c : a));
-        }
-        if (!Number.isNaN(out)) prev = out;
-        lastOut = out;
-        return out;
-    });
+    return deepen(keys);
+}
+
+/** {@link centredSideKeys}: onsets read on each side of the note. */
+export const CENTRED_SIDE_RADIUS = 48;
+
+/**
+ * OFFLINE side keys, for the two-pass tier: each note's key is read on the onsets centred on it (±48 onsets,
+ * the note's own included), with the same table and deepening as {@link sideKeys} and no confirmation step (a
+ * centred window already sees the passage on both sides). Same output convention: the relative major's tonic
+ * on the line of fifths (deepened up to ±7), NaN for the F♯/G♭ tie, null for none. Not look-ahead legal.
+ */
+export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE_RADIUS): (number | null)[] {
+    const { n, hist, onsetOf, first, end } = scan(notes);
+    const last = first.length - 1;
+    const keys: (Key | null)[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+        const o = onsetOf[i]!;
+        keys[i] = bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
+    }
+    return deepen(keys);
 }

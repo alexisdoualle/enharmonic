@@ -14,7 +14,7 @@ export type { NoteContext } from './kernel.js';
 export { outwardPairs } from './aug6.js';
 export type { OutwardNote, OutwardPairs, OutwardOptions } from './aug6.js';
 export { localKeys, degreeKeys } from './key.js';
-export { sideKeys } from './key-side.js';
+export { sideKeys, centredSideKeys, CENTRED_SIDE_RADIUS } from './key-side.js';
 export { dominantChords, DOMINANT_REACH } from './dominant.js';
 export { resolutionDirs, RESOLUTION_REACH } from './resolution.js';
 export type { ResolutionNote, ResolutionReach } from './resolution.js';

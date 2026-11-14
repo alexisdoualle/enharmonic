@@ -73,10 +73,20 @@ function heardCounts(win: number[][], cur: number[]): { counts: number[]; total:
     for (const pc of cur) { counts[pc]!++; total++; }
     return { counts, total };
 }
-/** Accidentals needed to notate the counted pitch classes from centre `c` (each pc spelled nearest `c`). */
-function costAtCounts(counts: number[], c: number): number {
+/** Accidentals needed to notate the counted pitch classes from centre `c` (each pc spelled nearest `c`),
+ *  counted from the key signature whose relative-major tonic is `sig` on the line of fifths (0 = C, no
+ *  signature). With a signature, a spelling costs the commas between it and its letter's spelling in the
+ *  signature (whose collection is the fifths [sig − 1, sig + 5]): under five flats, D♭ costs 0 and D costs 1. */
+function costAtCounts(counts: number[], c: number, sig = 0): number {
     let total = 0;
-    for (let pc = 0; pc < 12; pc++) if (counts[pc]) total += counts[pc]! * Math.abs(acc(spellNearest(pc, c)));
+    if (sig === 0) {
+        for (let pc = 0; pc < 12; pc++) if (counts[pc]) total += counts[pc]! * Math.abs(acc(spellNearest(pc, c)));
+        return total;
+    }
+    for (let pc = 0; pc < 12; pc++) if (counts[pc]) {
+        const n = spellNearest(pc, c), v = sig - 1 + ((((n - (sig - 1)) % 7) + 7) % 7);
+        total += counts[pc]! * Math.abs(n - v) / 7;
+    }
     return total;
 }
 
@@ -896,7 +906,7 @@ export class SpellingEngine {
             const heard = heardCounts(this.pcWindow, this.curOnsetPcs);
             if (heard.total === 0) return;
             const vetoed = this.foldMaxChroma > 0 && heard.counts.filter(k => k > 0).length > this.foldMaxChroma;
-            const costAt = (c: number) => costAtCounts(heard.counts, c);
+            const costAt = (c: number) => costAtCounts(heard.counts, c, this.signature);
             const here = costAt(cFrame);
             const up = costAt(cFrame + COMMA), dn = costAt(cFrame - COMMA);
             if (up < here - this.foldMargin && up <= dn) favoured = +COMMA;
@@ -1076,6 +1086,16 @@ export class SpellingEngine {
      * instead when the boundary is a hard restart that should also clear the frame and side memory.
      */
     setKey(keyTonic: number): void { this.foldCenter = keyTonic + 2; }
+
+    /** The key signature the ECONOMY fold counts accidentals from: its relative-major tonic on the line of
+     *  fifths (0 = C, the default count). */
+    private signature = 0;
+    /**
+     * Set the key signature the ECONOMY fold counts accidentals from (`keyTonic` as in {@link setKey}: the
+     * relative major's tonic on the line of fifths, 0 = C). The two-pass tier calls it before each note-on with
+     * the note's offline local key (`TwoPassOptions.keySide`). Inert under the clamp fold and fold `'off'`.
+     */
+    setSignature(keyTonic: number): void { this.signature = keyTonic; }
 
     /** Key → side state: whether a side key has been seen, and the last one applied (NaN: the raw tie). */
     private sideStarted = false;
