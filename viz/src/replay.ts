@@ -15,6 +15,7 @@ import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '..
 import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import { outwardPairs } from '../../src/aug6.js';
 import { degreeKeys, localKeys, type LocalKey } from '../../src/key.js';
+import { sideKeys } from '../../src/key-side.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -306,6 +307,13 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     const outward = mode === 'la' ? onsetOutward(events) : new Map<number, { partner: number; role: number }>();
     const keys = mode === 'la' ? onsetKeys(events) : new Map<number, LocalKey | null>();
     const degKeys = mode === 'la' ? onsetKeys(events, degreeKeys) : new Map<number, LocalKey | null>();
+    // Key → side (look-ahead): each on-event's side key, keyed by event index, applied before its note-on.
+    const sides = new Map<number, number | null>();
+    if (mode === 'la') {
+        const at: number[] = [], kn: { midi: number; tOn: number }[] = [];
+        events.forEach((e, i) => { if (e.type === 'on') { at.push(i); kn.push({ midi: e.midi!, tOn: e.t_ms }); } });
+        sideKeys(kn).forEach((x, j) => sides.set(at[j]!, x));
+    }
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -388,6 +396,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
             const ow = outward.get(i);
+            if (mode === 'la') engine!.sideKey(sides.get(i) ?? null);
             engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i), degKeys.get(i));
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the

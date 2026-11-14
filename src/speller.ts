@@ -13,7 +13,8 @@
  * The speller is frameless and detects no key: the side/orientation it settles on is an emergent
  * statistic of the notes it has committed, never a detected key signature. (The look-ahead caller may
  * pass local keys, read by `localKeys` and `degreeKeys`; the engine uses them only to name a falling leading
- * tone and to keep a note's letter on a move into a chromatic pitch.)
+ * tone and to keep a note's letter on a move into a chromatic pitch. It may also pass `sideKey`, read by
+ * `sideKeys`: the conventional side of the local key, which re-centres the fold as `setKey` does.)
  */
 
 import type { Pitch, PitchClass } from './pitch.js';
@@ -71,6 +72,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
+        if (ctx.sideKey !== undefined) this.engine.sideKey(ctx.sideKey);
         this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0, ctx.outwardPartner, ctx.outwardRole ?? 0, ctx.localKey, ctx.degreeKey);
     }
 

@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, degreeKeys, localKeys, outwardPairs, resolveStep, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, degreeKeys, localKeys, outwardPairs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
@@ -138,6 +138,21 @@ suite('aug6 outward convergence', () => {
         assert(outwardPairs(bare).partner.every(p => p < 0), 'paired on a bare unison');
         assertEq(outwardPairs(bare, 8, { chordMeet: 0 }).partner[1], 2);
         assertEq(outwardPairs(chord).partner[1], 2); assertEq(outwardPairs(chord).role[1], 1);
+    });
+
+    test('key → side: a D♭-major passage is read as D♭ (−5) and holds the flat side', () => {
+        // I–IV–V–I in D♭ major, four times. Keyless, the speller parks sharp and spells the tonic C♯–E♯–G♯.
+        const prog = [[49, 61, 65, 68], [54, 61, 66, 70], [56, 60, 63, 68], [49, 61, 65, 68]];
+        const notes = Array.from({ length: 16 }, (_, k) => prog[k % 4]!.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 }))).flat();
+        const x = sideKeys(notes);
+        assert(x.every(v => v === -5), `side keys ${x.join(',')}`);
+        const spell = (side: boolean) => {
+            const s = new Speller({ lookAhead: true });
+            notes.forEach((n, i) => s.noteOn(n.midi, { t: n.tOn, ...(side ? { sideKey: x[i]! } : {}) }));
+            return [61, 65, 68].map(m => tok(s.getSpelling(m))).join(' ');
+        };
+        assertEq(spell(false), 'C# E# G#');
+        assertEq(spell(true), 'Db F Ab');
     });
 
     test('spellTwoPass options: the rule and the wedge can be switched off', () => {

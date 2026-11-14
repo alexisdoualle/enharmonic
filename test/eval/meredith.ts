@@ -23,7 +23,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, type Pitch } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, type Pitch } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import type { StreamingSpeller } from './fixtures.js';
@@ -111,6 +111,7 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     const pairs = mode === 'la' ? outwardPairs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
     const keys = mode === 'la' ? localKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
     const degKeys = mode === 'la' ? degreeKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
+    const sides = mode === 'la' ? sideKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
     for (const e of events(notes)) {
@@ -121,6 +122,7 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
                 ...(y >= 0 ? { outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[e.i]! } : {}),
                 localKey: keys ? keys[e.i] : null,
                 degreeKey: degKeys ? degKeys[e.i] : null,
+                ...(sides ? { sideKey: sides[e.i]! } : {}),
             });
             (pend.get(e.midi) ?? pend.set(e.midi, []).get(e.midi)!).push(e.i);
         } else {

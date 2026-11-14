@@ -30,6 +30,11 @@ export interface NoteContext {
      *  note): a semitone resolution into a pitch outside it keeps the note's letter instead of the look-ahead's
      *  letter step. Look-ahead mode only; omit it to switch the key-degree gate off. */
     readonly degreeKey?: LocalKey | null;
+    /** Key → side: the conventional side of the local key, as its relative major's tonic on the line of fifths
+     *  (see `sideKeys`; NaN = the F♯/G♭ tie, resolved to the side nearer the current surface). The speller
+     *  re-centres its fold on it (as `setKey`) whenever it changes; on the very first note it also seeds the
+     *  frame there (as the `keyTonic` option). Look-ahead mode; omit it to switch key → side off. */
+    readonly sideKey?: number | null;
 }
 
 /**

@@ -1036,6 +1036,36 @@ export class SpellingEngine {
      */
     setKey(keyTonic: number): void { this.foldCenter = keyTonic + 2; }
 
+    /** Key → side state: whether a side key has been seen, and the last one applied (NaN: the raw tie). */
+    private sideStarted = false;
+    private sideX: number | null = null;
+
+    /**
+     * KEY → SIDE (look-ahead): call before each note-on with the note's side key (`NoteContext.sideKey`, from
+     * `sideKeys`): the local key's relative-major tonic on the line of fifths, NaN for the F♯/G♭ tie, null for
+     * none. The first call seeds the frame on that key when no note has sounded yet (the `keyTonic` start; a
+     * tie seeds the sharp side). After that, a key that differs from the last one re-centres the fold
+     * ({@link setKey}). A tie takes the side (F♯ or G♭ major) nearer the current surface's mean.
+     */
+    sideKey(x: number | null): void {
+        if (!this.sideStarted) {
+            this.sideStarted = true;
+            if (x !== null) {
+                const kt = Number.isNaN(x) ? 6 : x;
+                this.setKey(kt);
+                if (this.onset < 0) this.reset(collectionAt(kt + 2));
+            }
+            this.sideX = x;
+        }
+        if (x === null) return;
+        if (Number.isNaN(x)) {
+            const sc = this.getResolvedScale();
+            const mean = sc.reduce((a, p) => a + lofOf(p), 0) / sc.length;
+            x = Math.abs(6 + 2 - mean) <= Math.abs(-6 + 2 - mean) ? 6 : -6;
+        }
+        if (x !== this.sideX) { this.setKey(x); this.sideX = x; }
+    }
+
     /** Read-only snapshot of the current 7-letter surface (introspection). The diatonic frame rebuilds the
      *  slots at the start of each note and writes nothing at its commit, so the note just committed is
      *  laid over its letter's slot here: the surface includes it. (The mean frame writes the slot itself.) */

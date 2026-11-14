@@ -40,12 +40,13 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side |
 | `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run (aug6 rule and both key gates in both passes) |
 
-Frameless and key-signature-free: the side a passage settles on is a statistic of the notes
-committed so far, never a detected key. (A local key, read from the notes around each note, is used
-only to name a falling leading tone and to keep a note's letter on a move into a chromatic pitch; see below.)
+Frameless and key-signature-free: in real time the side a passage settles on is a statistic of the notes
+committed so far, never a detected key. (In look-ahead, a local key read from the notes around each note names
+a falling leading tone, keeps a note's letter on a move into a chromatic pitch, and, as `sideKey`, re-centres
+the side on the key's conventional signature; see below.)
 
 ### Timing
 
@@ -102,6 +103,15 @@ the same rise is E♯→F♯. `degreeKeys(notes)` reads it with the theory table
 note (notes in onset order); pass it as `degreeKey`. `spellTwoPass` does this itself (`keyDegreeGate: false`
 turns it off).
 
+`sideKey` is key → side: a passage is notated on the side of its local key's conventional signature (D♭
+major sounds, so D♭–F–A♭, not C♯–E♯–G♯). `sideKeys(notes)` reads it from `{ midi, tOn }` notes in onset order,
+look-ahead legal: the key of the last 96 onsets plus the next 16 notes (a primary-triads table: tonic and fifth
+4, third 3, other collection tones 2), taken only when the next 16 notes sound the new key's own notes more than
+the old key's, and deepened along the spiral up to 7 accidentals. It returns the relative major's tonic on the
+line of fifths (NaN for the F♯/G♭ tie); pass it as `sideKey` and the speller re-centres its fold there whenever
+it changes (as `setKey`), seeding the frame on the first note. It moves whole passages to the composer's side
+(fewer flips, higher exact); it does not lower the wrong count. Two-pass does not use it.
+
 With `localKey`, the look-ahead also finds a rising leading tone's target when the note's own other spelling
 holds the target's letter: F♯ rising to G while the G slot holds G♭ is still G's leading tone (the look-ahead votes F♯) when
 the local key names F♯ a leading tone (in G major or E minor, not in D♭ major). Engine option
@@ -134,7 +144,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.82% | 99.87% | 99.75% | 99.77% |
+| + look-ahead | 99.82% | 99.87% | 99.76% | 99.79% |
 | + two-pass | 99.88% | 99.90% | 99.85% | 99.87% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
