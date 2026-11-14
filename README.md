@@ -164,6 +164,15 @@ Debussy, *Clair de lune* m44–47 (D♭ major): the passes keep Debussy's G♭, 
 G♯. Without the six-accidental limit Chopin's Sonata No. 2/ii (E♭ minor, six flats) would come out in D♯ minor.
 Option `keySide`, default on.
 
+After the merge, two-pass lets a struck triad spell its third member: where the three pitch classes of a major or
+minor triad are attacked together and two members are spelled coherently with each other, a member a comma off the
+triad (a diminished fourth or augmented second inside it) takes the spelling that completes it, but only toward the
+local centre of the merged spellings (the median of the 16 notes on each side), and not when it is a third that
+moves a semitone onto the other third of the same root (an appoggiatura). Mozart K. 459/iii (F minor), A♭–C–F
+struck together: the merge wrote G♯, the rule writes Mozart's A♭. A chromatic line tone inside a struck triad is
+the counter-case: Joplin's C♯ rising to D against G♭–B♭ (*Chrysanthemum* m18) is respelt D♭. Option
+`struckTriadThird`, default on.
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its

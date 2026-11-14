@@ -117,6 +117,16 @@ export interface TwoPassOptions {
      *  F♯, C♯, D♯, G♯. Counter-case for the six-accidental limit: Chopin Sonata 2/ii (E♭ minor, six flats)
      *  would come out in D♯ minor if its key chose the side. Default `true`. */
     keySide?: boolean;
+    /** A STRUCK TRIAD SPELLS ITS THIRD MEMBER. After the merge, where the three pitch classes of a major or minor
+     *  triad are attacked together at a note's onset and the other two members are spelled coherently with each
+     *  other (one spelling each), a note a comma off the triad (a diminished fourth or augmented second inside it)
+     *  takes the spelling that completes it, but only toward the local merged centre (median of the ±16 notes
+     *  around it), and not when the note is a third that moves a semitone onto the other third of the same root
+     *  (an appoggiatura: G♯→A over F–C). One shot: nothing it writes feeds another decision. Mozart K. 459/iii,
+     *  F minor, A♭–C–F struck together: the merge wrote G♯ (G♯–C, a dim4), the rule writes Mozart's A♭.
+     *  Counter-case: a chromatic line tone the composer writes inside a struck triad (Joplin *Chrysanthemum*
+     *  m18, C♯ rising to D against G♭–B♭) is respelt D♭. Default `true`. */
+    struckTriadThird?: boolean;
 }
 
 /** One pass's engine state right after it committed a note (introspection / visualiser only). */
@@ -188,6 +198,59 @@ const TP_KEY_TABLE = 'tonic-triad', TP_KEY_RADIUS = 12;
 const CONTEXT_NOTES = 32;
 /** `keySide`: the most accidentals a key signature may have and still choose the side. */
 const KEY_SIDE_MAX_ACCIDENTALS = 5;
+/** `struckTriadThird`: notes read on each side for the co-sounding members, the merged centre, and onsets scanned
+ *  for an appoggiatura's resolution. */
+const TRIAD_SCAN = 64, TRIAD_CENTRE_RADIUS = 16, TRIAD_APP_ONSETS = 8;
+/** `struckTriadThird`: major and minor triads as [semitones, fifths] above the root. */
+const TRIADS: readonly (readonly [number, number])[][] = [[[0, 0], [4, 4], [7, 1]], [[0, 0], [3, -3], [7, 1]]];
+
+/** `struckTriadThird`: the [note, spelling] repairs over the merged spellings `out` (sorted order). */
+function struckTriadRepairs(N: readonly TwoPassNote[], out: readonly (number | undefined)[], sounding: readonly Set<number>[]): [number, number][] {
+    const n = N.length;
+    const pcOf = (t: number) => ((N[t]!.midi % 12) + 12) % 12;
+    const fix: [number, number][] = [];
+    for (let t = 0; t < n; t++) {
+        const o = out[t]; if (o === undefined) continue;
+        const pc = pcOf(t), S = sounding[t]!, lo = Math.max(0, t - TRIAD_SCAN), hi = Math.min(n, t + TRIAD_SCAN);
+        // The spellings of each pitch class among the notes overlapping this one.
+        const co = new Map<number, Set<number>>();
+        for (let k = lo; k < hi; k++) {
+            if (k === t || out[k] === undefined || !(N[k]!.tOn < N[t]!.tOff && N[k]!.tOff > N[t]!.tOn)) continue;
+            const q = pcOf(k); (co.get(q) ?? co.set(q, new Set()).get(q)!).add(out[k]!);
+        }
+        const struck = (q: number) => { for (let k = lo; k < hi; k++) if (k !== t && N[k]!.tOn === N[t]!.tOn && pcOf(k) === q) return true; return false; };
+        let want: number | null = null, clash = false;
+        for (const tpl of TRIADS) for (const [ms, mf] of tpl) {
+            const r = (pc - ms + 12) % 12;
+            const others = tpl.filter(([s2]) => s2 !== ms);
+            if (!others.every(([s2]) => S.has((r + s2) % 12) && co.get((r + s2) % 12)?.size === 1)) continue;
+            if (!others.every(([s2]) => struck((r + s2) % 12))) continue;
+            // An appoggiatura: a third moving a semitone onto the OTHER third of the same root (G♯→A over F–C).
+            if (ms === 3 || ms === 4) {
+                const alt = (r + (ms === 3 ? 4 : 3)) % 12, dm = ms === 3 ? 1 : -1;
+                let seen = 0, lastOn = N[t]!.tOn, hit = false;
+                for (let k = t + 1; k < n && seen < TRIAD_APP_ONSETS; k++) {
+                    if (N[k]!.tOn !== lastOn) { seen++; lastOn = N[k]!.tOn; }
+                    if (N[k]!.tOn > N[t]!.tOn && N[k]!.midi === N[t]!.midi + dm && pcOf(k) === alt) { hit = true; break; }
+                }
+                if (hit) continue;
+            }
+            const roots = others.map(([s2, f2]) => [...co.get((r + s2) % 12)!][0]! - f2);
+            if (roots[0] !== roots[1]) continue;              // the other two members are not coherent
+            const w = roots[0]! + mf;
+            if (want !== null && want !== w) clash = true; else want = w;
+        }
+        if (clash || want === null || want === o || Math.abs(want - o) !== 12) continue;
+        // Only toward the local merged centre.
+        const loc: number[] = [];
+        for (let k = Math.max(0, t - TRIAD_CENTRE_RADIUS); k <= Math.min(n - 1, t + TRIAD_CENTRE_RADIUS); k++) if (k !== t && out[k] !== undefined) loc.push(out[k]!);
+        loc.sort((a, b) => a - b);
+        const cen = loc.length ? loc[loc.length >> 1]! : 0;
+        if (Math.abs(want - cen) >= Math.abs(o - cen)) continue;
+        fix.push([t, want]);
+    }
+    return fix;
+}
 
 /** `keySide`: each note's signature for the passes (0 = count from C), null before any key is read. */
 function sideSignatures(notes: readonly TwoPassNote[]): (number | null)[] {
@@ -433,6 +496,9 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         for (let t = i; t < j; t++) out[t] = t < bestK ? fwd[t]! : bwd[t]!;
         i = j;
     }
+
+    // A STRUCK TRIAD SPELLS ITS THIRD MEMBER (see `struckTriadThird`); all repairs read the merge, then apply.
+    if (opts.struckTriadThird ?? true) for (const [t, w] of struckTriadRepairs(N, out, sounding)) out[t] = w;
 
     // HONOR-RESOLUTION. The wolf-cost merge reconciles the SIDE and can discard a note the forward pass
     // spelled from a real resolution (a sharp leading tone the merge flattened). A confirmed exact-midi

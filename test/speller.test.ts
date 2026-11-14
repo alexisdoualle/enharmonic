@@ -200,6 +200,16 @@ suite('aug6 outward convergence', () => {
         assertEq(tok({ ...spellTwoPass(notes)[19]!, octave: 4 }), 'F#');
         assertEq(spellTwoPass(notes, { triangleFreeContext: false }).length, notes.length);
         assertEq(spellTwoPass(notes, { keySide: false }).length, notes.length);
+        assertEq(spellTwoPass(notes, { struckTriadThird: false }).length, notes.length);
+    });
+
+    test('spellTwoPass struckTriadThird: a struck triad spells its third member', () => {
+        // Clair de lune m36:1, D♭–F–A♭ struck together (D♭ doubled in the bass): the merge wrote E♯ for Debussy's F
+        // (E♯–A♭, a diminished fourth inside the triad); the rule completes the triad.
+        const notes = onNotes(loadEvents('debussy_clair_de_lune'));
+        assertEq([notes[831]!.midi, notes[831]!.tOn], [77, 78750]);
+        assertEq(tok({ ...spellTwoPass(notes)[831]!, octave: 5 }), 'F');
+        assertEq(tok({ ...spellTwoPass(notes, { struckTriadThird: false })[831]!, octave: 5 }), 'E#');
     });
 
     test('centredSideKeys reads the offline side key on centred onsets', () => {
