@@ -75,6 +75,13 @@ export interface TwoPassOptions {
      *  least this many notes. Default 0 (off): the look-ahead tier ships it at 3, but on two-pass its fixes
      *  were mostly wrong → flipped and it did not confirm on the fresh15 set. */
     aug6ChordMeet?: number;
+    /** NO PASSAGE BOUNDARY INSIDE A REPEATED RUN. Where the passes disagree, the merge may not place its side
+     *  change between two strikes of a repeated run (three or more strikes of one pitch, at most 16 onsets
+     *  apart, over one bass pitch class) that lies inside the disagreement: the cut moves to the run's start or
+     *  end. Confutatis m28: the bass repeats E♭ four times under C♭ and B♭; the forward pass reads the bar
+     *  sharp, the backward pass flat, and the cut may no longer fall between the strikes (D♯ ×6 then E♭).
+     *  Default `true`. */
+    runBoundary?: boolean;
     /** In the merge's wolf-cost, an augmented sixth (ten fifths) whose sharper tone rises a semitone and whose
      *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
      *  one pitch class, not a misspelling. Default `true`. */
@@ -182,6 +189,32 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
     return out;
 }
 
+/**
+ * Repeated runs, for the merge's no-boundary rule: three or more strikes of one MIDI pitch, consecutive strikes at
+ * most 16 onsets apart, over one bass pitch class (the lowest note sounding at each strike). Returns every pair of
+ * consecutive strikes [a, b] (indices into the sorted notes), sorted by a. A re-struck pitch is read as one voice.
+ */
+function runPairs(N: readonly TwoPassNote[]): [number, number][] {
+    const n = N.length; const onsetIdx: number[] = []; let g = -1, lastT = -Infinity;
+    for (let k = 0; k < n; k++) { if (N[k]!.tOn !== lastT) { g++; lastT = N[k]!.tOn; } onsetIdx.push(g); }
+    const bass = N.map((x, k) => {
+        let b = x.midi;
+        for (let m = k - 1; m >= Math.max(0, k - 64); m--) if (N[m]!.tOff > x.tOn && N[m]!.midi < b) b = N[m]!.midi;
+        for (let m = k + 1; m < Math.min(n, k + 64) && N[m]!.tOn === x.tOn; m++) if (N[m]!.midi < b) b = N[m]!.midi;
+        return b % 12;
+    });
+    const byMidi = new Map<number, number[]>();
+    N.forEach((x, k) => { const a = byMidi.get(x.midi) ?? []; if (!a.length || N[a[a.length - 1]!]!.tOn !== x.tOn) a.push(k); byMidi.set(x.midi, a); });
+    const pairs: [number, number][] = [];
+    for (const ks of byMidi.values()) {
+        let cur: number[] = [];
+        const flush = () => { if (cur.length >= 3) for (let q = 1; q < cur.length; q++) pairs.push([cur[q - 1]!, cur[q]!]); cur = []; };
+        for (const k of ks) { if (cur.length) { const p = cur[cur.length - 1]!; if (onsetIdx[k]! - onsetIdx[p]! > 16 || bass[k] !== bass[p]) flush(); } cur.push(k); }
+        flush();
+    }
+    return pairs.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+}
+
 /** Sort helper: notes bass-first (onset asc, midi asc), with a mapping back to the caller's order. */
 function order(notes: readonly TwoPassNote[]) {
     const idx = notes.map((_, i) => i).sort((a, b) => notes[a]!.tOn - notes[b]!.tOn || notes[a]!.midi - notes[b]!.midi);
@@ -285,6 +318,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         return true;
     };
 
+    const runs = (opts.runBoundary ?? true) ? runPairs(N) : [];
+    let runAt = 0;   // runs[] sorted by first strike; disagreement runs only move forward
     let i = Math.max(0, firstAgree);
     while (i <= lastAgree) {
         if (agree(i)) { out[i] = fwd[i]!; i++; continue; }
@@ -310,8 +345,15 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
             }
             return cost;
         };
+        // NO BOUNDARY INSIDE A REPEATED RUN: the run pairs with both strikes in [i, j). A change-point that splits
+        // one costs more than any wolf count in the window, so the cut lands before or after the run.
+        while (runAt < runs.length && runs[runAt]![0] < i) runAt++;
+        const inner: [number, number][] = [];
+        for (let r = runAt; r < runs.length && runs[r]![0] < j; r++) if (runs[r]![1] < j) inner.push(runs[r]!);
+        const breaksOf = (k: number): number => { const pick = pickFor(k); let c = 0; for (const [a, b] of inner) if (pick(a) !== pick(b)) c++; return c; };
+        const W = j - i + 2;
         const cost: number[] = []; let minCost = Infinity;
-        for (let k = i; k <= j; k++) { cost[k - i] = costOf(k); if (cost[k - i]! < minCost) minCost = cost[k - i]!; }
+        for (let k = i; k <= j; k++) { cost[k - i] = (inner.length ? breaksOf(k) * W : 0) + costOf(k); if (cost[k - i]! < minCost) minCost = cost[k - i]!; }
         let bestK = i, bestPref = -Infinity, bestWarm = -Infinity;
         for (let k = i; k <= j; k++) {
             if (cost[k - i]! > minCost + centreMargin) continue;
