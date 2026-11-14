@@ -220,6 +220,17 @@ suite('aug6 outward convergence', () => {
         assertEq(x.length, notes.length);
         assert(x.every(v => v === -5), `D♭ major reads −5, got ${x.join(',')}`);
     });
+
+    test('centredSideKeys keyReturn: a key keeps its side on return after a forced respell', () => {
+        // Pathétique ii: A♭ minor (−7) → F♭ major, past the ±7 limit, forced to E major (+4, from m42) → A♭ minor
+        // again (m47:2.33, note 992). The return keeps A♭ minor's −7; without the rule it chains from E to G♯ minor (+5).
+        const notes = onNotes(loadEvents('beethoven_pathetique_adagio'));
+        const on = centredSideKeys(notes), off = centredSideKeys(notes, undefined, false);
+        assertEq([on[814], off[814]], [4, 4]);
+        assertEq([on[992], off[992]], [-7, 5]);
+        assert(on.slice(992, 1172).every(v => v === -7), 'A♭ minor holds −7 until m53');
+        assertEq(spellTwoPass(notes, { keyReturn: false }).length, notes.length);
+    });
 });
 
 suite('leading-tone gate', () => {

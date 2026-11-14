@@ -117,6 +117,15 @@ export interface TwoPassOptions {
      *  F♯, C♯, D♯, G♯. Counter-case for the six-accidental limit: Chopin Sonata 2/ii (E♭ minor, six flats)
      *  would come out in D♯ minor if its key chose the side. Default `true`. */
     keySide?: boolean;
+    /** A KEY KEEPS ITS SIDE ON RETURN (`keySide`'s key reader). A key written on the near side only because its far
+     *  reading is past the ±7 deepening limit is a readability respell; when the music returns to the key it came
+     *  from, that key keeps its prior side. A parallel, or the parallel of the relative, of the forced key or of the
+     *  key just before is never a return, and such a candidate disarms the pending return. Pathétique ii: A♭ minor
+     *  (−7) → F♭ major, forced to E major (+4) → A♭ minor at m48, read −7 again instead of G♯ minor (+5), so the
+     *  passes count from C there and m48–52 come back to A♭ and C♭ instead of a late boundary. Counter-case: an
+     *  over-deepened prior key (Troschel *Walec oryginalny*: D♭ already read as C♯ at +7, then A♭ folded back) is
+     *  restored on the far side. Default `true`; inert when `keySide` is off. */
+    keyReturn?: boolean;
     /** A STRUCK TRIAD SPELLS ITS THIRD MEMBER. After the merge, where the three pitch classes of a major or minor
      *  triad are attacked together at a note's onset and the other two members are spelled coherently with each
      *  other (one spelling each), a note a comma off the triad (a diminished fourth or augmented second inside it)
@@ -253,8 +262,8 @@ function struckTriadRepairs(N: readonly TwoPassNote[], out: readonly (number | u
 }
 
 /** `keySide`: each note's signature for the passes (0 = count from C), null before any key is read. */
-function sideSignatures(notes: readonly TwoPassNote[]): (number | null)[] {
-    return centredSideKeys(notes).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
+function sideSignatures(notes: readonly TwoPassNote[], keyReturn: boolean): (number | null)[] {
+    return centredSideKeys(notes, undefined, keyReturn).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
 }
 
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
@@ -361,7 +370,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     // The local keys are read in forward time on onsets centred on each note; the backward pass reads them too.
     const keysF = (opts.leadingToneGate ?? true) ? localKeys(N, { table: TP_KEY_TABLE, radius: TP_KEY_RADIUS }) : undefined;
     const degF = (opts.keyDegreeGate ?? true) ? degreeKeys(N) : undefined;
-    const sigF = (opts.keySide ?? true) ? sideSignatures(N) : undefined;
+    const sigF = (opts.keySide ?? true) ? sideSignatures(N, opts.keyReturn ?? true) : undefined;
     const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF, keysF, degF, sigF);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).

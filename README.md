@@ -164,6 +164,15 @@ Debussy, *Clair de lune* m44–47 (D♭ major): the passes keep Debussy's G♭, 
 G♯. Without the six-accidental limit Chopin's Sonata No. 2/ii (E♭ minor, six flats) would come out in D♯ minor.
 Option `keySide`, default on.
 
+The key reader deepens each new key along the spiral up to seven accidentals. A key written on the near side only
+because its far reading is past that limit is a readability respell, so when the music returns to the key it came
+from, that key keeps its prior side. A parallel, or the parallel of the relative, of the forced key or of the key
+just before is never a return, and such a candidate disarms the pending return. Beethoven, *Pathétique* ii: A♭
+minor (−7), then F♭ major (forced to E major, +4), then A♭ minor again at m47, read −7 instead of G♯ minor (+5), so
+m48–52 come back to A♭ and C♭. The counter-case is a prior key that was itself over-deepened (D♭ already read as C♯
+at +7): the return restores the over-rotation. Option `keyReturn`, default on (`centredSideKeys(notes, radius,
+keyReturn)`).
+
 After the merge, two-pass lets a struck triad spell its third member: where the three pitch classes of a major or
 minor triad are attacked together and two members are spelled coherently with each other, a member a comma off the
 triad (a diminished fourth or augmented second inside it) takes the spelling that completes it, but only toward the

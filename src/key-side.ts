@@ -30,6 +30,8 @@ const TABLE = [[DIATONIC, [0, 4, 7]], [HARMONIC_MINOR, [0, 3, 7]]].map(([coll, t
     return { yc, dy: yc.reduce((a, v) => a + v * v, 0) };
 });
 interface Key { readonly tonic: number; readonly minor: boolean }
+/** A key with the side the deepening gave it. */
+interface Sided { readonly k: Key; readonly out: number }
 
 /** The best-correlated key of a pitch-class histogram (null when empty). */
 function bestKey(h: readonly number[]): Key | null {
@@ -80,23 +82,43 @@ function scan(notes: readonly KeyNote[]) {
     return { n, pc, hist, onsetOf, first, end };
 }
 
-/** DEEPENING: each new key goes along the spiral from the current side, within ±7 accidentals. */
-function deepen(keys: readonly (Key | null)[]): (number | null)[] {
+/**
+ * DEEPENING: each new key goes along the spiral from the current side, within ±7 accidentals.
+ *
+ * `keyReturn` (two-pass only): a key written on the near side only because its far reading is past the ±7 limit is a
+ * readability respell. When the music returns to the key in force before it, that key keeps its prior side.
+ * Pathétique ii: A♭ minor (−7) → F♭ major, forced to E major (+4) → A♭ minor, read −7 again, not G♯ minor (+5). A
+ * parallel key (same tonic), or the parallel of the relative, of the forced key or of the key just before keeps that
+ * key's tonic letter, so it is never a return; such a candidate disarms the pending return (the music has reached the
+ * old key's pitch classes under the forced key's letter, and later recurrences continue it).
+ */
+function deepen(keys: readonly (Key | null)[], keyReturn = false): (number | null)[] {
     let prev: number | null = null, lastRaw: number | null = null, lastOut: number | null = null;
+    // `keyReturn`: the key just before (held), and, once the limit forces a respell, the key in force before it (pre)
+    // and the forced key itself, each with its side.
+    let held: Sided | null = null, pre: Sided | null = null, forced: Sided | null = null;
+    const parallel = (a: Sided | null, k: Key): boolean => !!a && (a.k.tonic === k.tonic || (a.k.tonic + (a.k.minor ? 3 : 9)) % 12 === k.tonic);
     return keys.map(k => {
         if (!k) return null;
         const x = xOf(k);
         if (x === lastRaw) return lastOut;
         lastRaw = x;
+        if (pre && prev !== null && k.tonic === pre.k.tonic && k.minor === pre.k.minor) {
+            const ret = parallel(forced, k) || parallel(held, k) ? null : pre.out;
+            pre = forced = null;
+            if (ret !== null) { prev = lastOut = ret; held = { k, out: ret }; return ret; }
+        }
         let out: number;
         if (prev === null) out = x;
         else {
             const cands = Number.isNaN(x) ? [6, -6] : [x, x + 12, x - 12];
             const ok = cands.filter(c => Math.abs(c) <= DEEPEN);
-            out = (ok.length ? ok : cands).reduce((a, c) => (Math.abs(c - prev!) < Math.abs(a - prev!) ? c : a));
+            const near = (cs: number[]) => cs.reduce((a, c) => (Math.abs(c - prev!) < Math.abs(a - prev!) ? c : a));
+            out = near(ok.length ? ok : cands);
+            if (keyReturn && !Number.isNaN(x) && near(cands) !== out && held) { pre = held; forced = { k, out }; }
         }
         if (!Number.isNaN(out)) prev = out;
-        lastOut = out;
+        lastOut = out; held = { k, out };
         return out;
     });
 }
@@ -140,8 +162,10 @@ export const CENTRED_SIDE_RADIUS = 48;
  * the note's own included), with the same table and deepening as {@link sideKeys} and no confirmation step (a
  * centred window already sees the passage on both sides). Same output convention: the relative major's tonic
  * on the line of fifths (deepened up to ±7), NaN for the F♯/G♭ tie, null for none. Not look-ahead legal.
+ * `keyReturn` (default `true`): a return to the key in force before a limit-forced respell keeps that key's side
+ * (see `deepen`; `TwoPassOptions.keyReturn`).
  */
-export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE_RADIUS): (number | null)[] {
+export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE_RADIUS, keyReturn = true): (number | null)[] {
     const { n, hist, onsetOf, first, end } = scan(notes);
     const last = first.length - 1;
     const keys: (Key | null)[] = new Array(n);
@@ -149,5 +173,5 @@ export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE
         const o = onsetOf[i]!;
         keys[i] = bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
     }
-    return deepen(keys);
+    return deepen(keys, keyReturn);
 }
