@@ -41,7 +41,7 @@ const spelled = spellTwoPass([
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
 | `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side + dominant tendency tones |
-| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run (aug6 rule and both key gates in both passes) |
+| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run, never by a triangle-free sonority (aug6 rule and both key gates in both passes) |
 
 Frameless and key-signature-free: in real time the side a passage settles on is a statistic of the notes
 committed so far, never a detected key. (In look-ahead, a local key read from the notes around each note names
@@ -135,6 +135,14 @@ holds the target's letter: F♯ rising to G while the G slot holds G♭ is still
 the local key names F♯ a leading tone (in G major or E minor, not in D♭ major). Engine option
 `heldLetterTarget`, on in both look-ahead and two-pass.
 
+Two-pass reconciles its passes by "no triangle, no side boundary": a sonority with no major or minor triad in it
+(a diminished seventh, an augmented triad, a bare dyad, any other triangle-free set of two or more pitch classes)
+names its tones only relative to each other, so it cannot say where a passage changes side. Where the passes
+disagree over a run made at least half of such notes, each pitch class takes the spelling the notes around the
+run give it (32 notes each way; the rule abstains if the two sides disagree). WTC II m68: B♯, F♯, A♯, G♯ in
+dyads and triangle-free three-note sets get Bach's sharps from the sharp context, where the backward pass wrote
+C, G♭, B♭, A♭. Option `triangleFreeContext`, default on.
+
 ### Optional key hint (experimental)
 
 Keyless, the speller parks its spiral fold on the sharp side, so a genuinely flat piece can drift to its
@@ -163,7 +171,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
 | + look-ahead | 99.82% | 99.87% | 99.77% | 99.79% |
-| + two-pass | 99.88% | 99.90% | 99.85% | 99.87% |
+| + two-pass | 99.89% | 99.91% | 99.86% | 99.89% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.

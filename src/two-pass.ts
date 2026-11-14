@@ -82,6 +82,17 @@ export interface TwoPassOptions {
      *  sharp, the backward pass flat, and the cut may no longer fall between the strikes (D♯ ×6 then E♭).
      *  Default `true`. */
     runBoundary?: boolean;
+    /** NO TRIANGLE, NO SIDE BOUNDARY. A sonority with no major or minor triad in it (a diminished seventh, an
+     *  augmented triad, a bare dyad, any other triangle-free set of two or more pitch classes) names its tones only
+     *  relative to each other, so it cannot say where a passage changes side. Where the passes disagree over a run
+     *  made at least half of such notes, the merge does not place a side boundary by them: each pitch class takes
+     *  the spelling the surrounding notes give it (the last merged spelling before the run, the first agreed one
+     *  after it, within 32 notes each way), and the wolf count decides only among change-points that keep them.
+     *  If the context before and after the run spells some pitch class two ways, the rule abstains. A single pitch
+     *  class is not a sonority (an arpeggiated triad is single notes) and does not trigger it. WTC II m68: B♯, F♯,
+     *  A♯, G♯ in dyads and triangle-free three-note sets, the passes disagree, the notes around are sharp; the
+     *  merge took the backward pass's C, G♭, B♭, A♭, the rule writes Bach's sharps. Default `true`. */
+    triangleFreeContext?: boolean;
     /** In the merge's wolf-cost, an augmented sixth (ten fifths) whose sharper tone rises a semitone and whose
      *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
      *  one pitch class, not a misspelling. Default `true`. */
@@ -163,6 +174,8 @@ interface Outward { partner: (number | undefined)[]; role: number[] }
 
 /** The leading-tone gate's key table and window in the two-pass tier. */
 const TP_KEY_TABLE = 'tonic-triad', TP_KEY_RADIUS = 12;
+/** `triangleFreeContext`: notes read on each side of a disagreement run for the context spellings. */
+const CONTEXT_NOTES = 32;
 
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
@@ -318,6 +331,14 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         return true;
     };
 
+    // NO TRIANGLE, NO SIDE BOUNDARY (see `triangleFreeContext`). A note is triangle-free when the pitch classes
+    // sounding during it hold no major or minor triad and it is not a lone pitch class (a single pc inside a dim7
+    // pair still counts: the dim7 is the sonority).
+    const pcOf = (t: number) => ((N[t]!.midi % 12) + 12) % 12;
+    const hasTriad = (s: Set<number>) => { for (const r of s) if (s.has((r + 7) % 12) && (s.has((r + 4) % 12) || s.has((r + 3) % 12))) return true; return false; };
+    const dim7Note = (t: number) => (t > 0 && inDim7(t - 1, t)) || (t + 1 < n && inDim7(t, t + 1));
+    const triFree: boolean[] = (opts.triangleFreeContext ?? true)
+        ? N.map((_, t) => !hasTriad(sounding[t]!) && (sounding[t]!.size >= 2 || dim7Note(t))) : [];
     const runs = (opts.runBoundary ?? true) ? runPairs(N) : [];
     let runAt = 0;   // runs[] sorted by first strike; disagreement runs only move forward
     let i = Math.max(0, firstAgree);
@@ -354,6 +375,32 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
         const W = j - i + 2;
         const cost: number[] = []; let minCost = Infinity;
         for (let k = i; k <= j; k++) { cost[k - i] = (inner.length ? breaksOf(k) * W : 0) + costOf(k); if (cost[k - i]! < minCost) minCost = cost[k - i]!; }
+        // A run made mostly of triangle-free notes: each context spelling (before, after) that a change-point
+        // contradicts costs more than any wolf count.
+        let free = 0; if (triFree.length) for (let t = i; t < j; t++) if (triFree[t]) free++;
+        if (triFree.length && free >= (j - i) / 2) {
+            const ctx = new Map<number, number[]>();
+            for (let t = i - 1, c = 0; t >= 0 && c < CONTEXT_NOTES; t--) {
+                if (out[t] === undefined) continue;
+                c++; if (!ctx.has(pcOf(t))) ctx.set(pcOf(t), [out[t]!]);
+            }
+            const after = new Map<number, number>();
+            for (let t = j, c = 0; t < n && c < CONTEXT_NOTES; t++) {
+                if (!agree(t)) continue;
+                c++; if (!after.has(pcOf(t))) after.set(pcOf(t), fwd[t]!);
+            }
+            let split = false;
+            for (const [pc, v] of after) { const a = ctx.get(pc); if (a) { if (a[0] !== v) split = true; a.push(v); } else ctx.set(pc, [v]); }
+            if (split) ctx.clear();
+            if (ctx.size) {
+                minCost = Infinity;
+                for (let k = i; k <= j; k++) {
+                    const pick = pickFor(k); let conflicts = 0;
+                    for (let t = i; t < j; t++) for (const v of ctx.get(pcOf(t)) ?? []) if (v !== pick(t)) conflicts++;
+                    cost[k - i] = cost[k - i]! + conflicts * 1e6; if (cost[k - i]! < minCost) minCost = cost[k - i]!;
+                }
+            }
+        }
         let bestK = i, bestPref = -Infinity, bestWarm = -Infinity;
         for (let k = i; k <= j; k++) {
             if (cost[k - i]! > minCost + centreMargin) continue;

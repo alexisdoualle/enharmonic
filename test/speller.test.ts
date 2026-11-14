@@ -185,6 +185,7 @@ suite('aug6 outward convergence', () => {
         const notes = [...cMinor, [56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);
         assertEq(tok({ ...spellTwoPass(notes)[19]!, octave: 4 }), 'F#');
+        assertEq(spellTwoPass(notes, { triangleFreeContext: false }).length, notes.length);
     });
 });
 
