@@ -40,7 +40,7 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side + dominant tendency tones |
 | `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run (aug6 rule and both key gates in both passes) |
 
 Frameless and key-signature-free: in real time the side a passage settles on is a statistic of the notes
@@ -112,6 +112,24 @@ line of fifths (NaN for the F♯/G♭ tie); pass it as `sideKey` and the speller
 it changes (as `setKey`), seeding the frame on the first note. It moves whole passages to the composer's side
 (fewer flips, higher exact); it does not lower the wrong count. Two-pass does not use it.
 
+`dominant` is the rule "a dominant names its tendency tones": when a major triad or dominant seventh sounds and
+the next chord with a different root has its root a fifth below, its third (the leading tone of the target) and
+its seventh (the tone that falls to the target's third) take the spelling that makes them its third and seventh.
+E7 → Am7: the G♯ is E7's third, even when it falls to G and the look-ahead would vote A♭ (Chopin Op. 28 No. 4
+m4). The root and fifth are not renamed: the root is read from the spellings of the sounding root and fifth
+(else from the frame), and the rule abstains when the name would lie more than the leash deadzone (8 fifths)
+from the collection centre. It overrides every score except the aug6 outward rule. `dominantChords(notes)` reads
+it from `{ midi, tOn, tOff }` notes; pass it as `dominant`. Two-pass does not use it.
+
+The reach, `dominantChords(notes, { reach: 16, unit: 'onsets' })` (the default), is a theory parameter: how far
+ahead the chord a fifth below may lie. It counts onsets, not notes, so it can look past the look-ahead's
+16-note buffer. Measured from each named third or seventh to the first note of the chord that triggers it
+(reach 16 onsets): median 5 notes, 95th percentile 30, maximum 146 on our 60-piece corpus (13% beyond 16
+notes); median 5, 95th percentile 33, maximum 106 on Meredith clean (17% beyond 16); median 4, 95th
+percentile 19, maximum 37 on Meredith noisy (8% beyond 16). From the dominant's onset the trigger is a median
+of 2 onsets ahead (95th percentile 8–11). A live caller who wants the rule exactly must buffer that far, or
+pass a smaller reach.
+
 With `localKey`, the look-ahead also finds a rising leading tone's target when the note's own other spelling
 holds the target's letter: F♯ rising to G while the G slot holds G♭ is still G's leading tone (the look-ahead votes F♯) when
 the local key names F♯ a leading tone (in G major or E minor, not in D♭ major). Engine option
@@ -144,7 +162,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.82% | 99.87% | 99.76% | 99.79% |
+| + look-ahead | 99.82% | 99.87% | 99.77% | 99.79% |
 | + two-pass | 99.88% | 99.90% | 99.85% | 99.87% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the

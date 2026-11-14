@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
-import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, type LocalKey } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, type LocalKey, type DominantChord } from '../../src/index.js';
 import { resolveStep, resolveExactStep, type NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
@@ -61,14 +61,16 @@ export function loadExpected(id: string): Expected[] {
  * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored. Look-ahead mode
  * also gets each note's aug6 outward partner ({@link outwardPairs}), its local key ({@link localKeys}: the
  * tonic-triad table on ±12 onsets centred on the note), its key-degree key ({@link degreeKeys}) and its side
- * key ({@link sideKeys}: the last 96 onsets and the next 16 notes).
+ * key ({@link sideKeys}: the last 96 onsets and the next 16 notes) and its dominant ({@link dominantChords}: the
+ * next 16 onsets, which can lie beyond the 16-note buffer).
  */
 export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pitch | null)[] {
     const out: (Pitch | null)[] = [];
     const pending = new Map<number, number[]>();
     let notes: { midi: number }[] = [], pairs: { partner: number[]; role: number[] } | null = null;
     let keys: (LocalKey | null)[] | null = null, degKeys: (LocalKey | null)[] | null = null, sides: (number | null)[] | null = null;
-    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); degKeys = degreeKeys(on); sides = sideKeys(on); }
+    let doms: (DominantChord | null)[] | null = null;
+    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); degKeys = degreeKeys(on); sides = sideKeys(on); doms = dominantChords(on); }
     let onIdx = 0;
     for (let i = 0; i < events.length; i++) {
         const e = events[i]!;
@@ -87,9 +89,10 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
             const y = pairs ? pairs.partner[onIdx]! : -1;
             const localKey = keys ? keys[onIdx] : null, degreeKey = degKeys ? degKeys[onIdx] : null;
             const side = sides ? { sideKey: sides[onIdx]! } : {};
+            const dominant = doms ? doms[onIdx] : null;
             s.noteOn(e.midi, y >= 0
-                ? { t: e.t, resolveDir: dir, resolveExact: exact, outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[onIdx]!, localKey, degreeKey, ...side }
-                : { t: e.t, resolveDir: dir, resolveExact: exact, localKey, degreeKey, ...side });
+                ? { t: e.t, resolveDir: dir, resolveExact: exact, outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[onIdx]!, localKey, degreeKey, dominant, ...side }
+                : { t: e.t, resolveDir: dir, resolveExact: exact, localKey, degreeKey, dominant, ...side });
             onIdx++;
             const idx = out.length; out.push(null);
             (pending.get(e.midi) ?? pending.set(e.midi, []).get(e.midi)!).push(idx);

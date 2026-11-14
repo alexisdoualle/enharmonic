@@ -15,6 +15,8 @@ export { outwardPairs } from './aug6.js';
 export type { OutwardNote, OutwardPairs, OutwardOptions } from './aug6.js';
 export { localKeys, degreeKeys } from './key.js';
 export { sideKeys } from './key-side.js';
+export { dominantChords, DOMINANT_REACH } from './dominant.js';
+export type { DominantChord, DominantNote, DominantOptions } from './dominant.js';
 export type { LocalKey, KeyNote, KeyTable, LocalKeyOptions } from './key.js';
 
 export { spellTwoPass } from './two-pass.js';

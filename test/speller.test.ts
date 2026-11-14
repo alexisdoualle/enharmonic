@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, degreeKeys, localKeys, outwardPairs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
@@ -153,6 +153,32 @@ suite('aug6 outward convergence', () => {
         };
         assertEq(spell(false), 'C# E# G#');
         assertEq(spell(true), 'Db F Ab');
+    });
+
+    test('a dominant names its tendency tones: E7 → Am7 keeps the G♯ against a falling line', () => {
+        // Op. 28 No. 4 m3–5 in outline: D ø7 (F A♭ D C) → E7 (E G♯ D B) → Am7 over G. The G♯ falls to the bass G,
+        // so the look-ahead votes A♭ (and the D ø7 just wrote A♭); E7 resolves a fifth down, so G♯ is its third.
+        const prog = [[53, 56, 62, 72], [52, 56, 62, 71], [43, 57, 60, 64]];
+        const notes = prog.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        const doms = dominantChords(notes);
+        assertEq(doms.map(d => d ? d.root : '.').join(' '), '. . . . 4 4 4 4 . . . .');
+        // Reach: the same E7 struck again before the Am7 is skipped (same root); one onset of reach does not see past it.
+        const twice = [[52, 56, 62, 71], [52, 56, 62, 71], [43, 57, 60, 64]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        assert(dominantChords(twice)[0] !== null, 'reach 16 sees the Am7');
+        assert(dominantChords(twice, { reach: 1, unit: 'onsets' })[0] === null, 'reach 1 does not');
+        const spell = (use: boolean) => {
+            const s = new Speller({ lookAhead: true });
+            let gs = '';
+            notes.forEach((n, i) => {
+                let dir = 0;
+                for (let j = i + 1; j < notes.length && !dir; j++) if (notes[j]!.tOn !== n.tOn) dir = resolveStep(n.midi, notes[j]!.midi);
+                if (n.tOn === 1000 && !gs) gs = tok(s.getSpelling(56));
+                s.noteOn(n.midi, { t: n.tOn, resolveDir: dir, ...(use ? { dominant: doms[i] } : {}) });
+            });
+            return gs;
+        };
+        assertEq(spell(false), 'Ab');
+        assertEq(spell(true), 'G#');
     });
 
     test('spellTwoPass options: the rule and the wedge can be switched off', () => {

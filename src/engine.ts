@@ -30,6 +30,7 @@ import type { Pitch, PitchClass } from './pitch.js';
 import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
 import { isKeyDegree, isLeadingTone, isWideLeadingTone, type LocalKey } from './key.js';
+import type { DominantChord } from './dominant.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -318,7 +319,8 @@ export const TP_PASS_PRESET: EngineOptions = {
 
 /** One candidate's scoring breakdown for a note (introspection / visualiser only). The argmax is
  *  `base + guardDelta + laDelta + daDelta + vertDelta + sideDelta + leanDelta`, unless the aug6 outward
- *  rule fires: it is dispositive and overrides the argmax (`Decision.chosen` shows it). */
+ *  rule or the dominant tendency-tone rule fires: each is dispositive and overrides the argmax
+ *  (`Decision.chosen` shows it). */
 export interface DecisionCandidate {
     readonly c: PitchClass;
     readonly base: number;
@@ -419,6 +421,8 @@ export class SpellingEngine {
     private curOnsetKey = new Map<number, LocalKey>();
     /** The current onset's key-degree-gate key per midi, for the same. */
     private curOnsetDegreeKey = new Map<number, LocalKey>();
+    /** The current onset's dominant per midi (`NoteContext.dominant`), for the tendency-tone rule. */
+    private curOnsetDominant = new Map<number, DominantChord>();
     /** The recency guard's memory as it stood before the current onset: a re-decision reads it, so a note's
      *  own first spelling is not exempt from the guard. */
     private guardBefore: ({ onset: number; n: number } | undefined)[] = [];
@@ -513,9 +517,9 @@ export class SpellingEngine {
      * mechanism's delta) is highest; then run the fold check. `t`, when given, groups co-struck notes
      * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
      * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule,
-     * `localKey` the leading-tone gate and `degreeKey` the key-degree gate.
+     * `localKey` the leading-tone gate, `degreeKey` the key-degree gate and `dominant` the tendency-tone rule.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null, degreeKey?: LocalKey | null): void {
+    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null, degreeKey?: LocalKey | null, dominant?: DominantChord | null): void {
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison
@@ -530,6 +534,7 @@ export class SpellingEngine {
             this.curOnsetOutward.clear();
             this.curOnsetKey.clear();
             this.curOnsetDegreeKey.clear();
+            this.curOnsetDominant.clear();
             if (this.onsetRevise) this.guardBefore = [...this.lastByLetter];
             if (this.curOnsetPcs.length) {
                 this.pcWindow.push(this.curOnsetPcs);
@@ -551,6 +556,7 @@ export class SpellingEngine {
         if (outwardPartner !== undefined && outwardRole !== 0) this.curOnsetOutward.set(midi, { partner: outwardPartner, role: outwardRole });
         if (localKey) this.curOnsetKey.set(midi, localKey); else this.curOnsetKey.delete(midi);
         if (degreeKey) this.curOnsetDegreeKey.set(midi, degreeKey); else this.curOnsetDegreeKey.delete(midi);
+        if (dominant) this.curOnsetDominant.set(midi, dominant); else this.curOnsetDominant.delete(midi);
 
         // PRINCIPLED FRAME: the 7 slots ARE the coverage collection (raw-pc, spiral-placed, sticky), set
         // before scoring. A committed note never drifts the frame (see the commit tail); only the raw-pc
@@ -702,9 +708,44 @@ export class SpellingEngine {
             cands.push({ c: spellingOf(n), base, guardDelta, laDelta, daDelta, vertDelta, sideDelta, leanDelta });
             if (s > bestScore) { bestScore = s; best = n; }
         }
+        // DOMINANT NAMES ITS TENDENCY TONES: dispositive over every score (the look-ahead vote included), below
+        // the aug6 outward rule.
+        const named = this.lookAheadOn && !outwardIsCandidate ? this.dominantSpelling(midi, self) : null;
+        if (named !== null) best = named;
         // AUG6 OUTWARD: dispositive, above every score (a struck augmented sixth is a fact, not a preference).
         if (outwardIsCandidate) best = outward;
         return { best, scale, cands };
+    }
+
+    /** The tendency-tone rule's spelling for `midi`, or null when it does not apply. The note must be the third
+     *  or the seventh of its onset's dominant (`NoteContext.dominant`). The root is named from the committed
+     *  spellings of the chord's sounding root and fifth (majority; on a tie or with none sounding, from the
+     *  frame surface), never from the tones being named, so one provisional third cannot rename the chord. The
+     *  rule stays inside the leash deadzone (`sideRadius` fifths from the collection centre): a farther name
+     *  means the root was read on the far side, and the summed scores decide instead. */
+    private dominantSpelling(midi: number, self?: number): number | null {
+        const v = this.curOnsetDominant.get(midi);
+        if (!v) return null;
+        const off = v.offs.get(((midi % 12) + 12) % 12);
+        if (off !== 4 && off !== -2) return null;
+        const votes = new Map<number, number>();
+        for (const [m, x] of this.active) {
+            if (m === midi || m === self) continue;
+            const o = v.offs.get(((m % 12) + 12) % 12);
+            if (o === 0 || o === 1) votes.set(x - o, (votes.get(x - o) ?? 0) + 1);
+        }
+        const ranked = [...votes].sort((p, q) => q[1] - p[1]);
+        let root: number;
+        if (ranked.length && !(ranked.length > 1 && ranked[0]![1] === ranked[1]![1])) root = ranked[0]![0];
+        else {
+            const s = LETTER_ORDER.find(x => pitchClass(this.scale[x]!) === v.root);
+            if (s === undefined) return null;
+            root = this.scale[s]!;
+        }
+        const named = root + off;
+        if (!candidates(midi).includes(named)) return null;
+        const centre = this.frameMode === 'diatonic' ? this.frameCentre : this.surfaceCollectionCentre();
+        return Math.abs(named - centre) > this.sideRadius ? null : named;
     }
 
     /** The aug6 outward rule's spelling for `midi`, or null when it does not apply: the note has a pair this

@@ -16,6 +16,7 @@ import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import { outwardPairs } from '../../src/aug6.js';
 import { degreeKeys, localKeys, type LocalKey } from '../../src/key.js';
 import { sideKeys } from '../../src/key-side.js';
+import { dominantChords, type DominantChord } from '../../src/dominant.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -314,6 +315,16 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         events.forEach((e, i) => { if (e.type === 'on') { at.push(i); kn.push({ midi: e.midi!, tOn: e.t_ms }); } });
         sideKeys(kn).forEach((x, j) => sides.set(at[j]!, x));
     }
+    // A dominant names its tendency tones (look-ahead): each on-event's dominant, keyed by event index.
+    const doms = new Map<number, DominantChord | null>();
+    if (mode === 'la') {
+        const at: number[] = [], dn: { midi: number; tOn: number; tOff: number }[] = [], open = new Map<number, number[]>();
+        events.forEach((e, i) => {
+            if (e.type === 'on') { at.push(i); (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(dn.length); dn.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms }); }
+            else if (e.type === 'off') { const q = open.get(e.midi!); if (q?.length) dn[q.shift()!]!.tOff = e.t_ms; }
+        });
+        dominantChords(dn).forEach((x, j) => doms.set(at[j]!, x));
+    }
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -397,7 +408,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             const before = engine!.getResolvedScale();
             const ow = outward.get(i);
             if (mode === 'la') engine!.sideKey(sides.get(i) ?? null);
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i), degKeys.get(i));
+            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i), degKeys.get(i), doms.get(i));
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
             // ringing notes so the lattice shows the engine's current spellings, not their first ones.

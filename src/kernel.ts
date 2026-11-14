@@ -35,6 +35,11 @@ export interface NoteContext {
      *  re-centres its fold on it (as `setKey`) whenever it changes; on the very first note it also seeds the
      *  frame there (as the `keyTonic` option). Look-ahead mode; omit it to switch key → side off. */
     readonly sideKey?: number | null;
+    /** A dominant names its tendency tones: the dominant sounding at the note, when the note is one of its
+     *  tones (see `dominantChords`). If the note is its third or seventh, it takes the spelling that makes it
+     *  that tone (E7 → A: G♯, not A♭), over every score but the aug6 outward rule. Look-ahead mode; omit it to
+     *  switch the rule off. */
+    readonly dominant?: import('./dominant.js').DominantChord | null;
 }
 
 /**
