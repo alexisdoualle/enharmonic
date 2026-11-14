@@ -79,9 +79,13 @@ apart that move outward onto one pitch class (A♭–C–E♭–F♯ → G) make
 against A♭, not G♭. `outwardPairs(notes)` finds the pairs from `{ midi, tOn, tOff }` notes sorted by onset;
 the tones meet when one of the next 8 onsets strikes both goals, or when their first moves (re-strikes skipped)
 land on one onset, so a German sixth repeated across a bar still pairs (`{ firstMoveMeet: false }` turns that
-off; in `spellTwoPass`, `aug6FirstMoveMeet: false`). Pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
+off; in `spellTwoPass`, `aug6FirstMoveMeet: false`). When both goals are one pitch (F♯ and A♭ onto one G), the
+meeting onset must strike a chord of at least 3 notes (`{ chordMeet: 3 }`, the default; 0 turns it off): two lone
+voices crossing on a note are passing. `spellTwoPass` keeps this off unless `aug6ChordMeet` is set. Pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
 only when the meeting pitch is in the key and the rising tone is not, so a dominant seventh whose diatonic
-seventh rises chromatically (D→D♯ in E7) keeps its spelling. `spellTwoPass` does this itself (`aug6Outward: false` turns it off).
+seventh rises chromatically (D→D♯ in E7) keeps its spelling. In look-ahead, a pair whose falling tone the rule
+would write as a double flat of a pitch the frame names natural is a passing voice, and neither tone takes the
+rule (engine option `aug6PassingVoice`). `spellTwoPass` does this itself (`aug6Outward: false` turns it off).
 
 `localKey` names a leading tone of the local key (its ♯4 leading to the dominant; in minor also the raised
 6th and 7th): a falling chromatic line from it cancels it, so C♯→C in D minor stays C♯ instead of the

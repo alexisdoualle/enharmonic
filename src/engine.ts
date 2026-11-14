@@ -223,6 +223,12 @@ export interface EngineOptions {
      *  in E7 → B/D♯), not a ♯4; a chromatic tone rising into the key takes its letter from its goal. Default
      *  false. */
     aug6Outward?: boolean;
+    /** AN AUG6 MEETING THAT NEEDS A DOUBLE FLAT ON A NATURAL IS A PASSING VOICE (with `aug6Outward`). When the
+     *  rule would spell the falling tone as a double flat while the frame names that pitch class with a natural,
+     *  the pair is one passing voice: neither tone takes the rule, the rising one included, until either tone is
+     *  released. In an A-major frame, C and D (tones of a D7) both moving onto one C♯ would give C and E𝄫; the
+     *  frame names D, so they stay C and D (Villa-Lobos, Bachianas 5 m7). Default false. */
+    aug6PassingVoice?: boolean;
     /** LEADING-TONE GATE (look-ahead only). A leading tone of the local key (its ♯4 leading to the dominant; in
      *  minor also its raised 6th and 7th) is named by the key, and a falling chromatic line from it cancels it:
      *  C♯→C in D minor is C♯, not D♭. So when a note falls a semitone (`resolveDir` −1) and its pitch class is a
@@ -281,7 +287,7 @@ export const LA_PRESET: EngineOptions = {
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
     doubleAccPenalty: 2,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
+    aug6Outward: true, aug6PassingVoice: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
     sideWeight: 1, sideRadius: 8,
@@ -393,6 +399,7 @@ export class SpellingEngine {
     private readonly ornamentMs: number;
     private readonly verticalPcTriad: boolean;
     private readonly aug6Outward: boolean;
+    private readonly aug6PassingVoice: boolean;
     private readonly leadingToneGate: boolean;
     private readonly keyDegreeGate: boolean;
     private readonly heldLetterTarget: boolean;
@@ -406,6 +413,8 @@ export class SpellingEngine {
     private curOnsetExact = new Map<number, number>();
     /** The current onset's aug6 outward partner per midi (partner midi, role +1 rising / −1 falling). */
     private curOnsetOutward = new Map<number, { partner: number; role: number }>();
+    /** aug6PassingVoice: pairs judged one passing voice ("rising:falling" midis), until either tone is released. */
+    private deadPairs = new Set<string>();
     /** The current onset's local key per midi (the leading-tone gate's), for the same. */
     private curOnsetKey = new Map<number, LocalKey>();
     /** The current onset's key-degree-gate key per midi, for the same. */
@@ -493,6 +502,7 @@ export class SpellingEngine {
         this.ornamentMs = opts.ornamentMs ?? 0;
         this.verticalPcTriad = opts.verticalPcTriad ?? false;
         this.aug6Outward = opts.aug6Outward ?? false;
+        this.aug6PassingVoice = opts.aug6PassingVoice ?? false;
         this.leadingToneGate = opts.leadingToneGate ?? false;
         this.keyDegreeGate = opts.keyDegreeGate ?? false;
         this.heldLetterTarget = opts.heldLetterTarget ?? false;
@@ -711,7 +721,21 @@ export class SpellingEngine {
         const meetPc = (((midi + pair.role) % 12) + 12) % 12;
         const risingPc = (((pair.role === 1 ? midi : pair.partner) % 12) + 12) % 12;
         if (!collection.has(meetPc) || collection.has(risingPc)) return null;
-        return pair.role === 1 ? partnerN + 10 : partnerN - 10;
+        const out = pair.role === 1 ? partnerN + 10 : partnerN - 10;
+        if (this.aug6PassingVoice) {
+            // A falling tone the rule would write as a double flat of a pitch the frame names natural (A → B𝄫):
+            // the pair is a passing voice, and stays one for both tones while they sound.
+            const key = pair.role === 1 ? `${midi}:${pair.partner}` : `${pair.partner}:${midi}`;
+            if (this.deadPairs.has(key)) return null;
+            if (pair.role === -1) {
+                const fallPc = ((midi % 12) + 12) % 12;
+                if (collection.has(fallPc)) {
+                    const framed = letterAt(LETTER_ORDER.find(s => pitchClass(letterAt(s, centre)) === fallPc)!, centre);
+                    if (acc(out) <= -2 && acc(framed) === 0) { this.deadPairs.add(key); return null; }
+                }
+            }
+        }
+        return out;
     }
 
     /** The mean frame keeps no diatonic collection: the centre of the contiguous 7-fifth window that covers the
@@ -956,6 +980,7 @@ export class SpellingEngine {
     }
 
     noteOff(midi: number, t?: number): void {
+        if (this.deadPairs.size) for (const k of [...this.deadPairs]) { const [a, b] = k.split(':').map(Number); if (a === midi || b === midi) this.deadPairs.delete(k); }
         const p = this.pending.get(midi);
         if (p) {
             this.pending.delete(midi);
@@ -995,6 +1020,7 @@ export class SpellingEngine {
         this.foldCentre = 2;
         this.frameCentre = 2;
         this.kept.clear();
+        this.deadPairs.clear();
         this.lastCommit = null;
         this.lastDecision = null;
     }

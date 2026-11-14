@@ -131,6 +131,15 @@ suite('aug6 outward convergence', () => {
         assert(outwardPairs(notes, 8, { firstMoveMeet: false }).partner.slice(0, 4).every(p => p < 0), 'met inside the window without first moves');
     });
 
+    test('outwardPairs: a unison meet pairs only when it resolves into a chord (chordMeet)', () => {
+        // C F♯ A♭ → G: F♯ rises and A♭ falls onto ONE G. A bare G is two voices passing; a struck G chord is an aug6.
+        const at = (chords: number[][]) => chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k, tOff: k + 1 })));
+        const bare = at([[60, 66, 68], [67]]), chord = at([[60, 66, 68], [55, 59, 67]]);
+        assert(outwardPairs(bare).partner.every(p => p < 0), 'paired on a bare unison');
+        assertEq(outwardPairs(bare, 8, { chordMeet: 0 }).partner[1], 2);
+        assertEq(outwardPairs(chord).partner[1], 2); assertEq(outwardPairs(chord).role[1], 1);
+    });
+
     test('spellTwoPass options: the rule and the wedge can be switched off', () => {
         const notes = [...cMinor, [56, 60, 63, 66], [55, 59, 62, 67]].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         assertEq(spellTwoPass(notes, { aug6Outward: false, aug6Wedge: false }).length, notes.length);

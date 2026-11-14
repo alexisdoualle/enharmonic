@@ -31,6 +31,12 @@ export interface OutwardOptions {
      *  onsets (Haydn Sym. 99/ii) resolves past the look window, but both tones still move at once. Default
      *  `true`. */
     firstMoveMeet?: boolean;
+    /** A UNISON MEET RESOLVES INTO A CHORD. When the two goals are one pitch (the tones a major second apart
+     *  closing onto a unison), the pair counts only if the meeting onset strikes at least this many notes. Two
+     *  lone voices crossing on one note are passing, not an augmented sixth: in C minor, A♭ and F♯ landing on
+     *  a struck G chord are an aug6; the same two tones meeting on a bare G are not. 0 turns it off. Default 3
+     *  (the look-ahead tier); `spellTwoPass` passes 0 unless `aug6ChordMeet` is set. */
+    chordMeet?: number;
 }
 
 const pcOf = (m: number) => ((m % 12) + 12) % 12;
@@ -103,10 +109,13 @@ function firstExactMoves(notes: readonly OutwardNote[], at: number[]): number[] 
  */
 export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: OutwardOptions = {}): OutwardPairs {
     const firstMoveMeet = opts.firstMoveMeet ?? true;
+    const chordMeet = opts.chordMeet ?? 3;
     const n = notes.length;
     const partner = new Array<number>(n).fill(-1), role = new Array<number>(n).fill(0);
     const moveAt = new Array<number>(n).fill(-1);
     const moves = firstExactMoves(notes, moveAt);
+    /** How many notes the onset starting at note index h strikes. */
+    const struck = (h: number): number => { let c = 0; for (let j = h; j < n && notes[j]!.tOn === notes[h]!.tOn; j++) c++; return c; };
     for (let x = 0; x < n; x++) {
         const t = notes[x]!.tOn;
         const sounding: number[] = [];
@@ -117,18 +126,20 @@ export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: Outw
             if (moves[x] !== 1 || moves[y] !== -1) continue;
             if (!sounding.some(k => pcOf(notes[k]!.midi - notes[y]!.midi) === 4)) continue;
             let g = x; while (g < n && notes[g]!.tOn === t) g++;
+            // A unison meet (both goals one pitch) needs a chord at the meeting onset (`chordMeet`).
+            const unison = chordMeet > 0 && notes[x]!.midi + 1 === notes[y]!.midi - 1;
             let met = false;
             for (let seen = 0; g < n && seen < look; seen++) {
-                const tg = notes[g]!.tOn; let up = false, dn = false;
+                const tg = notes[g]!.tOn, g0 = g; let up = false, dn = false;
                 while (g < n && notes[g]!.tOn === tg) {
                     if (notes[g]!.midi === notes[x]!.midi + 1) up = true;
                     if (notes[g]!.midi === notes[y]!.midi - 1) dn = true;
                     g++;
                 }
-                if (up && dn) { met = true; break; }
+                if (up && dn && !(unison && struck(g0) < chordMeet)) { met = true; break; }
             }
             // "The two tones meet when their first moves, re-strikes skipped, land on one onset."
-            if (!met && firstMoveMeet && moveAt[x]! >= 0 && moveAt[x] === moveAt[y]) met = true;
+            if (!met && firstMoveMeet && moveAt[x]! >= 0 && moveAt[x] === moveAt[y] && !(unison && struck(moveAt[x]!) < chordMeet)) met = true;
             if (!met) continue;
             if (partner[x]! < 0) { partner[x] = y; role[x] = 1; }
             if (partner[y]! < 0) { partner[y] = x; role[y] = -1; }

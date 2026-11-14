@@ -71,6 +71,10 @@ export interface TwoPassOptions {
     /** The aug6 pairs also meet when the two tones' first moves land on one onset (`outwardPairs`'s
      *  `firstMoveMeet`: a held or repeated German sixth resolving past the 8-onset window). Default `true`. */
     aug6FirstMoveMeet?: boolean;
+    /** `outwardPairs`'s `chordMeet` for the passes: a unison meet pairs only if the meeting onset strikes at
+     *  least this many notes. Default 0 (off): the look-ahead tier ships it at 3, but on two-pass its fixes
+     *  were mostly wrong → flipped and it did not confirm on the fresh15 set. */
+    aug6ChordMeet?: number;
     /** In the merge's wolf-cost, an augmented sixth (ten fifths) whose sharper tone rises a semitone and whose
      *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
      *  one pitch class, not a misspelling. Default `true`. */
@@ -223,7 +227,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const bFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
     let outF: Outward | undefined;
     if (opts.aug6Outward ?? true) {
-        const op = outwardPairs(N, undefined, { firstMoveMeet: opts.aug6FirstMoveMeet ?? true });
+        const op = outwardPairs(N, undefined, { firstMoveMeet: opts.aug6FirstMoveMeet ?? true, chordMeet: opts.aug6ChordMeet ?? 0 });
         outF = { partner: op.partner.map(y => (y >= 0 ? N[y]!.midi : undefined)), role: op.role };
     }
     // The local keys are read in forward time on onsets centred on each note; the backward pass reads them too.
