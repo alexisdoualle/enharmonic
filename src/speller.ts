@@ -11,7 +11,8 @@
  * For offline use with the whole piece in hand, see {@link spellTwoPass} (highest accuracy).
  *
  * The speller is frameless and detects no key: the side/orientation it settles on is an emergent
- * statistic of the notes it has committed, never a detected key signature. (The look-ahead caller may
+ * statistic of the notes it has committed, never a detected key signature. (The look-ahead caller reads each
+ * note's resolution direction with `resolutionDirs`, which looks until the note resolves. It may
  * pass local keys, read by `localKeys` and `degreeKeys`; the engine uses them only to name a falling leading
  * tone and to keep a note's letter on a move into a chromatic pitch. It may also pass `sideKey`, read by
  * `sideKeys`: the conventional side of the local key, which re-centres the fold as `setKey` does; and `dominant`,

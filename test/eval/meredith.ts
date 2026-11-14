@@ -23,9 +23,8 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, type Pitch } from '../../src/index.js';
+import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, resolutionDirs, type Pitch } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
-import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import type { StreamingSpeller } from './fixtures.js';
 import { scoreTiers } from './score.js';
 
@@ -56,22 +55,6 @@ function parseOpndv(text: string): Note[] {
     }
     notes.sort((a, b) => a.onset - b.onset || a.midi - b.midi);
     return notes;
-}
-
-/** Look-ahead resolveDir per note index: nearest onset a semitone away (any octave) within horizon 16;
- *  with `exact`, the nearest at the exact pitch (resolveExact). */
-function resolveDirs(notes: Note[], exact = false): number[] {
-    const step = exact ? resolveExactStep : resolveStep;
-    const d = new Array<number>(notes.length).fill(0);
-    for (let a = 0; a < notes.length; a++) {
-        let seen = 0;
-        for (let b = a + 1; b < notes.length && seen < 16; b++) {
-            seen++;
-            d[a] = step(notes[a]!.midi, notes[b]!.midi);
-            if (d[a] !== 0) break;
-        }
-    }
-    return d;
 }
 
 // The engine is onset-based, so there is no memory window to configure: the streaming modes stay fully
@@ -106,8 +89,8 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     }
     const s: StreamingSpeller = mode.startsWith('core') ? core(mode)
         : new Speller({ lookAhead: mode === 'la' });
-    const dirs = mode === 'la' ? resolveDirs(notes) : null;
-    const exact = mode === 'la' ? resolveDirs(notes, true) : null;
+    const rd = mode === 'la' ? resolutionDirs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
+    const dirs = rd ? rd.dir : null, exact = rd ? rd.exact : null;
     const pairs = mode === 'la' ? outwardPairs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
     const keys = mode === 'la' ? localKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
     const degKeys = mode === 'la' ? degreeKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;

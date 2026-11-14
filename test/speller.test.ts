@@ -6,7 +6,7 @@
  */
 
 import { assert, assertEq, suite, test } from './framework.js';
-import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
+import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
@@ -179,6 +179,19 @@ suite('aug6 outward convergence', () => {
         };
         assertEq(spell(false), 'Ab');
         assertEq(spell(true), 'G#');
+    });
+
+    test('resolutionDirs: past the 16-note buffer, follow the note\'s own voice until it moves by a semitone', () => {
+        // G♯4 (68) struck with E3 (52) ten times, then a tone up (70: does not end the wait), then A4 (69). The
+        // 16-note buffer holds only repeats and the E3s, so it is silent; the own voice rises a semitone.
+        const notes = [...Array.from({ length: 10 }, (_, k) => [52, 68].map(m => ({ midi: m, tOn: k * 250 }))).flat(),
+            { midi: 70, tOn: 2500 }, { midi: 69, tOn: 2750 }];
+        const r = resolutionDirs(notes);
+        assertEq(r.dir[1], 1); assertEq(r.exact[1], 1);
+        assertEq(resolutionDirs(notes, { mode: 'window' }).dir[1], 0);
+        assertEq(resolutionDirs(notes, { max: 16 }).dir[1], 0);
+        // Inside the buffer the rule is unchanged: a co-struck semitone still counts.
+        assertEq(resolutionDirs([{ midi: 68, tOn: 0 }, { midi: 67, tOn: 0 }, { midi: 69, tOn: 1 }]).dir[0], -1);
     });
 
     test('spellTwoPass options: the rule and the wedge can be switched off', () => {

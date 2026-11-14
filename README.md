@@ -24,7 +24,7 @@ s.noteOn(67, { t: 0 });
 console.log(s.getSpelling(64)); // { step: 'E', alter: 0, octave: 4 }
 s.noteOff(60, { t: 500 }); s.noteOff(64, { t: 500 }); s.noteOff(67, { t: 500 });
 
-// Near-real-time: feed resolveDir (and resolveExact) from a small forward buffer
+// Near-real-time: feed resolveDir (and resolveExact) from the notes ahead (resolutionDirs reads them)
 const nrt = new Speller({ lookAhead: true });
 nrt.noteOn(61, { t: 0, resolveDir: 1, resolveExact: 1 }); // resolves up to 62 → prefer C♯ over D♭
 
@@ -40,7 +40,7 @@ const spelled = spellTwoPass([
 | Call | Latency | Role |
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
-| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side + dominant tendency tones |
+| `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead (looks until the note resolves) + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side + dominant tendency tones |
 | `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run, never by a triangle-free sonority (aug6 rule and both key gates in both passes) |
 
 Frameless and key-signature-free: in real time the side a passage settles on is a statistic of the notes
@@ -74,6 +74,18 @@ shape how later notes are spelled; without `t` every note counts.
 0 none); `resolveExact` is the same at the exact pitch, the note's own line. `resolveStep` and
 `resolveExactStep` compute each from a pair of midi numbers. The exact one lets a rising chromatic line
 (B, B♯, C♯) through the recency guard.
+
+`resolutionDirs(notes)` reads both for every note of `{ midi, tOn }` notes in onset order: the first semitone
+step among the next 16 notes, and when that finds none, "look until the note resolves": it follows the note's
+own voice (same octave; notes struck with it do not count, a re-strike extends the scan, a step of a tone does
+not end it) until the voice moves by a semitone, up to 128 notes. Mozart Requiem Introitus m45: G♯ hammered
+eight times across doubled parts rises to A 80 notes later; the 16-note buffer finds no semitone and the speller
+wrote A♭, the own-voice scan writes G♯. The reach, `resolutionDirs(notes, { mode: 'own-voice', window: 16, max:
+128, unit: 'notes' })` (the default, `RESOLUTION_REACH`), is a theory parameter, not a latency budget: about one
+chromatic note in six resolves beyond 16 notes (doubled or repeated chords, hammered notes, a voice resting),
+and following it pays up to about 128 notes. A live caller who wants the rule exactly must buffer that far;
+`{ mode: 'window' }` keeps the 16-note buffer only. A far resolution on the same letter (E later falling to E♭)
+is still read as a letter step, as within the buffer. Two-pass keeps its own 16-note reader.
 
 `outwardPartner` and `outwardRole` name an augmented sixth by where its tones go: two tones ten semitones
 apart that move outward onto one pitch class (A♭–C–E♭–F♯ → G) make the rising tone the ♯4, spelled F♯
@@ -170,7 +182,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
-| + look-ahead | 99.82% | 99.87% | 99.77% | 99.79% |
+| + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
 | + two-pass | 99.89% | 99.91% | 99.86% | 99.89% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the

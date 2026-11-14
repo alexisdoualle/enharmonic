@@ -12,11 +12,11 @@
 import type { Pitch, PitchClass } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
-import { resolveStep, resolveExactStep } from '../../src/kernel.js';
 import { outwardPairs } from '../../src/aug6.js';
 import { degreeKeys, localKeys, type LocalKey } from '../../src/key.js';
 import { sideKeys } from '../../src/key-side.js';
 import { dominantChords, type DominantChord } from '../../src/dominant.js';
+import { resolutionDirs } from '../../src/resolution.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -102,7 +102,7 @@ export interface Snapshot {
 
 /** What the look-ahead tier is told about one note besides its pitch (see `SpellingEngine.noteOn`). */
 export interface LaContext {
-    resolveDir: number;              // +1 / −1: next onset a semitone up / down (any octave) within LA_HORIZON; 0 none
+    resolveDir: number;              // +1 / −1: next onset a semitone up / down (any octave) within LA_HORIZON, else the note's own voice (la); 0 none
     exactDir: number;                // the same at the exact pitch
     localKey: LocalKey | null;       // leading-tone gate + held-letter target key
     degreeKey: LocalKey | null;      // key-degree gate key
@@ -199,23 +199,15 @@ export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitc
  *  near-real-time caller holds. */
 export const LA_HORIZON = 16;
 
-/** Onsets in event order, each with a resolution direction for look-ahead (next onset a semitone away
- *  in any octave, within `horizon` upcoming onsets; with `exact`, at the exact pitch): the forward buffer a
- *  near-real-time caller feeds. */
-function onsetDirs(events: RawEvent[], horizon = LA_HORIZON, exact = false): Map<number, number> {
-    const step = exact ? resolveExactStep : resolveStep;
-    const dir = new Map<number, number>();
-    const ons = events.map((e, i) => ({ e, i })).filter(x => x.e.type === 'on');
-    for (let k = 0; k < ons.length; k++) {
-        const midi = ons[k]!.e.midi!;
-        let d = 0;
-        for (let j = k + 1; j < ons.length && j - k <= horizon; j++) {
-            d = step(midi, ons[j]!.e.midi!);
-            if (d !== 0) break;
-        }
-        dir.set(ons[k]!.i, d);
-    }
-    return dir;
+/** {@link resolutionDirs} (the look-ahead's shipped resolution reader: the 16-note buffer, then the note's own
+ *  voice until it resolves), `dir` and `exact`, each keyed by event index. */
+function onsetResolutions(events: RawEvent[]): { dir: Map<number, number>; exact: Map<number, number> } {
+    const at: number[] = [], notes: { midi: number; tOn: number }[] = [];
+    events.forEach((e, i) => { if (e.type === 'on') { at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms }); } });
+    const r = resolutionDirs(notes, { window: LA_HORIZON });
+    const dir = new Map<number, number>(), exact = new Map<number, number>();
+    at.forEach((i, j) => { dir.set(i, r.dir[j]!); exact.set(i, r.exact[j]!); });
+    return { dir, exact };
 }
 
 /** Each on-event's aug6 outward partner (its midi) and role, keyed by event index: the look-ahead context a
@@ -303,8 +295,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             ...(spiral.onsetTolerance ? { onsetTolerance: spiral.onsetTolerance } : {}),
         })
         : null;
-    const dirs = onsetDirs(events);
-    const exactDirs = onsetDirs(events, LA_HORIZON, true);
+    // Look-ahead resolution directions (only the look-ahead reads them).
+    const { dir: dirs, exact: exactDirs } = mode === 'la' ? onsetResolutions(events) : { dir: new Map<number, number>(), exact: new Map<number, number>() };
     const outward = mode === 'la' ? onsetOutward(events) : new Map<number, { partner: number; role: number }>();
     const keys = mode === 'la' ? onsetKeys(events) : new Map<number, LocalKey | null>();
     const degKeys = mode === 'la' ? onsetKeys(events, degreeKeys) : new Map<number, LocalKey | null>();

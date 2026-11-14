@@ -8,8 +8,9 @@ import type { LocalKey } from './key.js';
 
 /** Per-note context passed to the speller. */
 export interface NoteContext {
-    /** Look-ahead resolution direction (+1 up, −1 down, 0 none), supplied from a small forward buffer.
-     *  Used only in look-ahead mode; the real-time and two-pass paths ignore it. */
+    /** Look-ahead resolution direction (+1 up, −1 down, 0 none), read from the notes ahead (`resolutionDirs`:
+     *  the 16-note buffer, then the note's own voice until it resolves). Used only in look-ahead mode; the
+     *  real-time and two-pass paths ignore it. */
     readonly resolveDir?: number;
     /** The same at the exact pitch (+1 if the note's semitone above in the same octave comes first, −1 for
      *  the semitone below, 0 neither): the note's own line, not another voice. Look-ahead mode only. */

@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { Pitch } from '../../src/index.js';
-import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, type LocalKey, type DominantChord } from '../../src/index.js';
-import { resolveStep, resolveExactStep, type NoteContext } from '../../src/kernel.js';
+import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, resolutionDirs, type LocalKey, type DominantChord } from '../../src/index.js';
+import type { NoteContext } from '../../src/kernel.js';
 import { CoreSpeller } from '../../src/core.js';
 
 /** The streaming surface `drive` needs: satisfied by both the shipped `Speller` and the
@@ -56,9 +56,9 @@ export function loadExpected(id: string): Expected[] {
 /**
  * Drive a streaming Speller over an event list, returning one spelling per `on`
  * event in onset order. Read-back happens at `noteOff` (a note's final committed
- * spelling). For look-ahead mode, `resolveDir` is derived from the next onset a
- * semitone away in ANY octave within `horizon` upcoming onsets: the small forward
- * buffer a real caller feeds. See {@link resolveStep} for why the octave is ignored. Look-ahead mode
+ * spelling). For look-ahead mode, `resolveDir` / `resolveExact` come from {@link resolutionDirs}: the next onset a
+ * semitone away (any octave / exact pitch) within `horizon` upcoming onsets, the forward buffer, and when that finds
+ * nothing, the note's own voice until it moves by a semitone (up to 128 notes). Look-ahead mode
  * also gets each note's aug6 outward partner ({@link outwardPairs}), its local key ({@link localKeys}: the
  * tonic-triad table on ±12 onsets centred on the note), its key-degree key ({@link degreeKeys}) and its side
  * key ({@link sideKeys}: the last 96 onsets and the next 16 notes) and its dominant ({@link dominantChords}: the
@@ -69,23 +69,13 @@ export function drive(s: StreamingSpeller, events: BatchEv[], horizon = 16): (Pi
     const pending = new Map<number, number[]>();
     let notes: { midi: number }[] = [], pairs: { partner: number[]; role: number[] } | null = null;
     let keys: (LocalKey | null)[] | null = null, degKeys: (LocalKey | null)[] | null = null, sides: (number | null)[] | null = null;
-    let doms: (DominantChord | null)[] | null = null;
-    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); degKeys = degreeKeys(on); sides = sideKeys(on); doms = dominantChords(on); }
+    let doms: (DominantChord | null)[] | null = null, dirs: { dir: number[]; exact: number[] } | null = null;
+    if (s.lookAhead) { const on = onNotes(events); notes = on; pairs = outwardPairs(on); keys = localKeys(on); degKeys = degreeKeys(on); sides = sideKeys(on); doms = dominantChords(on); dirs = resolutionDirs(on, { window: horizon }); }
     let onIdx = 0;
     for (let i = 0; i < events.length; i++) {
         const e = events[i]!;
         if (e.type === 'on') {
-            let dir = 0, exact = 0, seen = 0;
-            if (s.lookAhead) {
-                for (let j = i + 1; j < events.length && seen < horizon; j++) {
-                    const fwd = events[j]!;
-                    if (fwd.type !== 'on') continue;
-                    seen++;
-                    if (dir === 0) dir = resolveStep(e.midi, fwd.midi);
-                    if (exact === 0) exact = resolveExactStep(e.midi, fwd.midi);
-                    if (dir !== 0 && exact !== 0) break;
-                }
-            }
+            const dir = dirs ? dirs.dir[onIdx]! : 0, exact = dirs ? dirs.exact[onIdx]! : 0;
             const y = pairs ? pairs.partner[onIdx]! : -1;
             const localKey = keys ? keys[onIdx] : null, degreeKey = degKeys ? degKeys[onIdx] : null;
             const side = sides ? { sideKey: sides[onIdx]! } : {};
