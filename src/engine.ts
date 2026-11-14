@@ -265,11 +265,13 @@ export const RT_PRESET: EngineOptions = {
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
- *  + the double-accidental leash + the vertical guard + collision repair + the onset buffer + the
- *  diatonic-anchor leash, over the diatonic frame. */
+ *  + the double-accidental leash + the vertical guard + the onset buffer + the diatonic-anchor leash, over
+ *  the diatonic frame. The mean-frame fields (collisionRepair, foldDebounce, anchorWindow, the clamp fold
+ *  mode) are not set: the diatonic frame returns before the code that reads them. The fold RANGE
+ *  (foldCenter/foldRadius) is live: it bounds the frame's placement on the spiral. */
 export const LA_PRESET: EngineOptions = {
     recencyGuard: 2, guardWindow: 7,
-    fold: 'clamp', foldCenter: 3, foldRadius: 7, foldDebounce: 8,
+    foldCenter: 3, foldRadius: 7,
     // lookAheadWeight stays 2; the extra pull comes from leadingToneBoost, GATED to up-resolutions into a
     // natural target (a genuine leading tone A♯→B), so it does not over-sharpen same-letter chromatic
     // inflections (C→C♯, C♯→C). A blunt weight bump cannot make that distinction and over-sharpens diatonic
@@ -277,12 +279,12 @@ export const LA_PRESET: EngineOptions = {
     // E♭→E, a lowered borrowed degree rising to the natural 3rd, is inseparable from a leading tone without
     // harmonic context.
     lookAhead: true, lookAheadWeight: 2, leadingToneBoost: 1,
-    doubleAccPenalty: 2, collisionRepair: true,
+    doubleAccPenalty: 2,
     frameMode: 'diatonic', onsetRevise: true, guardRaiseLine: true,
     aug6Outward: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
     // The leash with a wider deadzone than real-time's: a dim7 spans 9 fifths and an aug6 10, so at radius 6
     // one end of a dim7 or the aug6's sharp is pulled across.
-    sideWeight: 1, sideRadius: 8, anchorWindow: 32,
+    sideWeight: 1, sideRadius: 8,
     ornamentMs: 80,
     // The vertical guard reads the triad by pitch class and weighs a misspelled third 2.
     verticalWeight: 2, verticalPcTriad: true,

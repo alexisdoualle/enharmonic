@@ -296,7 +296,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             foldRepairScale: spiral.repair ?? false,
             // A/B toggle: run the older 'mean' drift-and-fold side substrate instead of the shipped diatonic
             // frame (over the same clamp fold + leash the preset already carries). Off = the shipped default.
-            ...(spiral.meanFrame ? { frameMode: 'mean' as const } : {}),
+            // LA_PRESET leaves out the mean-only collision repair (inert in the diatonic frame); put it back here.
+            ...(spiral.meanFrame ? { frameMode: 'mean' as const, ...(mode === 'la' ? { collisionRepair: true } : {}) } : {}),
             ...(spiral.onsetTolerance ? { onsetTolerance: spiral.onsetTolerance } : {}),
         })
         : null;
