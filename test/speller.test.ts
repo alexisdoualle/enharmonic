@@ -514,6 +514,41 @@ suite('key signature (keyTonic / setKey)', () => {
             assertEq(play(keyed(-3), steps, { 3: s => s.setKey(-3) }), play(keyed(-3), steps));
         });
     }
+
+    // A key the caller gives outranks the speller's own key estimate. The look-ahead's inferred side key (sideKeys)
+    // used to re-centre the fold whenever it changed, so under a notated D♭ signature an inferred C♯ major (+7)
+    // folded the frame back to sharps one note after the signature placed it (Chopin Op. 28/15 m77).
+    const playSided = (s: Speller, steps: number[][], side: (i: number) => number): string => {
+        let t = 0;
+        return steps.map((ch, i) => {
+            for (const m of ch) s.noteOn(m, { t, sideKey: side(i) });
+            const names = ch.map(m => tok(s.getSpelling(m))).join(' ');
+            t += 500;
+            for (const m of ch) s.noteOff(m, { t });
+            return names;
+        }).join(' | ');
+    };
+    const dflat = [[61, 65, 68], [66, 70, 73], [68, 72, 75], [61, 65, 68], [63, 66, 70], [68, 72, 75], [61, 65, 68]];
+    test('look-ahead: an inferred C♯ major does not pull a D♭ signature to sharps', () => {
+        assertEq(playSided(new Speller({ lookAhead: true, keyTonic: -5 }), dflat, i => (i < 2 ? -5 : 7)),
+            'Db F Ab | Gb Bb Db | Ab C Eb | Db F Ab | Eb Gb Bb | Ab C Eb | Db F Ab');
+    });
+    // The signature decides the side (the comma) of the inferred key, not the key: an inferred key a comma away
+    // from a conventional reading nearer the signature takes that reading (C♯ major under five flats → D♭ major);
+    // a modulation the signature does not name still moves the fold (F minor under four sharps; Grieg's Morning
+    // Mood m38, whose C F A would otherwise drift to B♯ E♯ G𝄪).
+    test('look-ahead: under a signature the inferred key keeps its key and takes the signature\'s side', () => {
+        const fold = (sig: number, sides: number[]): number => {
+            const e = new SpellingEngine(LA_PRESET);
+            e.keySignature(sig);
+            sides.forEach((x, k) => { e.sideKey(x); e.noteOn(60, k * 500); e.noteOff(60, k * 500 + 250); });
+            return (e as unknown as { foldCenter: number }).foldCenter - 2;
+        };
+        assertEq(fold(-5, [-5, 7]), -5, 'C♯ major (+7) under D♭ major: D♭ major');
+        assertEq(fold(4, [4, -4]), -4, 'A♭ major (−4) under E major: A♭ major, no G♯ major (+8)');
+        assertEq(fold(0, [0, -7]), 5, 'C♭ major (−7) under C major: B major (+5), the nearer conventional side');
+        assertEq(fold(-1, [-1, 6]), -6, 'the F♯/G♭ tie under one flat: G♭ major');
+    });
 });
 
 suite('seven-accidental twin (real-time frameTwin)', () => {

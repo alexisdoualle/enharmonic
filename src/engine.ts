@@ -1221,6 +1221,13 @@ export class SpellingEngine {
      * none. The first call seeds the frame on that key when no note has sounded yet (the `keyTonic` start; a
      * tie seeds the sharp side). After that, a key that differs from the last one re-centres the fold
      * ({@link setKey}). A tie takes the side (F♯ or G♭ major) nearer the current surface's mean.
+     *
+     * A key the caller gives outranks the speller's own key estimate ON THE SIDE: once a signature is supplied
+     * ({@link keySignature}), an inferred key that has a conventional reading (at most 7 accidentals) one comma
+     * nearer the signature takes that reading: C♯ major (+7) under five flats is D♭ major (−5), where the
+     * inferred +7 used to fold the frame back to sharps one note after the signature placed it (Chopin Op. 28/15
+     * m77). The key itself still comes from the notes: a modulation the signature does not name (F minor under
+     * four sharps, Grieg's Morning Mood m38) still re-centres the fold. A tie keeps the inferred reading.
      */
     sideKey(x: number | null): void {
         if (!this.sideStarted) {
@@ -1239,6 +1246,20 @@ export class SpellingEngine {
             const mean = sc.reduce((a, p) => a + lofOf(p), 0) / sc.length;
             x = Math.abs(6 + 2 - mean) <= Math.abs(-6 + 2 - mean) ? 6 : -6;
         }
+        // A supplied signature picks the comma of the inferred key (variant B, chosen 15 Nov 2026).
+        // The alternative, variant A (once a signature is supplied, ignore the inferred side key altogether), is
+        // better for stitched pieces and sets with many keys inside one input: there each new signature arrives
+        // while the inferred key still lags the previous piece by up to its 96-onset window, and when that lagging
+        // key has no conventional reading near the new signature, B lets it re-centre the fold and A does not
+        // (start of the WTC 1 C♯-major prelude after C-minor material: inferred −3/−4, and +8/+9 is not allowed).
+        // Keyed look-ahead (lab tools/probe/_keyhint_bench.ts), no fix → A → B: all 60 fixtures wrong
+        // 3,078 → 2,853 → 2,978, flipped 21,802 → 2,200 → 2,335 (the A-over-B gap is WTC 1/2 and the glued Chopin
+        // waltzes); Meredith clean wrong 224 → 219 → 224. B was chosen because A breaks every modulation the
+        // signature does not name: Grieg's Morning Mood m38, an F-major area under four sharps, drifts to
+        // B♯ E♯ G𝄪 (749 notes). On the 50 single pieces B wins every metric: exact 97.47 → 97.64 → 98.27%,
+        // flipped 2,090 → 1,878 → 937, wrong 1,696 → 1,659 → 1,656.
+        const sig = this.signedKey;
+        if (sig !== null) for (const c of [x + 12, x - 12]) if (Math.abs(c) <= 7 && Math.abs(c - sig) < Math.abs(x - sig)) x = c;
         if (x !== this.sideX) { this.setKey(x); this.sideX = x; }
     }
 
