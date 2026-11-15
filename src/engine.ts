@@ -1087,6 +1087,42 @@ export class SpellingEngine {
      */
     setKey(keyTonic: number): void { this.foldCenter = keyTonic + 2; }
 
+    /** The supplied key signature ({@link keySignature}), null for none; a supplied one outranks the first inferred
+     *  side key. */
+    private signedKey: number | null = null;
+
+    /**
+     * A supplied KEY SIGNATURE (the Speller's `keyTonic` and `setKey`): the signature names the collection until the
+     * music contradicts it. Re-centres the fold basin as {@link setKey} does and, in the diatonic frame, makes the
+     * signature's collection the held frame: the notes heard before it are not evidence against it, so the frame's
+     * raw-pc evidence restarts from the signature, and the frame leaves it only when the notes after it out-cover it
+     * (the frame's usual hysteresis). A note with no context therefore takes the signature's spelling, and after a
+     * change, the new signature's. Alterations held over the old collection are pulled back, as on any collection
+     * move; sounding notes keep their committed spelling, and the voice memory (recency guard) is kept. Under the
+     * mean frame it seeds the slots before the first note (the old `reset(collectionAt)` seed) and is otherwise
+     * {@link setKey}. Restating the current signature changes nothing. `keyTonic` as in {@link setKey}.
+     *
+     * Keyless runs never call it. (The seed in {@link reset} and in the first {@link sideKey} call does not reach the
+     * diatonic frame, whose centre `reset` puts back at C: a known gap, left as is because keyless look-ahead runs
+     * through it.)
+     */
+    keySignature(keyTonic: number): void {
+        this.setKey(keyTonic);
+        if (keyTonic === this.signedKey) return;   // the same signature restated is not a new one
+        this.signedKey = keyTonic;
+        const c = Math.round(keyTonic) + 2;   // the frame's centre is a whole position on the line of fifths
+        if (this.frameMode !== 'diatonic') { if (this.onset < 0) this.reset(collectionAt(c)); return; }
+        this.frameCentre = c;
+        this.foldCentre = c;
+        this.collectionCentre = c;
+        this.anchor = c;
+        for (let s = 0; s < 7; s++) this.scale[s] = letterAt(s, c);
+        this.kept.clear();
+        this.pending.clear();
+        this.pcWindow = [];
+        this.curOnsetPcs = [];
+    }
+
     /** The key signature the ECONOMY fold counts accidentals from: its relative-major tonic on the line of
      *  fifths (0 = C, the default count). */
     private signature = 0;
@@ -1111,7 +1147,8 @@ export class SpellingEngine {
     sideKey(x: number | null): void {
         if (!this.sideStarted) {
             this.sideStarted = true;
-            if (x !== null) {
+            // A supplied signature already seeded the start; the inferred side key does not replace it.
+            if (x !== null && this.signedKey === null) {
                 const kt = Number.isNaN(x) ? 6 : x;
                 this.setKey(kt);
                 if (this.onset < 0) this.reset(collectionAt(kt + 2));

@@ -426,6 +426,67 @@ suite('onset tolerance', () => {
     }
 });
 
+suite('key signature (keyTonic / setKey)', () => {
+    // The signature names the collection until the music contradicts it: a note with no context takes the
+    // signature's spelling, and after setKey, the new signature's. Both latency modes share the key path.
+    const LOF_STEP = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+    const lofName = (n: number): string => { const a = Math.floor((n + 1) / 7); return LOF_STEP[n + 1 - 7 * a]! + (a > 0 ? '#'.repeat(a) : 'b'.repeat(-a)); };
+    const lofPc = (n: number): number => ((7 * n) % 12 + 12) % 12;
+    /** Play `steps` (each a chord of MIDI keys, 500 ms apart); `before[i]` runs before step i. */
+    const play = (s: Speller, steps: number[][], before: Record<number, (s: Speller) => void> = {}): string => {
+        let t = 0;
+        return steps.map((ch, i) => {
+            before[i]?.(s);
+            for (const m of ch) s.noteOn(m, { t });
+            const names = ch.map(m => tok(s.getSpelling(m))).join(' ');
+            t += 500;
+            for (const m of ch) s.noteOff(m, { t });
+            return names;
+        }).join(' | ');
+    };
+    for (const lookAhead of [false, true]) {
+        const mode = lookAhead ? 'look-ahead' : 'real-time';
+        const keyed = (keyTonic: number) => new Speller({ keyTonic, lookAhead });
+
+        test(`${mode}: a first note takes the signature's spelling, for every key from 7 flats to 7 sharps`, () => {
+            for (let k = -7; k <= 7; k++) for (let n = k - 1; n <= k + 5; n++) {
+                assertEq(play(keyed(k), [[60 + lofPc(n)]]), lofName(n), `key ${k}: first ${lofName(n)}`);
+            }
+        });
+
+        test(`${mode}: in three flats (C minor) a first A♭ is A♭`, () => {
+            assertEq(play(keyed(-3), [[68]]), 'Ab');
+        });
+
+        test(`${mode}: a D♭-major scale from a cold start is spelled in D♭`, () => {
+            assertEq(play(keyed(-5), [[61], [63], [65], [66], [68], [70], [72], [73]]), 'Db | Eb | F | Gb | Ab | Bb | C | Db');
+        });
+
+        test(`${mode}: a C♭-major scale from a cold start is spelled in C♭`, () => {
+            assertEq(play(keyed(-7), [[59], [61], [63], [64], [66], [68], [70], [71]]), 'Cb | Db | Eb | Fb | Gb | Ab | Bb | Cb');
+        });
+
+        test(`${mode}: after C major, setKey(D♭) spells the first D♭ triad in D♭`, () => {
+            assertEq(play(keyed(0), [[60, 64, 67], [65, 69, 72], [67, 71, 74], [60, 64, 67], [61, 65, 68], [66, 70, 73]], { 4: s => s.setKey(-5) }),
+                'C E G | F A C | G B D | C E G | Db F Ab | Gb Bb Db');
+        });
+
+        test(`${mode}: setKey mid-stream in a keyless start names the new collection`, () => {
+            assertEq(play(new Speller({ lookAhead }), [[60, 64, 67], [68]], { 1: s => s.setKey(-3) }), 'C E G | Ab');
+        });
+
+        test(`${mode}: the signature names only what the music has not contradicted (C major, E G♯ B A keeps G♯)`, () => {
+            assertEq(play(keyed(0), [[64], [68], [71], [69]]), 'E | G# | B | A');
+            assertEq(play(keyed(0), [[64, 68, 71], [57, 60, 64]]), 'E G# B | A C E');
+        });
+
+        test(`${mode}: restating the current key changes nothing`, () => {
+            const steps = [[60], [63], [67], [66], [68], [61]];
+            assertEq(play(keyed(-3), steps, { 3: s => s.setKey(-3) }), play(keyed(-3), steps));
+        });
+    }
+});
+
 suite('curated fixtures', () => {
     for (const id of FIXTURES) {
         test(`${id}: real-time commits one spelling per onset`, () => {

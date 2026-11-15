@@ -21,7 +21,7 @@
 
 import type { Pitch, PitchClass } from './pitch.js';
 import type { NoteContext } from './kernel.js';
-import { SpellingEngine, RT_PRESET, LA_PRESET, collectionAt } from './engine.js';
+import { SpellingEngine, RT_PRESET, LA_PRESET } from './engine.js';
 
 export interface SpellerOptions {
     /**
@@ -57,20 +57,23 @@ export class Speller {
         this.lookAhead = opts.lookAhead ?? false;
         const preset = this.lookAhead ? LA_PRESET : RT_PRESET;
         this.engine = new SpellingEngine(opts.onsetTolerance ? { ...preset, onsetTolerance: opts.onsetTolerance } : preset);
-        // An initial key is just setKey at t=0 plus a matching frame seed (see setKey / keyTonic).
-        if (opts.keyTonic !== undefined) { this.engine.setKey(opts.keyTonic); this.engine.reset(collectionAt(opts.keyTonic + 2)); }
+        // An initial key is setKey at t=0: the signature names the opening collection (see setKey).
+        if (opts.keyTonic !== undefined) this.engine.keySignature(opts.keyTonic);
     }
 
     /**
      * Change the key mid-stream: call between notes at each notated key-signature change (a modulation, or
-     * a new piece in a concatenated file), the way you would replay a MusicXML/MIDI key track. It re-centres
-     * the spiral fold basin on the new key WITHOUT clearing the running frame, so continuity is kept; a
-     * single construction-time `keyTonic` is just the t=0 case. `keyTonic` = signed line-of-fifths of the
-     * MAJOR tonic (minor: its relative major). For a HARD boundary that should also reset the frame (truly
-     * independent pieces), call `reset(scale)` at the seam as well.
+     * a new piece in a concatenated file), the way you would replay a MusicXML/MIDI key track. The new
+     * signature names the collection until the music contradicts it: the next notes are spelled in it (a
+     * D♭ triad right after a change from C major to D♭ major is D♭–F–A♭), the notes before the change no
+     * longer count as evidence against it, and the frame leaves it only when later notes out-cover it. The
+     * spiral fold basin is re-centred on the key. Sounding notes and the voice memory are kept; restating
+     * the current key changes nothing. A single construction-time `keyTonic` is just the t=0 case.
+     * `keyTonic` = signed line-of-fifths of the MAJOR tonic (minor: its relative major). For a HARD
+     * boundary that should also forget the voices (truly independent pieces), construct a new Speller.
      */
     setKey(keyTonic: number): void {
-        this.engine.setKey(keyTonic);
+        this.engine.keySignature(keyTonic);
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
