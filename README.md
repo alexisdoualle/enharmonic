@@ -173,6 +173,13 @@ m48–52 come back to A♭ and C♭. The counter-case is a prior key that was it
 at +7): the return restores the over-rotation. Option `keyReturn`, default on (`centredSideKeys(notes, radius,
 keyReturn)`).
 
+A composer respells a passage for a section, never for a few beats. Where the passes disagree over a region of at
+most 32 onsets holding at least three pitch classes, and the merge spells it against the notes just before and just
+after it (32 notes each way, which agree with each other), the region takes, whole, the pass the surroundings use.
+Handel, Op. 2 No. 9/iv m71–76: the merge wrote A♭ minor and D♭ minor (B𝄫, E𝄫) inside Handel's sharps; the rule
+gives back his G♯ minor and C♯ minor (F𝄪, B♯, E♯). The cost is a composer's own short respell, which is undone too
+(Chopin's *Barcarolle* m23–24). Option `shortFlip`, default on.
+
 After the merge, two-pass lets a struck triad spell its third member: where the three pitch classes of a major or
 minor triad are attacked together and two members are spelled coherently with each other, a member a comma off the
 triad (a diminished fourth or augmented second inside it) takes the spelling that completes it, but only toward the
@@ -231,7 +238,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.54% | 99.61% | 99.49% | 99.57% |
 | + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
-| + two-pass | 99.90% | 99.92% | 99.89% | 99.89% |
+| + two-pass | 99.93% | 99.93% | 99.89% | 99.89% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.

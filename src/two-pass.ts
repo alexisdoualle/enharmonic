@@ -148,6 +148,15 @@ export interface TwoPassOptions {
      *  guarded: *Pathétique* ii m42–49 (E major under four flats) is four fifths away and keeps the inferred
      *  sharps. Default `true`; inert without `keySignatures` or when `keySide` is off. */
     keySignatureAnchor?: boolean;
+    /** A SHORT RESPELLED SECTION TAKES THE SURROUNDING SIDE. A composer respells a passage for a section, never for a
+     *  few beats: in the merge, a disagreement region of at most {@link SHORT_FLIP_MAX_ONSETS} onsets and at least
+     *  {@link SHORT_FLIP_MIN_PCS} pitch classes, whose merged spelling contradicts the spelling of the same pitch
+     *  classes just before and just after it (the two contexts agreeing with each other), takes whole the pass whose
+     *  spelling the surroundings use, when that pass contradicts them less than the merge does. Meredith clean (216
+     *  movements): the two-pass merge left short off-side islands inside agreeing context (46 flipped notes), all
+     *  undone. Counter-case: a composer's own short respell is undone too (Chopin *Barcarolle* m23–24). Default
+     *  `true`. */
+    shortFlip?: boolean;
 }
 
 /** One pass's engine state right after it committed a note (introspection / visualiser only). */
@@ -217,6 +226,10 @@ interface Outward { partner: (number | undefined)[]; role: number[] }
 const TP_KEY_TABLE = 'tonic-triad', TP_KEY_RADIUS = 12;
 /** `triangleFreeContext`: notes read on each side of a disagreement run for the context spellings. */
 const CONTEXT_NOTES = 32;
+/** `shortFlip`: the longest region (in onsets) that counts as short — the scorer's flip window is ±16 onsets, so a
+ *  respell shorter than 32 onsets is never a section; and the fewest pitch classes it must hold — with one or two
+ *  (a held or repeated note) the rule becomes a memory rule on held notes and loses. */
+const SHORT_FLIP_MAX_ONSETS = 32, SHORT_FLIP_MIN_PCS = 3;
 /** `keySide`: the most accidentals a key signature may have and still choose the side. */
 const KEY_SIDE_MAX_ACCIDENTALS = 5;
 /** `struckTriadThird`: notes read on each side for the co-sounding members, the merged centre, and onsets scanned
@@ -460,6 +473,33 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const triFree: boolean[] = (opts.triangleFreeContext ?? true)
         ? N.map((_, t) => !hasTriad(sounding[t]!) && (sounding[t]!.size >= 2 || dim7Note(t))) : [];
     const runs = (opts.runBoundary ?? true) ? runPairs(N) : [];
+    // A SHORT RESPELLED SECTION TAKES THE SURROUNDING SIDE (see `shortFlip`). Reads the context before [i, j) in the
+    // merge and after it in the agreeing notes (the first spelling of each pitch class within CONTEXT_NOTES notes);
+    // if no pitch class is spelled differently before and after, and the region is short and holds enough pitch
+    // classes, the pass that contradicts the context less replaces the merge when the merge contradicts it more.
+    const shortFlip = opts.shortFlip ?? true;
+    const shortFlipRepair = (i: number, j: number): void => {
+        const before = new Map<number, number>();
+        for (let t = i - 1, c = 0; t >= 0 && c < CONTEXT_NOTES; t--) { if (out[t] === undefined) continue; c++; if (!before.has(pcOf(t))) before.set(pcOf(t), out[t]!); }
+        const after = new Map<number, number>();
+        for (let t = j, c = 0; t < n && c < CONTEXT_NOTES; t++) { if (!agree(t)) continue; c++; if (!after.has(pcOf(t))) after.set(pcOf(t), fwd[t]!); }
+        for (const [pc, v] of after) { const b = before.get(pc); if (b !== undefined && b !== v) return; }
+        let onsets = 0; const pcs = new Set<number>();
+        for (let t = i; t < j; t++) { pcs.add(pcOf(t)); if (t === i || N[t]!.tOn !== N[t - 1]!.tOn) onsets++; }
+        if (onsets > SHORT_FLIP_MAX_ONSETS || pcs.size < SHORT_FLIP_MIN_PCS) return;
+        const conflicts = (sp: (t: number) => number): number => {
+            let c = 0;
+            for (let t = i; t < j; t++) {
+                const v = sp(t), b = before.get(pcOf(t)), a = after.get(pcOf(t));
+                if (b !== undefined && b !== v) c++;
+                if (a !== undefined && a !== v) c++;
+            }
+            return c;
+        };
+        const cF = conflicts(t => fwd[t]!), cB = conflicts(t => bwd[t]!), cO = conflicts(t => out[t]!);
+        const pass = cF <= cB ? fwd : bwd;
+        if (cO > Math.min(cF, cB)) for (let t = i; t < j; t++) out[t] = pass[t]!;
+    };
     let runAt = 0;   // runs[] sorted by first strike; disagreement runs only move forward
     let i = Math.max(0, firstAgree);
     while (i <= lastAgree) {
@@ -531,6 +571,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
             if (pref > bestPref || (pref === bestPref && warm > bestWarm)) { bestK = k; bestPref = pref; bestWarm = warm; }
         }
         for (let t = i; t < j; t++) out[t] = t < bestK ? fwd[t]! : bwd[t]!;
+        if (shortFlip) shortFlipRepair(i, j);
         i = j;
     }
 
