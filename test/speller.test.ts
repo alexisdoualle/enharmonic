@@ -9,7 +9,7 @@ import { assert, assertEq, suite, test } from './framework.js';
 import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, centredSideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
-import { SpellingEngine, LA_PRESET, RT_PRESET } from '../src/engine.js';
+import { SpellingEngine, LA_PRESET, RT_PRESET, TP_PASS_PRESET } from '../src/engine.js';
 import { anchoredSideKeys } from '../src/key-side.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
@@ -546,6 +546,29 @@ suite('seven-accidental twin (real-time frameTwin)', () => {
     });
     test('look-ahead does not apply the rule', () => {
         assertEq(LA_PRESET.frameTwin, undefined);
+    });
+});
+
+suite('minor collection holds its leading tone (real-time minorLeadingTone)', () => {
+    // C natural minor up the scale (only B♭ heard), then G–?–G: the frame's collection (E♭ major) is heard as its
+    // relative C minor, so the chromatic note takes the raised 7th's slot: F♯ (it completes B–D–F♯), not G♭.
+    const seq = [60, 62, 63, 65, 67, 68, 70, 72, 67, 66, 67];
+    const last3 = (s: { noteOn(m: number, t: number): void; noteOff(m: number, t: number): void; getSpelling(m: number): Pitch | null }): string => {
+        let t = 0;
+        const out = seq.map(m => { s.noteOn(m, t); const n = tok(s.getSpelling(m)); t += 500; s.noteOff(m, t); return n; });
+        return out.slice(-3).join(' ');
+    };
+    const eng = (e: SpellingEngine) => ({ noteOn: (m: number, t: number) => e.noteOn(m, t), noteOff: (m: number, t: number) => e.noteOff(m, t), getSpelling: (m: number) => e.getSpelling(m) });
+    test('real-time: C minor G–F♯–G', () => {
+        const sp = new Speller();
+        assertEq(last3({ noteOn: (m, t) => sp.noteOn(m, { t }), noteOff: (m, t) => sp.noteOff(m, { t }), getSpelling: m => sp.getSpelling(m) }), 'G F# G');
+    });
+    test('without the rule the chromatic note is G♭', () => {
+        assertEq(last3(eng(new SpellingEngine({ ...RT_PRESET, minorLeadingTone: false }))), 'G Gb G');
+    });
+    test('look-ahead and two-pass do not apply the rule', () => {
+        assertEq(LA_PRESET.minorLeadingTone, undefined);
+        assertEq(TP_PASS_PRESET.minorLeadingTone, undefined);
     });
 });
 

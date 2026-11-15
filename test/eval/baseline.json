@@ -7,9 +7,9 @@
       "total": 535
     },
     "rt": {
-      "correct": 533,
+      "correct": 532,
       "flipped": 0,
-      "wrong": 2,
+      "wrong": 3,
       "total": 535
     },
     "la": {
@@ -59,9 +59,9 @@
       "total": 604
     },
     "rt": {
-      "correct": 581,
+      "correct": 585,
       "flipped": 0,
-      "wrong": 23,
+      "wrong": 19,
       "total": 604
     },
     "la": {
@@ -137,9 +137,9 @@
       "total": 7374
     },
     "rt": {
-      "correct": 7368,
+      "correct": 7373,
       "flipped": 0,
-      "wrong": 6,
+      "wrong": 1,
       "total": 7374
     },
     "la": {

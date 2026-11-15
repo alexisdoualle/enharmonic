@@ -201,6 +201,15 @@ export interface EngineOptions {
      *  names the side itself. Known cost: a composer reaching seven sharps by fifths from a sharp neighbourhood
      *  (Chopin's Barcarolle m81–106, F♯ major → C♯ major). Default false. */
     frameTwin?: boolean;
+    /** 'diatonic' frame: MINOR COLLECTION. A minor key's collection holds its leading tone: when the frame's
+     *  collection is heard as its relative minor, a note outside the collection is scored with the minor's raised
+     *  7th in that slot (C minor: B, not B♭), whether or not the 7th sounded recently. In C minor, G–?–G with only
+     *  B♭ heard spells F♯ (it completes B–D–F♯), not G♭. The minor reading: the local key when the caller supplies
+     *  one (`NoteContext.localKey`), else the relative minor's tonic triad outweighs the major's on the frame's own
+     *  recency-weighted raw pitch classes. Not while the ♭7 sounds, nor when a kept alteration holds the slot.
+     *  Known cost: a chromatic note of a third key the pair does not name (Confutatis m14, G–B♭–C♯ over a
+     *  G-major frame read as E minor: B♭ becomes A♯). Default false. */
+    minorLeadingTone?: boolean;
     /** 'diatonic' frame: raw-pc coverage window in onsets (the memory length that defines the collection).
      *  Too short churns the collection on dense music; this is the frame's one real tuning, the equivalent
      *  of the mean fold's. Default 128. */
@@ -292,6 +301,10 @@ export const RT_PRESET: EngineOptions = {
     // Real-time only: in look-ahead the inferred side key re-centres the fold and undoes it, and lowering the
     // deepening limit to match costs wrong notes.
     frameTwin: true,
+    // A minor key's collection holds its leading tone: a chromatic note heard in the frame's relative minor is
+    // scored with the raised 7th in its slot (C minor G–F♯–G, not G♭). Real-time only: the look-ahead gain was
+    // not confirmed held-out, and two-pass uses the look-ahead's mechanisms.
+    minorLeadingTone: true,
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
@@ -417,6 +430,7 @@ export class SpellingEngine {
     private readonly frameKeepAlive: boolean;
     private readonly frameSide: 'continuity' | 'drift';
     private readonly frameTwin: boolean;
+    private readonly minorLeadingTone: boolean;
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
     private readonly onsetTolerance: number;
@@ -523,6 +537,7 @@ export class SpellingEngine {
         this.frameKeepAlive = opts.frameKeepAlive ?? true;
         this.frameSide = opts.frameSide ?? 'continuity';
         this.frameTwin = opts.frameTwin ?? false;
+        this.minorLeadingTone = opts.minorLeadingTone ?? false;
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         this.onsetTolerance = opts.onsetTolerance ?? 0;
@@ -651,6 +666,21 @@ export class SpellingEngine {
     /** Score every spelling of `midi` against the current frame and the notes ringing (less `self`, the note
      *  being re-decided), and return the best with its per-candidate trace. */
     private decide(midi: number, resolveDir: number, resolveExact: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
+        // MINOR COLLECTION ({@link minorLeadingTone}): a note outside the frame's collection is scored with the
+        // relative minor's raised 7th in its slot when the collection is heard as that minor.
+        if (this.minorLeadingTone && this.frameMode === 'diatonic') {
+            const pc = ((midi % 12) + 12) % 12;
+            if (!LETTER_ORDER.some(s => pitchClass(letterAt(s, this.frameCentre)) === pc)) {
+                const live = this.scale;
+                this.scale = [...live];
+                this.raiseMinorLeadingTone(midi);
+                try { return this.decideOn(midi, resolveDir, resolveExact, self); } finally { this.scale = live; }
+            }
+        }
+        return this.decideOn(midi, resolveDir, resolveExact, self);
+    }
+
+    private decideOn(midi: number, resolveDir: number, resolveExact: number, self?: number): { best: number | null; scale: PitchClass[]; cands: DecisionCandidate[] } {
         // LOOK-AHEAD: if this note resolves a semitone to a target the scale already spells, reward the
         // diatonic-STEP letter toward it and penalise the target's own letter.
         // LEADING-TONE GATE: a falling note that is a leading tone of the local key keeps the key's name.
@@ -956,14 +986,40 @@ export class SpellingEngine {
      * hard barrier past the writable band [foldCenter ± foldRadius] (the fold). Hysteresis holds the current
      * collection unless a rival's coverage beats it by more than {@link frameMargin}. One number, no drift.
      */
-    private computeFrameCentre(): number {
-        // Recency-weighted raw-pc histogram over the frame window: the current onset weighs 1, each older
-        // onset × decay^age (half-life {@link frameHalfLife}). Anti-poison: raw pcs, never our own spellings.
+    /** The frame's evidence: the recency-weighted raw-pc histogram over the frame window. The current onset
+     *  weighs 1, each older onset × decay^age (half-life {@link frameHalfLife}). Raw pcs, never our spellings. */
+    private frameCounts(): number[] {
         const decay = Math.pow(0.5, 1 / this.frameHalfLife);
         const counts = new Array(12).fill(0);
         let w = 1;
         for (const pc of this.curOnsetPcs) counts[pc] += w;
         for (let j = this.pcWindow.length - 1; j >= 0; j--) { w *= decay; for (const pc of this.pcWindow[j]!) counts[pc] += w; }
+        return counts;
+    }
+
+    /** MINOR COLLECTION ({@link minorLeadingTone}): put the relative minor's raised 7th in its slot when the
+     *  frame's collection is heard as that minor, the slot still holds the frame's own ♭7, and the ♭7 is not
+     *  sounding. The minor reading: the caller's local key, else the two tonic triads on the frame's evidence. */
+    private raiseMinorLeadingTone(midi: number): void {
+        const c = this.frameCentre, flat7 = c - 1, lt = c + 6, s = letter(lt);
+        if (this.scale[s] !== flat7) return;   // a kept alteration already holds the slot
+        const t = pitchClass(c + 1), T = pitchClass(c - 2);   // minor and major tonics
+        const k = this.curOnsetKey.get(midi);
+        let minor: boolean;
+        if (k) minor = k.minor && k.tonic === t;
+        else {
+            const h = this.frameCounts();
+            minor = h[t]! + h[(t + 3) % 12]! + h[(t + 7) % 12]! > h[T]! + h[(T + 4) % 12]! + h[(T + 7) % 12]!;
+        }
+        if (!minor) return;
+        for (const m of this.active.keys()) if (((m % 12) + 12) % 12 === pitchClass(flat7)) return;
+        this.scale[s] = lt;
+    }
+
+    private computeFrameCentre(): number {
+        // Recency-weighted raw-pc histogram over the frame window: the current onset weighs 1, each older
+        // onset × decay^age (half-life {@link frameHalfLife}). Anti-poison: raw pcs, never our own spellings.
+        const counts = this.frameCounts();
         let total = 0; for (const c of counts) total += c;
         if (total === 0) return this.frameCentre;
         // Coverage of the 7-fifth collection centred at c (recency-weighted mass of its pitch classes).

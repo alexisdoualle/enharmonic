@@ -208,6 +208,13 @@ with five or fewer: C♯ minor turning to its parallel major is spelled D♭ maj
 look-ahead and two-pass do not use it. Engine option `frameTwin`, on in the real-time preset. Known cost: a
 piece that reaches C♯ major by fifths from a sharp neighbourhood (Chopin's Barcarolle m81–106) is respelt flat.
 
+In minor, the real-time speller spells a chromatic note against the key's raised 7th, whether or not it sounded
+recently: in C minor with only B♭ heard, G–?–G is spelled G–F♯–G (F♯ completes B–D–F♯), not G♭. The minor is read
+from the two tonic triads on the recent pitch classes. Engine option `minorLeadingTone`, on in the real-time
+preset, keyless and keyed; look-ahead and two-pass do not use it. Known cost: a chromatic note of a third key that the
+collection and its relative minor do not name (Mozart's Confutatis m14, the vii°7 of D minor over a G-major
+collection, writes A♯ for B♭).
+
 ### Optional key signatures (two-pass)
 
 When the notated key signature is known (a MIDI import into a score, "respell" on an existing score), pass it
@@ -236,7 +243,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | Mode | clean exact | clean coherent | noisy exact | noisy coherent |
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
-| Real-time | 99.54% | 99.61% | 99.49% | 99.57% |
+| Real-time | 99.59% | 99.66% | 99.54% | 99.62% |
 | + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
 | + two-pass | 99.93% | 99.93% | 99.89% | 99.89% |
 
