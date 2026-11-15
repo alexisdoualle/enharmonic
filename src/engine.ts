@@ -302,8 +302,7 @@ export const RT_PRESET: EngineOptions = {
     // deepening limit to match costs wrong notes.
     frameTwin: true,
     // A minor key's collection holds its leading tone: a chromatic note heard in the frame's relative minor is
-    // scored with the raised 7th in its slot (C minor G–F♯–G, not G♭). Real-time only: the look-ahead gain was
-    // not confirmed held-out, and two-pass uses the look-ahead's mechanisms.
+    // scored with the raised 7th in its slot (C minor G–F♯–G, not G♭). Also on in look-ahead (LA_PRESET).
     minorLeadingTone: true,
 };
 
@@ -331,6 +330,10 @@ export const LA_PRESET: EngineOptions = {
     ornamentMs: 80,
     // The vertical guard reads the triad by pitch class and weighs a misspelled third 2.
     verticalWeight: 2, verticalPcTriad: true,
+    // A minor key's collection holds its leading tone, as in real time (C minor G–F♯–G, not G♭). Confirmed on
+    // the whole development pool (DCML, ASAP, lieder, fresh15–20): wrong −525 [−794, −257], flips flat. The
+    // two-pass passes run the mean frame, where the rule does not apply.
+    minorLeadingTone: true,
 };
 
 /** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the

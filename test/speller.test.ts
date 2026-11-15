@@ -584,7 +584,7 @@ suite('seven-accidental twin (real-time frameTwin)', () => {
     });
 });
 
-suite('minor collection holds its leading tone (real-time minorLeadingTone)', () => {
+suite('minor collection holds its leading tone (minorLeadingTone, real time and look-ahead)', () => {
     // C natural minor up the scale (only B♭ heard), then G–?–G: the frame's collection (E♭ major) is heard as its
     // relative C minor, so the chromatic note takes the raised 7th's slot: F♯ (it completes B–D–F♯), not G♭.
     const seq = [60, 62, 63, 65, 67, 68, 70, 72, 67, 66, 67];
@@ -601,8 +601,14 @@ suite('minor collection holds its leading tone (real-time minorLeadingTone)', ()
     test('without the rule the chromatic note is G♭', () => {
         assertEq(last3(eng(new SpellingEngine({ ...RT_PRESET, minorLeadingTone: false }))), 'G Gb G');
     });
-    test('look-ahead and two-pass do not apply the rule', () => {
-        assertEq(LA_PRESET.minorLeadingTone, undefined);
+    test('look-ahead: C minor G–F♯–G, as real time', () => {
+        const sp = new Speller({ lookAhead: true });
+        assertEq(last3({ noteOn: (m, t) => sp.noteOn(m, { t }), noteOff: (m, t) => sp.noteOff(m, { t }), getSpelling: m => sp.getSpelling(m) }), 'G F# G');
+    });
+    test('look-ahead without the rule: G♭', () => {
+        assertEq(last3(eng(new SpellingEngine({ ...LA_PRESET, minorLeadingTone: false }))), 'G Gb G');
+    });
+    test('two-pass does not apply the rule', () => {
         assertEq(TP_PASS_PRESET.minorLeadingTone, undefined);
     });
 });

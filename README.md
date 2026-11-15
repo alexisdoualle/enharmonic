@@ -208,10 +208,10 @@ with five or fewer: C♯ minor turning to its parallel major is spelled D♭ maj
 look-ahead and two-pass do not use it. Engine option `frameTwin`, on in the real-time preset. Known cost: a
 piece that reaches C♯ major by fifths from a sharp neighbourhood (Chopin's Barcarolle m81–106) is respelt flat.
 
-In minor, the real-time speller spells a chromatic note against the key's raised 7th, whether or not it sounded
-recently: in C minor with only B♭ heard, G–?–G is spelled G–F♯–G (F♯ completes B–D–F♯), not G♭. The minor is read
-from the two tonic triads on the recent pitch classes. Engine option `minorLeadingTone`, on in the real-time
-preset, keyless and keyed; look-ahead and two-pass do not use it. Known cost: a chromatic note of a third key that the
+In minor, the real-time and look-ahead spellers spell a chromatic note against the key's raised 7th, whether or
+not it sounded recently: in C minor with only B♭ heard, G–?–G is spelled G–F♯–G (F♯ completes B–D–F♯), not G♭. The
+minor is read from the two tonic triads on the recent pitch classes. Engine option `minorLeadingTone`, on in the
+real-time and look-ahead presets, keyless and keyed; two-pass does not use it. Known cost: a chromatic note of a third key that the
 collection and its relative minor do not name (Mozart's Confutatis m14, the vii°7 of D minor over a G-major
 collection, writes A♯ for B♭).
 
