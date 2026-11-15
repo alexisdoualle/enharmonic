@@ -9,7 +9,7 @@ import { assert, assertEq, suite, test } from './framework.js';
 import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, centredSideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
-import { SpellingEngine, LA_PRESET } from '../src/engine.js';
+import { SpellingEngine, LA_PRESET, RT_PRESET } from '../src/engine.js';
 import { anchoredSideKeys } from '../src/key-side.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
@@ -485,6 +485,39 @@ suite('key signature (keyTonic / setKey)', () => {
             assertEq(play(keyed(-3), steps, { 3: s => s.setKey(-3) }), play(keyed(-3), steps));
         });
     }
+});
+
+suite('seven-accidental twin (real-time frameTwin)', () => {
+    // A frame move to a collection that needs seven accidentals lands on its five-accidental twin: E → B → F♯ →
+    // C♯ major by fifths, each key a run of I–IV–V–I cadences, ends in D♭ major in real time. With a key supplied
+    // the signature names the side and the rule is off.
+    const cadence = (t: number): number[][] => [[t, t + 4, t + 7], [t + 5, t + 9, t + 12], [t + 7, t + 11, t + 14], [t, t + 4, t + 7]].map(c => c.map(m => 48 + m));
+    const steps = [4, 11, 6, 1].flatMap(k => Array.from({ length: 16 }, () => cadence(k)).flat());
+    const lastCadence = (s: { noteOn(m: number, c: { t: number }): void; noteOff(m: number, c: { t: number }): void; getSpelling(m: number): Pitch | null }): string => {
+        let t = 0;
+        const out = steps.map(ch => {
+            for (const m of ch) s.noteOn(m, { t });
+            const names = ch.map(m => tok(s.getSpelling(m))).join(' ');
+            t += 500;
+            for (const m of ch) s.noteOff(m, { t });
+            return names;
+        });
+        return out.slice(-4).join(' | ');
+    };
+    test('real-time: C♯ major reached by fifths is written D♭ major', () => {
+        assertEq(lastCadence(new Speller()), 'Db F Ab | Gb Bb Db | Ab C Eb | Db F Ab');
+    });
+    test('without the rule the frame keeps C♯ major by continuity', () => {
+        const e = new SpellingEngine({ ...RT_PRESET, frameTwin: false });
+        assertEq(lastCadence({ noteOn: (m, c) => e.noteOn(m, c.t), noteOff: (m, c) => e.noteOff(m, c.t), getSpelling: m => e.getSpelling(m) }),
+            'C# E# G# | F# A# C# | G# B# D# | C# E# G#');
+    });
+    test('real-time with a key supplied (E major): the rule is off', () => {
+        assertEq(lastCadence(new Speller({ keyTonic: 4 })), 'C# E# G# | F# A# C# | G# B# D# | C# E# G#');
+    });
+    test('look-ahead does not apply the rule', () => {
+        assertEq(LA_PRESET.frameTwin, undefined);
+    });
 });
 
 suite('curated fixtures', () => {

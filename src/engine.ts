@@ -192,6 +192,15 @@ export interface EngineOptions {
      *  comma nearest the held frame; 'drift' = nearest the recent committed notes' median LoF (the notated
      *  side). A/B lever; continuity is the clean default. */
     frameSide?: 'continuity' | 'drift';
+    /** 'diatonic' frame: SEVEN-ACCIDENTAL TWIN. A frame move to a collection that needs seven or more
+     *  accidentals is written on its enharmonic twin when that twin needs five or fewer: a modulation that would
+     *  need seven accidentals is notated in its five-accidental enharmonic. C♯ minor moving to its parallel major
+     *  lands on D♭ major (F, C natural), not C♯ major (E♯, B♯); continuity alone keeps C♯ major, which the fold
+     *  band (up to eight sharps) never folds back (Chopin Op. 28/15 m75). Applies only when the frame moves to a
+     *  new collection, not when it holds one; off once a key signature is supplied ({@link keySignature}), which
+     *  names the side itself. Known cost: a composer reaching seven sharps by fifths from a sharp neighbourhood
+     *  (Chopin's Barcarolle m81–106, F♯ major → C♯ major). Default false. */
+    frameTwin?: boolean;
     /** 'diatonic' frame: raw-pc coverage window in onsets (the memory length that defines the collection).
      *  Too short churns the collection on dense music; this is the frame's one real tuning, the equivalent
      *  of the mean fold's. Default 128. */
@@ -279,6 +288,10 @@ export const RT_PRESET: EngineOptions = {
     // direction, so the lean would fight it. onsetRevise lets a bass struck first follow the chord above it.
     frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1, onsetRevise: true,
     ornamentMs: 80,
+    // A frame move to a seven-accidental collection lands on its twin with five or fewer (C♯ major → D♭ major).
+    // Real-time only: in look-ahead the inferred side key re-centres the fold and undoes it, and lowering the
+    // deepening limit to match costs wrong notes.
+    frameTwin: true,
 };
 
 /** LOOK-AHEAD tier (`new Speller({ lookAhead: true })`): a wider guard window + letter-aware look-ahead
@@ -403,6 +416,7 @@ export class SpellingEngine {
     private readonly frameMargin: number;
     private readonly frameKeepAlive: boolean;
     private readonly frameSide: 'continuity' | 'drift';
+    private readonly frameTwin: boolean;
     private readonly frameWindow: number;
     private readonly chromaticSharpLean: number;
     private readonly onsetTolerance: number;
@@ -508,6 +522,7 @@ export class SpellingEngine {
         this.frameMargin = opts.frameMargin ?? 1;
         this.frameKeepAlive = opts.frameKeepAlive ?? true;
         this.frameSide = opts.frameSide ?? 'continuity';
+        this.frameTwin = opts.frameTwin ?? false;
         this.frameWindow = opts.frameWindow ?? 128;
         this.chromaticSharpLean = opts.chromaticSharpLean ?? 0;
         this.onsetTolerance = opts.onsetTolerance ?? 0;
@@ -967,6 +982,13 @@ export class SpellingEngine {
             if (cov > bestCov || (cov === bestCov && sc < bestSide)) { bestCov = cov; bestC = c; bestSide = sc; }
         }
         if (coverage(prev) >= bestCov - this.frameMargin && sideCost(prev) <= bestSide) return prev;
+        // SEVEN-ACCIDENTAL TWIN ({@link frameTwin}): a move to a NEW collection (not a comma shift of the held one)
+        // whose placement needs seven or more accidentals (|tonic| ≥ 7) takes the twin a comma away when the twin
+        // needs five or fewer. A supplied signature names the side itself, so the rule is off then.
+        if (this.frameTwin && this.signedKey === null && (((bestC - prev) % 12) + 12) % 12 !== 0) {
+            const tonic = bestC - 2;
+            if (Math.abs(tonic) >= 7) { const twin = bestC - 12 * Math.sign(tonic); if (Math.abs(twin - 2) <= 5) return twin; }
+        }
         return bestC;
     }
 

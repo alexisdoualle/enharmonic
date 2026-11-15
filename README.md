@@ -195,6 +195,12 @@ s.setKey(2);                                // re-centre mid-stream at a key cha
 `keyTonic` is the signed line-of-fifths of the major tonic (C=0, G=+1, F=−1, D♭=−5; for a minor key pass
 its relative major, A minor to C=0). Experimental; omit it for the default keyless behaviour above.
 
+Keyless, the real-time speller writes a move to a collection that would need seven accidentals in its twin
+with five or fewer: C♯ minor turning to its parallel major is spelled D♭ major (F, C natural), not C♯ major
+(E♯, B♯), as Chopin does in Op. 28/15 m75. A supplied key turns it off (the signature names the side), and
+look-ahead and two-pass do not use it. Engine option `frameTwin`, on in the real-time preset. Known cost: a
+piece that reaches C♯ major by fifths from a sharp neighbourhood (Chopin's Barcarolle m81–106) is respelt flat.
+
 ### Optional key signatures (two-pass)
 
 When the notated key signature is known (a MIDI import into a score, "respell" on an existing score), pass it
@@ -223,7 +229,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | Mode | clean exact | clean coherent | noisy exact | noisy coherent |
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
-| Real-time | 99.57% | 99.62% | 99.55% | 99.59% |
+| Real-time | 99.54% | 99.61% | 99.49% | 99.57% |
 | + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
 | + two-pass | 99.90% | 99.92% | 99.89% | 99.89% |
 
