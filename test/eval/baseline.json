@@ -59,9 +59,9 @@
       "total": 604
     },
     "rt": {
-      "correct": 585,
+      "correct": 580,
       "flipped": 0,
-      "wrong": 19,
+      "wrong": 24,
       "total": 604
     },
     "la": {
@@ -85,9 +85,9 @@
       "total": 1566
     },
     "rt": {
-      "correct": 1377,
+      "correct": 1380,
       "flipped": 166,
-      "wrong": 23,
+      "wrong": 20,
       "total": 1566
     },
     "la": {
@@ -137,9 +137,9 @@
       "total": 7374
     },
     "rt": {
-      "correct": 7373,
+      "correct": 7370,
       "flipped": 0,
-      "wrong": 1,
+      "wrong": 4,
       "total": 7374
     },
     "la": {
@@ -163,9 +163,9 @@
       "total": 1623
     },
     "rt": {
-      "correct": 1423,
+      "correct": 1419,
       "flipped": 191,
-      "wrong": 9,
+      "wrong": 13,
       "total": 1623
     },
     "la": {

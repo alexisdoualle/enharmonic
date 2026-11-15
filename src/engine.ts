@@ -243,6 +243,14 @@ export interface EngineOptions {
     /** The vertical guard's triad test on pitch classes, the note's own included: a root struck after its third
      *  and fifth still counts as inside the triad. A dim7 has no fifth by pitch class either. Default false. */
     verticalPcTriad?: boolean;
+    /** The vertical guard counts a misspelled third only inside a perfect triad that holds the note: by pitch class,
+     *  the note is the root, third or fifth of a sounding major or minor triad, and only that triad's members count
+     *  against it. A P5 elsewhere in the sonority does not make every dim4/aug2 a misspelled third: in the German
+     *  sixth D–F♯–A–B♯ the B♯ belongs to no triad, so its aug2 with A is not read as a misspelled C. A note that
+     *  would be a triad's third while the triad's other third is sounding is that third's chromatic neighbour, not
+     *  its third: A♭ struck against a ringing F–A–C (a legato A still held as G♯/A♭ arrives) is not counted as
+     *  F minor's third. Default false. */
+    verticalOwnTriad?: boolean;
     /** AUGMENTED SIXTH BY OUTWARD CONVERGENCE (look-ahead only). Two tones ten semitones apart that move
      *  outward and meet on one pitch class are an augmented sixth, and the rising tone is the ♯4: it is spelled
      *  ten fifths sharp of its partner's committed spelling (F♯ against A♭, never G♭), dispositively, over
@@ -286,7 +294,7 @@ export interface EngineOptions {
  *  centre averages only recently-sounded letters (foldSlotRecency), so a stale degree's spelling does not
  *  drag the side. */
 export const RT_PRESET: EngineOptions = {
-    recencyGuard: 2, guardWindow: 3,
+    recencyGuard: 2, guardWindow: 7,
     fold: 'clamp', foldCenter: 3, foldRadius: 7,
     sideWeight: 1, sideRadius: 6, anchorWindow: 32,
     // The diatonic frame: the 7 slots are the coverage collection (recency-weighted raw pcs), placed on the
@@ -295,8 +303,13 @@ export const RT_PRESET: EngineOptions = {
     // chromaticSharpLean handles the melodic/isolated leading tones the vertical guard cannot (no
     // co-sounding P5), leaning a chromatic to its raise. Not used in look-ahead, which resolves these by
     // direction, so the lean would fight it. onsetRevise lets a bass struck first follow the chord above it.
-    frameMode: 'diatonic', verticalWeight: 1, chromaticSharpLean: 1, onsetRevise: true,
+    frameMode: 'diatonic', chromaticSharpLean: 1, onsetRevise: true,
     ornamentMs: 80,
+    // A misspelled third inside a struck perfect triad weighs 2, so it overrules the sharp lean (a conditional
+    // preference): in an E♭ chord the pitch class 3 is E♭, not D♯. The triad is read by pitch class and must hold
+    // the note (verticalOwnTriad), so a chromatic neighbour beside a triad is not read as its misspelled third.
+    // The look-ahead tier's guard reading, with its recency-guard window of 7 onsets.
+    verticalWeight: 2, verticalPcTriad: true, verticalOwnTriad: true,
     // A frame move to a seven-accidental collection lands on its twin with five or fewer (C♯ major → D♭ major).
     // Real-time only: in look-ahead the inferred side key re-centres the fold and undoes it, and lowering the
     // deepening limit to match costs wrong notes.
@@ -441,6 +454,7 @@ export class SpellingEngine {
     private readonly guardRaiseLine: boolean;
     private readonly ornamentMs: number;
     private readonly verticalPcTriad: boolean;
+    private readonly verticalOwnTriad: boolean;
     private readonly aug6Outward: boolean;
     private readonly aug6PassingVoice: boolean;
     private readonly leadingToneGate: boolean;
@@ -548,6 +562,7 @@ export class SpellingEngine {
         this.guardRaiseLine = opts.guardRaiseLine ?? false;
         this.ornamentMs = opts.ornamentMs ?? 0;
         this.verticalPcTriad = opts.verticalPcTriad ?? false;
+        this.verticalOwnTriad = opts.verticalOwnTriad ?? false;
         this.aug6Outward = opts.aug6Outward ?? false;
         this.aug6PassingVoice = opts.aug6PassingVoice ?? false;
         this.leadingToneGate = opts.leadingToneGate ?? false;
@@ -726,6 +741,25 @@ export class SpellingEngine {
         const inPerfectTriad = this.verticalPcTriad
             ? pcs.some(a => pcs.some(b => (b - a + 12) % 12 === 7))
             : coSounding.some((p, i) => coSounding.some((q, j) => j > i && Math.abs(p - q) === 1));
+        // OWN TRIAD: only the members of a sounding major/minor triad that holds this note's pitch class count.
+        let triadMates: number[] | null = null;
+        if (this.verticalOwnTriad && this.verticalWeight > 0) {
+            const own = ((midi % 12) + 12) % 12;
+            const ring = [...this.active].filter(([m]) => m !== self);
+            const have = new Set(ring.map(([m]) => ((m % 12) + 12) % 12)); have.add(own);
+            const mates = new Set<number>();
+            for (const off of [0, 3, 4, 7]) {
+                const r = (own - off + 12) % 12;
+                if (!have.has(r) || !have.has((r + 7) % 12)) continue;
+                for (const third of [3, 4]) {
+                    if (!have.has((r + third) % 12) || (off !== 0 && off !== 7 && off !== third)) continue;
+                    // The note as a third while the triad's other third is ringing is that third's neighbour.
+                    if (off === third && have.has((r + 7 - third) % 12)) continue;
+                    mates.add(r); mates.add((r + third) % 12); mates.add((r + 7) % 12);
+                }
+            }
+            triadMates = ring.filter(([m]) => mates.has(((m % 12) + 12) % 12)).map(([, v]) => v);
+        }
         // CHROMATIC SHARP-LEAN: if this note's pc is outside the frame collection, reward the sharper
         // (higher-LoF) of its single-accidental spellings, the raised leading tone / raised degree.
         let leanTarget: number | null = null;
@@ -753,7 +787,7 @@ export class SpellingEngine {
             const laDelta = laOn ? (letter(n) === laStep ? laWeight : letter(n) === laTarget ? -laWeight : 0) : 0;
             const daDelta = Math.abs(acc(n)) >= 2 ? -this.doubleAccPenalty : 0;
             let misThirds = 0;
-            if (this.verticalWeight > 0 && inPerfectTriad) for (const x of coSounding) if (isMisspelledThird(n, x)) misThirds++;
+            if (this.verticalWeight > 0 && inPerfectTriad) for (const x of triadMates ?? coSounding) if (isMisspelledThird(n, x)) misThirds++;
             const vertDelta = -this.verticalWeight * misThirds;
             // LEASH: one point per fifth the candidate sits BEYOND the anchor's deadzone. Zero inside, so
             // ordinary chromatic colour is free; it only bites a spelling that would strand the note far

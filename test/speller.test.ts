@@ -613,6 +613,49 @@ suite('minor collection holds its leading tone (minorLeadingTone, real time and 
     });
 });
 
+suite('struck triad weighs 2 in real time (verticalOwnTriad)', () => {
+    // Events [t, on, midi]; each note is read at its note-off, as the parity bench reads it.
+    type Ev = [number, boolean, number];
+    const scale = (ms: number[]): Ev[] => ms.flatMap((m, i): Ev[] => [[i * 500, true, m], [i * 500 + 400, false, m]]);
+    const chord = (t: number, ms: number[], dur = 400): Ev[] => [...ms.map((m): Ev => [t, true, m]), ...ms.map((m): Ev => [t + dur, false, m])];
+    const read = (opts: typeof RT_PRESET, ev: Ev[], from: number): string => {
+        const e = new SpellingEngine(opts); const out: string[] = [];
+        for (const [t, on, m] of [...ev].sort((a, b) => a[0] - b[0] || Number(a[1]) - Number(b[1]))) {
+            if (on) e.noteOn(m, t); else { out.push(tok(e.getSpelling(m))); e.noteOff(m, t); }
+        }
+        return out.slice(from).join(' ');
+    };
+    const G_MAJOR = [67, 69, 71, 72, 74, 76, 78, 79], C_MAJOR = [60, 62, 64, 65, 67, 69, 71, 72], B_MINOR = [59, 61, 62, 64, 66, 67, 69, 71];
+    // The real-time reading before this rule: weight 1, the triad read on committed spellings, guard window 3.
+    const BEFORE = { ...RT_PRESET, verticalWeight: 1, verticalPcTriad: false, verticalOwnTriad: false, guardWindow: 3 };
+    test('G major, then a struck E♭ major triad: E♭ G B♭ (the triad overrules the sharp lean)', () => {
+        const ev = [...scale(G_MAJOR), ...chord(4000, [51, 55, 58])];
+        assertEq(read(RT_PRESET, ev, 8), 'Eb G Bb');
+        assertEq(read(BEFORE, ev, 8), 'D# G A#');
+    });
+    test('C major, then a struck F minor triad: F A♭ C', () => {
+        const ev = [...scale(C_MAJOR), ...chord(4000, [53, 56, 60])];
+        assertEq(read(RT_PRESET, ev, 8), 'F Ab C');
+        assertEq(read(BEFORE, ev, 8), 'F G# C');
+    });
+    test('a chromatic neighbour beside a held triad is not its misspelled third: B minor + E♯', () => {
+        // B–D–F♯ held, then E♯ → F♯ above it. E♯ is in no triad, so its aug2 with D is not counted.
+        const ev = [...scale(B_MINOR), ...chord(4000, [47, 59, 62, 66], 1500), ...chord(4500, [77]), ...chord(5000, [78])];
+        assertEq(read(RT_PRESET, ev, 8).split(' ').slice(0, 2).join(' '), 'E# F#');
+        assertEq(read({ ...RT_PRESET, verticalOwnTriad: false }, ev, 8).split(' ').slice(0, 2).join(' '), 'F F#');
+    });
+    test('a third whose triad already sounds the other third is its neighbour: F–A–C held + G♯', () => {
+        // G♯/A♭ against a ringing F–A–C is A's chromatic neighbour, not F minor's third.
+        const ev = [...scale(C_MAJOR), ...chord(4000, [53, 57, 60], 1500), ...chord(4500, [68]), ...chord(5000, [69])];
+        assertEq(read(RT_PRESET, ev, 8).split(' ').slice(0, 2).join(' '), 'G# A');
+        assertEq(read({ ...RT_PRESET, verticalOwnTriad: false }, ev, 8).split(' ').slice(0, 2).join(' '), 'Ab A');
+    });
+    test('real time only: look-ahead and two-pass keep their guard', () => {
+        assertEq(LA_PRESET.verticalOwnTriad, undefined);
+        assertEq(TP_PASS_PRESET.verticalOwnTriad, undefined);
+    });
+});
+
 suite('curated fixtures', () => {
     for (const id of FIXTURES) {
         test(`${id}: real-time commits one spelling per onset`, () => {

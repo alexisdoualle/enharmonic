@@ -215,6 +215,14 @@ real-time and look-ahead presets, keyless and keyed; two-pass does not use it. K
 collection and its relative minor do not name (Mozart's Confutatis m14, the vii°7 of D minor over a G-major
 collection, writes A♯ for B♭).
 
+In real time, a misspelled third inside a struck major or minor triad outweighs the lean toward the sharp spelling
+of a chromatic note: after G major, a struck E♭–G–B♭ is spelled E♭ G B♭, not D♯ G A♯. The triad is read by pitch
+class and must hold the note as its root, third or fifth, so a chromatic neighbour beside a triad is not taken for
+its misspelled third (E♯ above a held B–D–F♯ stays E♯), nor is a note whose triad already sounds its other third
+(G♯ against a ringing F–A–C). Engine options `verticalWeight: 2`, `verticalPcTriad` and `verticalOwnTriad`, with a
+recency-guard window of 7 onsets, as in look-ahead; the real-time preset only. Known cost: a recency guard of 7
+onsets can hold a spelling across a chord change (Chopin Op. 28/4 m3, E♭ written after the B7's D♯).
+
 ### Optional key signatures (two-pass)
 
 When the notated key signature is known (a MIDI import into a score, "respell" on an existing score), pass it
@@ -243,7 +251,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | Mode | clean exact | clean coherent | noisy exact | noisy coherent |
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
-| Real-time | 99.59% | 99.66% | 99.54% | 99.62% |
+| Real-time | 99.62% | 99.69% | 99.53% | 99.61% |
 | + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
 | + two-pass | 99.93% | 99.93% | 99.89% | 99.89% |
 
