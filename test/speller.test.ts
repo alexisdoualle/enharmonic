@@ -10,6 +10,7 @@ import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutio
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
 import { SpellingEngine, LA_PRESET } from '../src/engine.js';
+import { anchoredSideKeys } from '../src/key-side.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
 const tok = (sp: Pitch | null): string =>
@@ -230,6 +231,40 @@ suite('aug6 outward convergence', () => {
         assertEq([on[992], off[992]], [-7, 5]);
         assert(on.slice(992, 1172).every(v => v === -7), 'A♭ minor holds −7 until m53');
         assertEq(spellTwoPass(notes, { keyReturn: false }).length, notes.length);
+    });
+
+    test('spellTwoPass keySignatures: a six-flat signature settles the F♯/G♭ tie flat', () => {
+        // E♭ minor / G♭ major (i iv V i III v III). The inferred key has six accidentals and cannot choose, so the
+        // passes count from C and come out in D♯ minor; the notated six flats (or six sharps) choose the side.
+        const chords = [[51, 58, 63, 66], [56, 59, 63, 68], [58, 62, 65, 70], [51, 58, 63, 66], [54, 61, 66, 70], [49, 56, 61, 65], [54, 58, 61, 66]];
+        const notes = chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        const spell = (o: object) => spellTwoPass(notes, o).map(p => tok({ ...p!, octave: 4 })).join(' ');
+        const flat = 'Eb Bb Eb Gb Ab Cb Eb Ab Bb D F Bb Eb Bb Eb Gb Gb Db Gb Bb Db Ab Db F Gb Bb Db Gb';
+        assertEq(spell({ keySignatures: notes.map(() => -6) }), flat);
+        assert(spell({}).startsWith('D# A# D# F#'), 'without a signature the tie counts from C (sharp)');
+        assert(spell({ keySignatures: notes.map(() => 6) }).endsWith('F# A# C# F#'), 'six sharps keep the sharp side throughout');
+        assertEq(spell({ keySignatures: notes.map(() => -6), keySignatureAnchor: false }), spell({}));
+    });
+
+    test('spellTwoPass keySignatures: a passage far from its signature keeps the inferred side', () => {
+        // Pathétique ii, four flats throughout: the E major passage (m42–49, note 814) is four fifths from the
+        // signature, so its side stays the inferred key's (+4); the A♭ major opening is anchored on −4.
+        const notes = onNotes(loadEvents('beethoven_pathetique_adagio'));
+        const sigs = notes.map(() => -4);
+        const inferred = centredSideKeys(notes);
+        const anchored = anchoredSideKeys(notes, sigs, inferred);
+        assertEq([anchored[0], anchored[814]], [-4, 4]);
+        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: sigs }).slice(814, 992)), JSON.stringify(spellTwoPass(notes).slice(814, 992)));
+    });
+
+    test('spellTwoPass keySignatures: none, all unknown, or anchor off is identical to before', () => {
+        const notes = onNotes(loadEvents('debussy_clair_de_lune'));
+        const before = JSON.stringify(spellTwoPass(notes));
+        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => null) })), before);
+        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => -5), keySignatureAnchor: false })), before);
+        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => -5), keySide: false })), JSON.stringify(spellTwoPass(notes, { keySide: false })));
+        let threw = false; try { spellTwoPass(notes, { keySignatures: [0] }); } catch { threw = true; }
+        assert(threw, 'a keySignatures array of the wrong length throws');
     });
 });
 

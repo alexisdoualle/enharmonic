@@ -166,6 +166,11 @@ export const CENTRED_SIDE_RADIUS = 48;
  * (see `deepen`; `TwoPassOptions.keyReturn`).
  */
 export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE_RADIUS, keyReturn = true): (number | null)[] {
+    return deepen(centredKeys(notes, radius), keyReturn);
+}
+
+/** Each note's key read on the onsets centred on it (±radius), before deepening. */
+function centredKeys(notes: readonly KeyNote[], radius: number): (Key | null)[] {
     const { n, hist, onsetOf, first, end } = scan(notes);
     const last = first.length - 1;
     const keys: (Key | null)[] = new Array(n);
@@ -173,5 +178,32 @@ export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE
         const o = onsetOf[i]!;
         keys[i] = bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
     }
-    return deepen(keys, keyReturn);
+    return keys;
+}
+
+/** {@link anchoredSideKeys}: the most fifths a local key may lie from the notated signature and still be in its
+ *  diatonic neighbourhood (the closely related keys, whose collections share six of seven notes with it). */
+export const SIGNATURE_NEIGHBOURHOOD = 1;
+
+/**
+ * NOTATED SIGNATURE → SIDE (two-pass `keySignatures`). Proposition: a passage is notated on the side of its key
+ * signature while its local key stays within one fifth of it. Each note's centred local key (as
+ * {@link centredSideKeys}, ±radius onsets) is read as its enharmonic reading nearest the signature `sigs[i]`, within
+ * ±7 accidentals (a tie in distance goes to fewer accidentals, then the flat side). Within
+ * {@link SIGNATURE_NEIGHBOURHOOD} fifths of the signature, the side is the signature; farther, or with no signature
+ * (null), it is `inferred[i]`, the side read from the notes alone. Chopin, Sonata No. 2/ii (E♭ minor, six flats): the
+ * signature settles the F♯/G♭ tie the inferred key cannot, and m114–179 keep Chopin's D♭, C♭, G♭. Beethoven,
+ * *Pathétique* ii m42–49 (E major written with sharps under four flats): the local key is four fifths from the
+ * signature, so the side stays the inferred one. Not look-ahead legal.
+ */
+export function anchoredSideKeys(notes: readonly KeyNote[], sigs: readonly (number | null)[], inferred: readonly (number | null)[], radius = CENTRED_SIDE_RADIUS): (number | null)[] {
+    return centredKeys(notes, radius).map((k, i) => {
+        const s = sigs[i] ?? null;
+        if (s === null) return inferred[i] ?? null;
+        if (!k) return s;
+        const x = xOf(k);
+        const cands = (Number.isNaN(x) ? [-6, 6] : [x, x + 12, x - 12]).filter(c => Math.abs(c) <= DEEPEN);
+        const near = cands.reduce((a, c) => (Math.abs(c - s) < Math.abs(a - s) || (Math.abs(c - s) === Math.abs(a - s) && Math.abs(c) < Math.abs(a)) ? c : a));
+        return Math.abs(near - s) <= SIGNATURE_NEIGHBOURHOOD ? s : inferred[i] ?? null;
+    });
 }

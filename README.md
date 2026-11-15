@@ -195,6 +195,21 @@ s.setKey(2);                                // re-centre mid-stream at a key cha
 `keyTonic` is the signed line-of-fifths of the major tonic (C=0, G=+1, F=−1, D♭=−5; for a minor key pass
 its relative major, A minor to C=0). Experimental; omit it for the default keyless behaviour above.
 
+### Optional key signatures (two-pass)
+
+When the notated key signature is known (a MIDI import into a score, "respell" on an existing score), pass it
+per note to `spellTwoPass`:
+
+```ts
+const spelled = spellTwoPass(notes, { keySignatures: notes.map(() => -6) });   // six flats; null = unknown
+```
+
+Each entry is signed sharps − flats (0 = none), in the order of `notes`. A passage is notated on the side of its
+key signature while its local key stays within one fifth of it: there the passes count accidentals from the
+signature; farther, the side comes from the inferred key as without signatures. Chopin, Sonata No. 2/ii (six
+flats): the signature settles the F♯/G♭ tie, so m114–179 keep Chopin's D♭, C♭, G♭. *Pathétique* ii m42–49 (E
+major under four flats) is left to the inferred key. `keySignatureAnchor: false` ignores the signatures.
+
 ## Status
 
 The shipped library is the speller above: the real-time `Speller`, its look-ahead setting, and the

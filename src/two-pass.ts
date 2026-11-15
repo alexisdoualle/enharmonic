@@ -29,7 +29,7 @@ import { outwardPairs } from './aug6.js';
 import { degreeKeys, localKeys, type LocalKey } from './key.js';
 import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
-import { centredSideKeys } from './key-side.js';
+import { anchoredSideKeys, centredSideKeys } from './key-side.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -136,6 +136,18 @@ export interface TwoPassOptions {
      *  Counter-case: a chromatic line tone the composer writes inside a struck triad (Joplin *Chrysanthemum*
      *  m18, C♯ rising to D against G♭–B♭) is respelt D♭. Default `true`. */
     struckTriadThird?: boolean;
+    /** Each input note's NOTATED key signature, in the caller's order: signed sharps − flats (0 = none, −6 = six
+     *  flats; the relative major's tonic on the line of fifths), null where unknown. Optional; read by
+     *  `keySignatureAnchor`. Must have one entry per note. */
+    keySignatures?: readonly (number | null)[];
+    /** THE SIGNATURE ANCHORS THE SIDE (`keySide`, with `keySignatures`). A passage is notated on the side of its key
+     *  signature while its local key stays within one fifth of it: there the passes count accidentals from the
+     *  notated signature; farther, they count from the inferred key, as without signatures
+     *  ({@link anchoredSideKeys}). Chopin Sonata 2/ii (E♭ minor, six flats): the signature settles the F♯/G♭ tie
+     *  the inferred key cannot, and m114–179 keep Chopin's D♭, C♭, G♭ instead of C♯, B, F♯. Counter-case
+     *  guarded: *Pathétique* ii m42–49 (E major under four flats) is four fifths away and keeps the inferred
+     *  sharps. Default `true`; inert without `keySignatures` or when `keySide` is off. */
+    keySignatureAnchor?: boolean;
 }
 
 /** One pass's engine state right after it committed a note (introspection / visualiser only). */
@@ -266,6 +278,21 @@ function sideSignatures(notes: readonly TwoPassNote[], keyReturn: boolean): (num
     return centredSideKeys(notes, undefined, keyReturn).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
 }
 
+/** `keySide`: the per-note signatures for the passes (sorted order). With `keySignatureAnchor` and notated
+ *  signatures, the notated signature where the local key is within one fifth of it, else the inferred one. */
+function passSignatures(notes: readonly TwoPassNote[], opts: TwoPassOptions, notated?: readonly (number | null)[]): (number | null)[] {
+    const inferred = sideSignatures(notes, opts.keyReturn ?? true);
+    return notated && (opts.keySignatureAnchor ?? true) ? anchoredSideKeys(notes, notated, inferred) : inferred;
+}
+
+/** `keySignatures` in sorted order (undefined when not given). */
+function notatedSignatures(sorted: { permute<T>(xs: readonly T[]): T[] }, n: number, opts: TwoPassOptions): (number | null)[] | undefined {
+    const ks = opts.keySignatures;
+    if (!ks) return undefined;
+    if (ks.length !== n) throw new RangeError(`keySignatures has ${ks.length} entries for ${n} notes`);
+    return sorted.permute(ks);
+}
+
 /** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
  *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
  *  With `frames`, also record the engine state right after each note-on (read-only, no effect on spellings). */
@@ -325,6 +352,7 @@ function order(notes: readonly TwoPassNote[]) {
     const sorted = idx.map(i => notes[i]!);
     return {
         notes: sorted,
+        permute<T>(xs: readonly T[]): T[] { return idx.map(i => xs[i]!); },
         restore<T>(spelled: T[]): T[] {
             const out: T[] = new Array(notes.length);
             idx.forEach((orig, pos) => { out[orig] = spelled[pos]!; });
@@ -349,7 +377,7 @@ interface CoreResult {
  * Shared by {@link spellTwoPass} and {@link spellTwoPassTraced}; the public functions restore the caller's
  * note order around it.
  */
-function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, traceFrames = false): CoreResult {
+function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, traceFrames = false, notated?: readonly (number | null)[]): CoreResult {
     const backwardLA = opts.backwardLookAhead ?? 'forward';
     const centreTiebreak = opts.centreTiebreak ?? true;
     const centreMargin = opts.centreMargin ?? 0;
@@ -370,7 +398,7 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     // The local keys are read in forward time on onsets centred on each note; the backward pass reads them too.
     const keysF = (opts.leadingToneGate ?? true) ? localKeys(N, { table: TP_KEY_TABLE, radius: TP_KEY_RADIUS }) : undefined;
     const degF = (opts.keyDegreeGate ?? true) ? degreeKeys(N) : undefined;
-    const sigF = (opts.keySide ?? true) ? sideSignatures(N, opts.keyReturn ?? true) : undefined;
+    const sigF = (opts.keySide ?? true) ? passSignatures(N, opts, notated) : undefined;
     const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF, keysF, degF, sigF);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
@@ -558,7 +586,7 @@ const toPc = (n: number | undefined): PitchClass | null => n === undefined ? nul
 export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): (PitchClass | null)[] {
     if (notes.length === 0) return [];
     const sorted = order(notes);
-    const core = twoPassCore(sorted.notes, opts);
+    const core = twoPassCore(sorted.notes, opts, false, notatedSignatures(sorted, notes.length, opts));
     return sorted.restore(core.spellings.map(toPc));
 }
 
@@ -566,7 +594,7 @@ export function spellTwoPass(notes: readonly TwoPassNote[], opts: TwoPassOptions
 export function spellTwoPassTraced(notes: readonly TwoPassNote[], opts: TwoPassOptions = {}): TwoPassTrace {
     if (notes.length === 0) return { spellings: [], notes: [], firstStable: null, lastStable: null };
     const sorted = order(notes);
-    const core = twoPassCore(sorted.notes, opts, true);
+    const core = twoPassCore(sorted.notes, opts, true, notatedSignatures(sorted, notes.length, opts));
     const spellings = sorted.restore(core.spellings.map(toPc));
     const noteTraces: TwoPassNoteTrace[] = core.spellings.map((sp, k) => {
         const source = sp === core.forward[k] ? 'forward' : 'backward';
