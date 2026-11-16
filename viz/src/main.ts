@@ -1653,7 +1653,10 @@ async function boot() {
     $<HTMLSelectElement>('mode').value = state.mode;
     $<HTMLInputElement>('look-ahead').checked = state.lookAhead;
     $<HTMLInputElement>('key-lanes').checked = state.showKeyLanes;
-    const id = (urlFixture && ids.includes(urlFixture)) ? urlFixture : ids[0];
+    // Without ?fixture= the app opens on Jesu, meine Freude (a short four-part chorale), not on whichever
+    // id sorts first.
+    const DEFAULT_FIXTURE = 'bach_jesu_meine_freude';
+    const id = (urlFixture && ids.includes(urlFixture)) ? urlFixture : ids.includes(DEFAULT_FIXTURE) ? DEFAULT_FIXTURE : ids[0];
     if (id) {
         $<HTMLSelectElement>('fixture').value = id;
         await pickFixture(id, stepFromSearch(urlStep), true);
