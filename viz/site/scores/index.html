@@ -106,7 +106,7 @@
   <p>Every speller gets the same MIDI notes, without key signatures, and every note is scored by the same three-tier scorer:</p>
   <dl class="tiers">
     <dt>Exact</dt><dd>spelled as the composer wrote it.</dd>
-    <dt>Flipped</dt><dd>part of a passage spelled consistently on the other enharmonic side (D♭ major read as C♯ major). Coherent, so not an error.</dd>
+    <dt>Flipped</dt><dd>a coherent transposition: part of a passage spelled consistently on the other enharmonic side (D♭ major read as C♯ major), the same music shifted by a comma. Not an error.</dd>
     <dt>Wrong</dt><dd>breaks the spelling of the notes around it (C♯–F–G♯ for C♯–E♯–G♯). The bars below rank by this.</dd>
   </dl>
 
@@ -216,7 +216,7 @@ function metricPicker() {
   }
   const sw = (c, t) => { const s = el('span'); const i = el('i', { style: `background:${c}` }); s.append(i, t); return s; };
   $('#legend').replaceChildren(sw('var(--ours)', 'enharmonic (ours)'), sw('var(--base)', 'other spellers'),
-    ...(metric === 'flipped' ? [sw('var(--ours-flip)', 'flipped (lighter shade)')] : []));
+    ...(metric === 'flipped' ? [sw('var(--ours-flip)', 'flipped = coherent transposition (lighter shade)')] : []));
 }
 
 function choose(name) { current = name; history.replaceState(null, '', '#' + encodeURIComponent(name)); render(); }

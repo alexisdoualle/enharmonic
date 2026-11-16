@@ -82,12 +82,18 @@
   /* accuracy table: mode down, corpus across, exact vs coherent */
   .scores { border-collapse: collapse; margin: 1.4rem 0 .8rem; font-size: .95rem; }
   .scores th, .scores td { padding: .5rem .95rem; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  .scores th:first-child, .scores td:first-child { text-align: left; padding-left: 0; }
+  .scores th:first-child, .scores td:first-child { text-align: left; padding-left: 0; white-space: normal; }
   .scores thead th { color: var(--muted); font-weight: 500; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; }
   .scores thead tr:first-child th { border-bottom: none; padding-bottom: .12rem; }
   .scores tbody td { font-family: 'IBM Plex Mono', monospace; }
   .scores tbody td:first-child { font-family: inherit; }
   .scores .grp { border-left: 1px solid var(--line); }
+  .scores tr.ours td, .scores th.ours, .scores td.ours { color: var(--accent); }
+  .scores tr.ours td:first-child { font-weight: 600; }
+  .tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tablewrap .scores { margin: 0; }
+  .tablewrap { margin: 1.4rem 0 .8rem; }
+  .scores thead th { white-space: normal; }
   @media (max-width: 430px) { .scores { font-size: .85rem; } .scores th, .scores td { padding: .45rem .6rem; } }
   /* buttons */
   .cta { display: flex; flex-wrap: wrap; gap: .8rem; margin: 2.4rem 0 0; }
@@ -150,12 +156,33 @@
       resolves. An offline <strong>two-pass</strong> option reads the whole piece forward and backward,
       then reconciles the two to repair the modulation boundaries the streaming pass spells late.</p>
 
-      <table class="scores" aria-label="accuracy on the Meredith and curated corpora">
+      <div class="tablewrap"><table class="scores" aria-label="accuracy on the Meredith benchmark">
+        <thead>
+          <tr><th>Mode</th><th>exact</th><th>coherent</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (4 principles)</td><td>99.37%</td><td>99.46%</td></tr>
+          <tr><td>Real-time</td><td>99.62%</td><td>99.69%</td></tr>
+          <tr><td>Look-ahead</td><td>99.85%</td><td>99.90%</td></tr>
+          <tr><td>Two-pass</td><td>99.93%</td><td>99.93%</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Meredith (216
+      movements, 195,972 notes) is the standard pitch-spelling benchmark; these are its clean scores. Exact is a composer-spelling
+      match; coherent also counts flipped notes (below). Each mode beats the published speller of its
+      latency there: real-time beats Chew &amp; Chen, look-ahead beats Cambouropoulos, two-pass beats
+      PKSpell.</p>
+
+      <h2>Held-out collections</h2>
+      <p>The same spellers, untouched, on collections none of their rules were built on. PKSpell, a neural
+      speller, has the highest exact rate of the published spellers on these sets; like two-pass it reads
+      the whole piece.</p>
+      <div class="tablewrap"><table class="scores" aria-label="two-pass and PKSpell on held-out collections">
         <thead>
           <tr>
-            <th rowspan="2">Mode</th>
-            <th colspan="2">Meredith</th>
-            <th class="grp" colspan="2">Curated corpus, harder</th>
+            <th rowspan="2">Collection</th>
+            <th class="ours" colspan="2">Two-pass (ours)</th>
+            <th class="grp" colspan="2">PKSpell</th>
           </tr>
           <tr>
             <th>exact</th>
@@ -165,18 +192,46 @@
           </tr>
         </thead>
         <tbody>
-          <tr><td><a href="https://github.com/alexisdoualle/enharmonic/blob/main/examples/core-speller.ts">Core</a> (4 principles)</td><td>99.37%</td><td>99.46%</td><td class="grp">91.29%</td><td>97.99%</td></tr>
-          <tr><td>Real-time</td><td>99.53%</td><td>99.58%</td><td class="grp">91.43%</td><td>98.36%</td></tr>
-          <tr><td>Two-pass</td><td>99.86%</td><td>99.86%</td><td class="grp">94.73%</td><td>98.66%</td></tr>
+          <tr><td>OpenScore Lieder (397 songs)</td><td class="ours">97.28%</td><td class="ours">99.06%</td><td class="grp">97.03%</td><td>98.49%</td></tr>
+          <tr><td>DCML corpora (498 pieces)</td><td class="ours">97.41%</td><td class="ours">99.03%</td><td class="grp">97.33%</td><td>98.66%</td></tr>
+          <tr><td>ASAP piano, unseen by PKSpell (18)</td><td class="ours">91.38%</td><td class="ours">97.00%</td><td class="grp">93.09%</td><td>96.14%</td></tr>
+          <tr><td>Four new collections (5,356 pieces)</td><td class="ours">98.46%</td><td class="ours">99.34%</td><td class="grp">98.10%</td><td>99.07%</td></tr>
         </tbody>
-      </table>
-      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Exact is a
-      composer-spelling match. On Meredith's held-out corpus (195,972 notes), the standard pitch-spelling
-      benchmark, the library is level with the best deterministic and neural spellers. The 59-piece curated
-      corpus is harder and less overfit: it stresses the side (comma) choice Meredith mostly avoids. There
-      the exact rate falls (steeply for Core), but coherent stays high. Coherent counts a whole-passage flip to the other
-      side of the spiral as correct, since it is the same music transposed, not a wrong note. Almost every
-      miss is a flip, not an error.</p>
+      </table></div>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Two-pass makes fewer
+      wrong notes than PKSpell on every set; on the unseen ASAP pieces the difference is within noise, and
+      PKSpell matches the composer's side more often there. Per-set tables, every speller and the
+      significance tests are on the <a href="scores/">scoreboard</a>.</p>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">The gap between
+      exact and coherent is flipped notes. A flip is a coherent transposition: a whole passage spelled
+      consistently on the other side of the spiral (C♯ major for D♭ major), the same music, not a wrong
+      note. Almost every miss is a flip, not an error.</p>
+
+      <h2>Pieces played back to back</h2>
+      <p>Most spellers assume one piece in one key. Feed them the 48 preludes and fugues of Bach's
+      Well-Tempered Clavier, Book I, as one continuous stream, the way a live player or a long MIDI file
+      would, and they carry the last piece's key into the next. Our spellers (in blue) follow each key change:</p>
+      <div class="tablewrap"><table class="scores" aria-label="WTC Book I as one stream, share of wrong notes">
+        <thead>
+          <tr><th>Speller</th><th>wrong notes, one stream</th><th class="grp">wrong notes, restarted per piece</th></tr>
+        </thead>
+        <tbody>
+          <tr class="ours"><td>Look-ahead</td><td>0.23%</td><td class="grp">0.25%</td></tr>
+          <tr class="ours"><td>Two-pass</td><td>0.25%</td><td class="grp">0.21%</td></tr>
+          <tr class="ours"><td>Real-time</td><td>0.42%</td><td class="grp">0.55%</td></tr>
+          <tr><td>Longuet-Higgins</td><td>0.62%</td><td class="grp">0.60%</td></tr>
+          <tr><td>Cambouropoulos</td><td>2.99%</td><td class="grp">2.84%</td></tr>
+          <tr><td>ps13</td><td>4.06%</td><td class="grp">0.31%</td></tr>
+          <tr><td>Chew &amp; Chen</td><td>4.83%</td><td class="grp">0.92%</td></tr>
+          <tr><td>music21</td><td>14.53%</td><td class="grp">14.53%</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note" style="color:var(--muted); font-size:.95rem; margin-top:.8rem;">Restarted at every
+      piece, ps13 is as good as our spellers; in one stream it makes 13 times as many errors, because it fixes
+      its reference from the first notes. Chew &amp; Chen averages the key over everything heard. Ours keep
+      a local collection, so a new key simply replaces the old one. (Exact rates are lower for everyone here,
+      since 24 keys leave many coherent side choices. PKSpell, trained on these pieces, is left out. The
+      restarted runs of our spellers come from a slightly earlier version.)</p>
 
       <div class="cta">
         <a class="btn primary" href="viz/">Open the visualiser →</a>
