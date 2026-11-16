@@ -10,9 +10,9 @@ authors:
   - family-names: Doualle
     given-names: Alexis
     affiliation: Independent Researcher
-version: 0.1.2
+version: 0.2.0
 doi: 10.5281/zenodo.23023002
-date-released: 2026-09-28
+date-released: 2026-11-16
 license: Apache-2.0
 repository-code: "https://github.com/alexisdoualle/enharmonic"
 url: "https://enharmonic.tonalmap.org"
