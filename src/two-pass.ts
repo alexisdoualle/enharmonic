@@ -29,7 +29,7 @@ import { outwardPairs } from './aug6.js';
 import { degreeKeys, localKeys, type LocalKey } from './key.js';
 import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
-import { anchoredSideKeys, centredSideKeys } from './key-side.js';
+import { anchoredSideKeys, centredKeys, CENTRED_SIDE_RADIUS, deepenCentredKeys, type Key } from './key-side.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -300,15 +300,16 @@ function struckTriadRepairs(N: readonly TwoPassNote[], out: readonly (number | u
 }
 
 /** `keySide`: each note's signature for the passes (0 = count from C), null before any key is read. */
-function sideSignatures(notes: readonly TwoPassNote[], keyReturn: boolean): (number | null)[] {
-    return centredSideKeys(notes, undefined, keyReturn).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
+function sideSignatures(keys: readonly (Key | null)[], keyReturn: boolean): (number | null)[] {
+    return deepenCentredKeys(keys, keyReturn).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
 }
 
 /** `keySide`: the per-note signatures for the passes (sorted order). With `keySignatureAnchor` and notated
  *  signatures, the notated signature where the local key is within one fifth of it, else the inferred one. */
 function passSignatures(notes: readonly TwoPassNote[], opts: TwoPassOptions, notated?: readonly (number | null)[]): (number | null)[] {
-    const inferred = sideSignatures(notes, opts.keyReturn ?? true);
-    return notated && (opts.keySignatureAnchor ?? true) ? anchoredSideKeys(notes, notated, inferred) : inferred;
+    const keys = centredKeys(notes, CENTRED_SIDE_RADIUS);   // read once, for the inferred and the anchored sides
+    const inferred = sideSignatures(keys, opts.keyReturn ?? true);
+    return notated && (opts.keySignatureAnchor ?? true) ? anchoredSideKeys(notes, notated, inferred, CENTRED_SIDE_RADIUS, keys) : inferred;
 }
 
 /** `keySignatures` in sorted order (undefined when not given). */

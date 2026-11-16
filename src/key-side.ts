@@ -20,7 +20,7 @@
  * The F♯/G♭ tie (six accidentals either way) is returned as `NaN`; the speller resolves it to the side nearer
  * its current surface.
  */
-import type { KeyNote } from './key.js';
+import { prefixCounts, windowCounts, type KeyNote } from './key.js';
 
 const DIATONIC = [0, 2, 4, 5, 7, 9, 11], HARMONIC_MINOR = [0, 2, 3, 5, 7, 8, 11];
 /** The primary-triads table, centred and with its squared norm, for major and minor. */
@@ -29,18 +29,21 @@ const TABLE = [[DIATONIC, [0, 4, 7]], [HARMONIC_MINOR, [0, 3, 7]]].map(([coll, t
     const my = y.reduce((a, b) => a + b) / 12, yc = y.map(v => v - my);
     return { yc, dy: yc.reduce((a, v) => a + v * v, 0) };
 });
-interface Key { readonly tonic: number; readonly minor: boolean }
+export interface Key { readonly tonic: number; readonly minor: boolean }
 /** A key with the side the deepening gave it. */
 interface Sided { readonly k: Key; readonly out: number }
+
+const XC = new Float64Array(12);   // scratch: the histogram rotated to a tonic, centred
 
 /** The best-correlated key of a pitch-class histogram (null when empty). */
 function bestKey(h: readonly number[]): Key | null {
     let tot = 0; for (const v of h) tot += v;
     if (!tot) return null;
     const mx = tot / 12; let br = -Infinity, bt = -1, bm = false;
+    const xc = XC;
     for (let t = 0; t < 12; t++) {
-        let dx = 0; const xc: number[] = [];
-        for (let i = 0; i < 12; i++) { xc.push(h[(t + i) % 12]! - mx); dx += xc[i]! ** 2; }
+        let dx = 0;
+        for (let i = 0; i < 12; i++) { xc[i] = h[(t + i) % 12]! - mx; dx += xc[i]! ** 2; }
         for (let m = 0; m < 2; m++) {
             const { yc, dy } = TABLE[m]!; let s = 0;
             for (let i = 0; i < 12; i++) s += xc[i]! * yc[i]!;
@@ -67,13 +70,8 @@ const BEHIND_ONSETS = 96, AHEAD_NOTES = 16, CONFIRM_NOTES = 16, DEEPEN = 7;
 function scan(notes: readonly KeyNote[]) {
     const n = notes.length;
     const pc = notes.map(x => ((x.midi % 12) + 12) % 12);
-    const pre: Int32Array[] = [new Int32Array(12)];
-    for (let i = 0; i < n; i++) { const h = Int32Array.from(pre[i]!); h[pc[i]!]!++; pre.push(h); }
-    const hist = (a: number, b: number): number[] => {
-        a = Math.max(0, a); b = Math.min(n, b);
-        const h: number[] = []; for (let q = 0; q < 12; q++) h.push(b > a ? pre[b]![q]! - pre[a]![q]! : 0);
-        return h;
-    };
+    const pre = prefixCounts(n, k => notes[k]!.midi);
+    const hist = (a: number, b: number): number[] => windowCounts(pre, Math.max(0, a), Math.min(n, b));
     const onsetOf: number[] = [], first: number[] = [], end: number[] = [];
     for (let i = 0; i < n; i++) {
         if (i === 0 || notes[i]!.tOn !== notes[i - 1]!.tOn) { first.push(i); end.push(i); }
@@ -169,14 +167,20 @@ export function centredSideKeys(notes: readonly KeyNote[], radius = CENTRED_SIDE
     return deepen(centredKeys(notes, radius), keyReturn);
 }
 
-/** Each note's key read on the onsets centred on it (±radius), before deepening. */
-function centredKeys(notes: readonly KeyNote[], radius: number): (Key | null)[] {
+/** {@link centredSideKeys} from keys already read by {@link centredKeys} (two-pass reads them once for both uses). */
+export function deepenCentredKeys(keys: readonly (Key | null)[], keyReturn = true): (number | null)[] {
+    return deepen(keys, keyReturn);
+}
+
+/** Each note's key read on the onsets centred on it (±radius), before deepening. The notes of one onset share
+ *  their window, so the key is read once per onset. */
+export function centredKeys(notes: readonly KeyNote[], radius: number): (Key | null)[] {
     const { n, hist, onsetOf, first, end } = scan(notes);
     const last = first.length - 1;
     const keys: (Key | null)[] = new Array(n);
     for (let i = 0; i < n; i++) {
         const o = onsetOf[i]!;
-        keys[i] = bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
+        keys[i] = i > 0 && onsetOf[i - 1] === o ? keys[i - 1]! : bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
     }
     return keys;
 }
@@ -199,8 +203,8 @@ export const SIGNATURE_NEIGHBOURHOOD = 1;
  * *Pathétique* ii m42–49 (E major written with sharps under four flats): the local key is four fifths from the
  * signature, so the side stays the inferred one. Not look-ahead legal.
  */
-export function anchoredSideKeys(notes: readonly KeyNote[], sigs: readonly (number | null)[], inferred: readonly (number | null)[], radius = CENTRED_SIDE_RADIUS): (number | null)[] {
-    return centredKeys(notes, radius).map((k, i) => {
+export function anchoredSideKeys(notes: readonly KeyNote[], sigs: readonly (number | null)[], inferred: readonly (number | null)[], radius = CENTRED_SIDE_RADIUS, keys: readonly (Key | null)[] = centredKeys(notes, radius)): (number | null)[] {
+    return keys.map((k, i) => {
         const s = sigs[i] ?? null;
         if (s === null) return inferred[i] ?? null;
         if (!k) return s;

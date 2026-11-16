@@ -110,12 +110,11 @@ export function localKeys(notes: readonly KeyNote[], opts: LocalKeyOptions = {})
     const radius = opts.radius ?? 12;
     const n = notes.length;
     if (opts.unit === 'notes') {
-        const pre: number[][] = [new Array<number>(12).fill(0)];
-        for (const x of notes) { const h = pre[pre.length - 1]!.slice(); h[((x.midi % 12) + 12) % 12]!++; pre.push(h); }
-        return notes.map((_, i) => {
-            const a = Math.max(0, i - radius), b = Math.min(n, i + radius + 1);
-            return bestKey(pre[b]!.map((v, q) => v - pre[a]![q]!), table);
-        });
+        // Prefix sums over notes, flat (row k = the counts of notes[0..k)), so each window is a difference.
+        const pre = prefixCounts(n, k => notes[k]!.midi);
+        const out = new Array<LocalKey | null>(n);
+        for (let i = 0; i < n; i++) out[i] = bestKey(windowCounts(pre, Math.max(0, i - radius), Math.min(n, i + radius + 1)), table);
+        return out;
     }
     const idx = notes.map((_, i) => i).sort((a, b) => notes[a]!.tOn - notes[b]!.tOn);
     // Onsets in time order: their pc counts, and each note's onset.
@@ -130,15 +129,37 @@ export function localKeys(notes: readonly KeyNote[], opts: LocalKeyOptions = {})
     // Prefix sums over onsets, so each window is a difference.
     const pre: number[][] = [new Array<number>(12).fill(0)];
     for (const c of counts) pre.push(pre[pre.length - 1]!.map((v, q) => v + c[q]!));
-    const byOnset = new Map<number, LocalKey | null>();
-    return notes.map((_, i) => {
+    // One key per onset, indexed by onset (not a Map: Qt 5.15's engine, which runs the MuseScore plugin, looks a
+    // Map key up by a linear scan, so a Map over every onset makes this quadratic there).
+    const byOnset = new Array<LocalKey | null | undefined>(counts.length);
+    const out = new Array<LocalKey | null>(n);
+    for (let i = 0; i < n; i++) {
         const o = onsetOf[i]!;
-        if (!byOnset.has(o)) {
+        if (byOnset[o] === undefined) {
             const a = Math.max(0, o - radius), b = Math.min(counts.length - 1, o + radius) + 1;
-            byOnset.set(o, bestKey(pre[b]!.map((v, q) => v - pre[a]![q]!), table));
+            byOnset[o] = bestKey(pre[b]!.map((v, q) => v - pre[a]![q]!), table);
         }
-        return byOnset.get(o)!;
-    });
+        out[i] = byOnset[o]!;
+    }
+    return out;
+}
+
+/** Pitch-class prefix counts of n notes, flat: entries [12k, 12k + 12) count the pcs of notes 0..k−1. */
+export function prefixCounts(n: number, midiAt: (k: number) => number): Int32Array {
+    const pre = new Int32Array(12 * (n + 1));
+    for (let k = 0; k < n; k++) {
+        const r = 12 * k;
+        for (let q = 0; q < 12; q++) pre[r + 12 + q] = pre[r + q]!;
+        pre[r + 12 + (((midiAt(k) % 12) + 12) % 12)]!++;
+    }
+    return pre;
+}
+
+/** The pc counts of notes a..b−1 from {@link prefixCounts} (zeros when b ≤ a). */
+export function windowCounts(pre: Int32Array, a: number, b: number): number[] {
+    const h: number[] = [];
+    for (let q = 0; q < 12; q++) h.push(b > a ? pre[12 * b + q]! - pre[12 * a + q]! : 0);
+    return h;
 }
 
 /** Whether pitch class `pc` is a leading tone of `key`: in major the ♯4 (leading to the dominant); in minor

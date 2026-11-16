@@ -53,16 +53,24 @@ function isMisspelledThird(a: number, b: number): boolean {
 /** The [−2, +2] spelling of pitch class `pc` nearest centre `c` (letter free). Equal distances go to
  *  the first letter from C to B. */
 function spellNearest(pc: number, c: number): number {
+    const ns = NEAR_CANDIDATES[pc]!;
     let best = 0, bestD = Infinity;
-    for (const s of LETTER_ORDER) {
-        const raw = ((pc - pitchClass(s - 1)) % 12 + 12) % 12;
-        const alter = raw > 6 ? raw - 12 : raw;
-        if (Math.abs(alter) > 2) continue;
-        const n = s - 1 + 7 * alter;
+    for (let k = 0; k < ns.length; k++) {
+        const n = ns[k]!;
         if (Math.abs(n - c) < bestD) { bestD = Math.abs(n - c); best = n; }
     }
     return best;
 }
+/** {@link spellNearest}'s candidates per pitch class: its [−2, +2] spellings in letter order C to B. */
+const NEAR_CANDIDATES: number[][] = Array.from({ length: 12 }, (_, pc) => {
+    const ns: number[] = [];
+    for (const s of LETTER_ORDER) {
+        const raw = ((pc - pitchClass(s - 1)) % 12 + 12) % 12;
+        const alter = raw > 6 ? raw - 12 : raw;
+        if (Math.abs(alter) <= 2) ns.push(s - 1 + 7 * alter);
+    }
+    return ns;
+});
 
 /** The economy fold's evidence as per-pitch-class counts: every raw pc in the window plus the current onset.
  *  Costing each heard pitch class once (count × accidentals) instead of once per note gives the same integer
