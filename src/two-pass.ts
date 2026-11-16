@@ -83,6 +83,18 @@ export interface TwoPassOptions {
      *  sharp, the backward pass flat, and the cut may no longer fall between the strikes (D♯ ×6 then E♭).
      *  Default `true`. */
     runBoundary?: boolean;
+    /** A HAMMERED NOTE KEEPS ITS NAME WHEN THE HARMONY GIVES NO REASON TO CHANGE IT. After the merge, a repeated
+     *  run (three or more onsets striking one MIDI pitch, consecutive strikes at most 4 onsets apart) whose
+     *  strikes carry two names gives a block of minority strikes the run's majority name, if (a) one name holds a
+     *  strict majority, (b) no other pitch class carries two names inside the run's span, and (c) the harmony did
+     *  not change under the block: every pitch class SOUNDING (struck, or still held) from the block's first
+     *  strike to the next run strike also sounds in the neighbouring majority strikes' spans. Only the run's own
+     *  strikes change. A respell in time costs a diminished second in every voice that carries the note across,
+     *  so with no new harmony to pay for it the name stays: a hammered E♭ over a held chord does not turn D♯ for
+     *  two strikes. A composer's respell over a moving chord is kept (Liszt, Bruckner, Shostakovich Op. 110
+     *  m59); the known miss is a pivot over an unchanged chord (Beethoven Op. 7/ii m50). Mid-run respells −19%
+     *  on DCML, −28% on sealed fresh19 with wrong neutral; Meredith clean wrong 145 → 131. Default `true`. */
+    runRepair?: boolean;
     /** NO TRIANGLE, NO SIDE BOUNDARY. A sonority with no major or minor triad in it (a diminished seventh, an
      *  augmented triad, a bare dyad, any other triangle-free set of two or more pitch classes) names its tones only
      *  relative to each other, so it cannot say where a passage changes side. Where the passes disagree over a run
@@ -359,6 +371,73 @@ function runPairs(N: readonly TwoPassNote[]): [number, number][] {
     return pairs.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
 }
 
+/** `runRepair` (see `TwoPassOptions.runRepair`): rename flickering strikes of a repeated run, in place. All
+ *  judgements read the merged spellings as they stand before any repair. */
+function runRepair(N: readonly TwoPassNote[], out: (number | undefined)[]): void {
+    const n = N.length;
+    const pcOf = (t: number) => ((N[t]!.midi % 12) + 12) % 12;
+    const onsetIdx: number[] = []; let g = -1, lastT = -Infinity;
+    for (let k = 0; k < n; k++) { if (N[k]!.tOn !== lastT) { g++; lastT = N[k]!.tOn; } onsetIdx.push(g); }
+    const byMidi = new Map<number, number[]>();
+    N.forEach((x, k) => { (byMidi.get(x.midi) ?? byMidi.set(x.midi, []).get(x.midi)!).push(k); });
+    const fixes: [number, number][] = [];
+
+    // One run = strikes (each strike = its same-onset unisons) of one MIDI pitch.
+    const judge = (run: number[][]): void => {
+        if (run.length < 3) return;
+        const pc0 = pcOf(run[0]![0]!);
+        const notes = run.flat().filter(t => out[t] !== undefined);
+        const cnt = new Map<number, number>();
+        for (const t of notes) cnt.set(out[t]!, (cnt.get(out[t]!) ?? 0) + 1);
+        if (cnt.size < 2) return;
+        const srt = [...cnt.entries()].sort((a, b) => b[1] - a[1]);
+        if (srt[0]![1] <= srt[1]![1]) return;                         // no strict majority
+        const maj = srt[0]![0];
+        // Another pitch class renamed inside the span: the passage moves, the respell is not the run's own.
+        const lo = run[0]![0]!, last = run[run.length - 1]!, hi = last[last.length - 1]!;
+        const names = new Map<number, number>();
+        for (let t = lo; t <= hi; t++) {
+            if (pcOf(t) === pc0 || out[t] === undefined) continue;
+            const v = names.get(pcOf(t));
+            if (v === undefined) names.set(pcOf(t), out[t]!); else if (v !== out[t]) return;
+        }
+        const isMaj = (s: number) => run[s]!.every(t => out[t] === undefined || out[t] === maj);
+        const tStart = (s: number) => N[run[s]![0]!]!.tOn;
+        const tEnd = (s: number) => s + 1 < run.length ? tStart(s + 1) : Math.max(...run[s]!.map(t => N[t]!.tOff));
+        // Pitch classes other than the run's sounding in [t0, t1): struck in it, or held into it (128 notes back).
+        const sounding = (t0: number, t1: number) => {
+            const set = new Set<number>();
+            let k = lo; while (k > 0 && N[k - 1]!.tOn >= t0) k--;
+            for (let m = Math.max(0, k - 128); m < k; m++) if (N[m]!.tOff > t0 && pcOf(m) !== pc0) set.add(pcOf(m));
+            for (; k < n && N[k]!.tOn < t1; k++) if (N[k]!.tOff > t0 && pcOf(k) !== pc0) set.add(pcOf(k));
+            return set;
+        };
+        for (let s = 0; s < run.length; s++) {
+            if (isMaj(s)) continue;
+            let e = s; while (e + 1 < run.length && !isMaj(e + 1)) e++;  // minority block [s, e]
+            const M = sounding(tStart(s), tEnd(e));
+            const A = new Set<number>();
+            if (s > 0) for (const q of sounding(tStart(s - 1), tStart(s))) A.add(q);
+            if (e + 1 < run.length) for (const q of sounding(tStart(e + 1), tEnd(e + 1))) A.add(q);
+            if ([...M].every(q => A.has(q)))
+                for (let b = s; b <= e; b++) for (const t of run[b]!) if (out[t] !== undefined && out[t] !== maj) fixes.push([t, maj]);
+            s = e;
+        }
+    };
+
+    for (const ks of byMidi.values()) {
+        let run: number[][] = [];
+        for (const k of ks) {
+            const prev = run[run.length - 1];
+            if (prev && N[prev[0]!]!.tOn === N[k]!.tOn) { prev.push(k); continue; }
+            if (prev && onsetIdx[k]! - onsetIdx[prev[0]!]! > 4) { judge(run); run = []; }
+            run.push([k]);
+        }
+        judge(run);
+    }
+    for (const [t, v] of fixes) out[t] = v;
+}
+
 /** Sort helper: notes bass-first (onset asc, midi asc), with a mapping back to the caller's order. */
 function order(notes: readonly TwoPassNote[]) {
     const idx = notes.map((_, i) => i).sort((a, b) => notes[a]!.tOn - notes[b]!.tOn || notes[a]!.midi - notes[b]!.midi);
@@ -609,6 +688,8 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
                 out[idx] = f;
         }
     }
+
+    if (opts.runRepair ?? true) runRepair(N, out);
 
     const agrees = new Array<boolean>(n);
     for (let t = 0; t < n; t++) agrees[t] = agree(t);

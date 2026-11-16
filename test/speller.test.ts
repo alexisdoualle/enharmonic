@@ -288,7 +288,7 @@ suite('aug6 outward convergence', () => {
             '412.24.75 420.8.47 428.8.47').split(' ').map(s => s.split('.').map(Number))
             .map(([on, dur, midi]) => ({ midi: midi!, tOn: on! * 125, tOff: (on! + dur!) * 125 }));
         const spell = (o: object) => spellTwoPass(notes, o).map(p => tok({ ...p!, octave: 4 }));
-        const on = spell({}), off = spell({ shortFlip: false });
+        const on = spell({ runRepair: false }), off = spell({ shortFlip: false, runRepair: false });   // shortFlip alone
         const changed = on.flatMap((s, k) => s === off[k] ? [] : [k]);
         assertEq([changed.length, changed[0], changed[changed.length - 1]], [47, 70, 129]);
         assertEq([off[86], off[95], off[98], off[116], off[122]], ['Eb', 'C', 'Bbb', 'Fb', 'F']);
