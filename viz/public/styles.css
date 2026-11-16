@@ -486,3 +486,7 @@ footer code, footer b { color: var(--ink); }
   #keyboard { overflow-x: auto; }
   .pk-keys { min-width: 640px; }
 }
+
+/* the logo links to the landing page; keep it looking like the title */
+#toolbar a.home { color: inherit; text-decoration: none; }
+#toolbar a.home:hover { text-decoration: underline; }

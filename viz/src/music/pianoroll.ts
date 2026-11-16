@@ -334,6 +334,9 @@ function wireBoxDrag(replay: Replay, width: number, height: number): void {
         suppressClick = false;
         if (!e.shiftKey || e.button !== 0) return;
         e.preventDefault();
+        // Shift+press also extends the page's text selection, and a live selection makes ⌘/Ctrl+C copy
+        // that text instead of the box. Drop it, so plain ⌘/Ctrl+C copies the boxed passage.
+        window.getSelection()?.removeAllRanges();
         const el = svg!, p0 = at(e);
         el.setPointerCapture(e.pointerId);
         const move = (ev: PointerEvent) => { const p = at(ev); placeBox(p0.x, p0.y, p.x, p.y); };
@@ -349,6 +352,8 @@ function wireBoxDrag(replay: Replay, width: number, height: number): void {
         };
         el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
     });
+    // pointerdown's preventDefault does not stop the browser's text selection; mousedown's does.
+    svg!.addEventListener('mousedown', e => { if (e.shiftKey && e.button === 0) e.preventDefault(); });
     // Swallow the click that ends a drag, before the note rects and the background seek see it.
     svg!.addEventListener('click', e => { if (suppressClick) { suppressClick = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 }
