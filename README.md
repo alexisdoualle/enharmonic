@@ -200,7 +200,9 @@ s.setKey(2);                                // re-centre mid-stream at a key cha
 ```
 
 `keyTonic` is the signed line-of-fifths of the major tonic (C=0, G=+1, F=−1, D♭=−5; for a minor key pass
-its relative major, A minor to C=0). Experimental; omit it for the default keyless behaviour above.
+its relative major, A minor to C=0). Experimental; omit it for the default keyless behaviour above. In
+look-ahead, the key read from the notes takes the supplied signature's side, past seven accidentals too when it is
+within one fifth of the signature: under seven sharps (C♯ major) the dominant G♯ major keeps F𝄪, not A♭ major.
 
 Keyless, the real-time speller writes a move to a collection that would need seven accidentals in its twin
 with five or fewer: C♯ minor turning to its parallel major is spelled D♭ major (F, C natural), not C♯ major

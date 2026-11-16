@@ -560,6 +560,8 @@ suite('key signature (keyTonic / setKey)', () => {
         assertEq(fold(4, [4, -4]), -4, 'A♭ major (−4) under E major: A♭ major, no G♯ major (+8)');
         assertEq(fold(0, [0, -7]), 5, 'C♭ major (−7) under C major: B major (+5), the nearer conventional side');
         assertEq(fold(-1, [-1, 6]), -6, 'the F♯/G♭ tie under one flat: G♭ major');
+        assertEq(fold(7, [7, -4]), 8, 'A♭ major (−4) under seven sharps: G♯ major (+8), one fifth from the signature');
+        assertEq(fold(-7, [-7, 4]), -8, 'E major (+4) under seven flats: F♭ major (−8), one fifth from the signature');
     });
 });
 

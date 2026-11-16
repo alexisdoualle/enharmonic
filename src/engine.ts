@@ -32,6 +32,7 @@ import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf,
 import { intervalScore } from './scoring.js';
 import { isKeyDegree, isLeadingTone, isWideLeadingTone, type LocalKey } from './key.js';
 import type { DominantChord } from './dominant.js';
+import { SIGNATURE_NEIGHBOURHOOD } from './key-side.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
 // by letter slot. {step, alter} appears only at the public API and in the decision trace.
@@ -1268,11 +1269,12 @@ export class SpellingEngine {
      * ({@link setKey}). A tie takes the side (F♯ or G♭ major) nearer the current surface's mean.
      *
      * A key the caller gives outranks the speller's own key estimate ON THE SIDE: once a signature is supplied
-     * ({@link keySignature}), an inferred key that has a conventional reading (at most 7 accidentals) one comma
-     * nearer the signature takes that reading: C♯ major (+7) under five flats is D♭ major (−5), where the
-     * inferred +7 used to fold the frame back to sharps one note after the signature placed it (Chopin Op. 28/15
-     * m77). The key itself still comes from the notes: a modulation the signature does not name (F minor under
-     * four sharps, Grieg's Morning Mood m38) still re-centres the fold. A tie keeps the inferred reading.
+     * ({@link keySignature}), an inferred key that has a conventional reading (at most 7 accidentals, or past seven
+     * within one fifth of the signature: G♯ major under seven sharps) one comma nearer the signature takes that
+     * reading: C♯ major (+7) under five flats is D♭ major (−5), where the inferred +7 used to fold the frame back
+     * to sharps one note after the signature placed it (Chopin Op. 28/15 m77). The key itself still comes from the
+     * notes: a modulation the signature does not name (F minor under four sharps, Grieg's Morning Mood m38) still
+     * re-centres the fold. A tie keeps the inferred reading.
      */
     sideKey(x: number | null): void {
         if (!this.sideStarted) {
@@ -1303,8 +1305,12 @@ export class SpellingEngine {
         // signature does not name: Grieg's Morning Mood m38, an F-major area under four sharps, drifts to
         // B♯ E♯ G𝄪 (749 notes). On the 50 single pieces B wins every metric: exact 97.47 → 97.64 → 98.27%,
         // flipped 2,090 → 1,878 → 937, wrong 1,696 → 1,659 → 1,656.
+        // A reading past seven accidentals counts when it is within one fifth of the signature, as in the two-pass
+        // anchor (`anchoredSideKeys`): under seven sharps the dominant G♯ major (+8) is G♯, not A♭ (−4). Farther from
+        // the signature the seven-accidental limit stands (A♭ major under four sharps stays A♭, not G♯).
         const sig = this.signedKey;
-        if (sig !== null) for (const c of [x + 12, x - 12]) if (Math.abs(c) <= 7 && Math.abs(c - sig) < Math.abs(x - sig)) x = c;
+        const allowed = (c: number) => Math.abs(c) <= 7 || Math.abs(c - sig!) <= SIGNATURE_NEIGHBOURHOOD;
+        if (sig !== null) for (const c of [x + 12, x - 12]) if (allowed(c) && Math.abs(c - sig) < Math.abs(x - sig)) x = c;
         if (x !== this.sideX) { this.setKey(x); this.sideX = x; }
     }
 
