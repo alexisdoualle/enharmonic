@@ -153,8 +153,9 @@ export interface TwoPassOptions {
      *  `keySignatureAnchor`. Must have one entry per note. */
     keySignatures?: readonly (number | null)[];
     /** THE SIGNATURE ANCHORS THE SIDE (`keySide`, with `keySignatures`). A passage is notated on the side of its key
-     *  signature while its local key stays within one fifth of it: there the passes count accidentals from the
-     *  notated signature; farther, they count from the inferred key, as without signatures
+     *  signature while its local key stays within one fifth of it (on the line of fifths, past seven accidentals
+     *  too: G♯ major under seven sharps): there the passes count accidentals from the notated signature; farther,
+     *  they count from the inferred key, as without signatures
      *  ({@link anchoredSideKeys}). Chopin Sonata 2/ii (E♭ minor, six flats): the signature settles the F♯/G♭ tie
      *  the inferred key cannot, and m114–179 keep Chopin's D♭, C♭, G♭ instead of C♯, B, F♯. Counter-case
      *  guarded: *Pathétique* ii m42–49 (E major under four flats) is four fifths away and keeps the inferred

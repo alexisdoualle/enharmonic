@@ -234,7 +234,8 @@ const spelled = spellTwoPass(notes, { keySignatures: notes.map(() => -6) });   /
 
 Each entry is signed sharps − flats (0 = none), in the order of `notes`. A passage is notated on the side of its
 key signature while its local key stays within one fifth of it: there the passes count accidentals from the
-signature; farther, the side comes from the inferred key as without signatures. Chopin, Sonata No. 2/ii (six
+signature; farther, the side comes from the inferred key as without signatures. The fifth is counted on the line of
+fifths, past seven accidentals too: Bach's WTC I/3 (seven sharps) keeps G♯ major with F𝄪, not A♭ major. Chopin, Sonata No. 2/ii (six
 flats): the signature settles the F♯/G♭ tie, so m114–179 keep Chopin's D♭, C♭, G♭. *Pathétique* ii m42–49 (E
 major under four flats) is left to the inferred key. `keySignatureAnchor: false` ignores the signatures.
 

@@ -257,6 +257,18 @@ suite('aug6 outward convergence', () => {
         assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: sigs }).slice(814, 992)), JSON.stringify(spellTwoPass(notes).slice(814, 992)));
     });
 
+    test('spellTwoPass keySignatures: the dominant of a seven-sharp signature keeps the sharp side', () => {
+        // G♯ major, I IV V7 I twice, under seven sharps (C♯ major's dominant, as in WTC I/3). G♯ major needs eight
+        // sharps, so its reading within ±7 is A♭ major; the signature's neighbourhood is measured without that limit.
+        const chords = [[56, 60, 63, 68], [49, 61, 65, 68], [51, 63, 67, 70, 73], [56, 60, 63, 68]];
+        const notes = [...chords, ...chords].flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
+        const spell = (o: object) => spellTwoPass(notes, o).map(p => tok({ ...p!, octave: 4 })).join(' ');
+        assertEq(anchoredSideKeys(notes, notes.map(() => 7), centredSideKeys(notes))[0], 7);
+        assert(spell({ keySignatures: notes.map(() => 7) }).startsWith('G# B# D# G# C# C# E# G# D# D# F## A# C#'), 'seven sharps: G♯ major with F𝄪');
+        assert(spell({}).startsWith('Ab C Eb'), 'keyless: A♭ major');
+        assertEq(spell({ keySignatures: notes.map(() => -7) }), spell({}));
+    });
+
     test('spellTwoPass keySignatures: none, all unknown, or anchor off is identical to before', () => {
         const notes = onNotes(loadEvents('debussy_clair_de_lune'));
         const before = JSON.stringify(spellTwoPass(notes));

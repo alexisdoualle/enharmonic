@@ -188,8 +188,11 @@ export const SIGNATURE_NEIGHBOURHOOD = 1;
 /**
  * NOTATED SIGNATURE → SIDE (two-pass `keySignatures`). Proposition: a passage is notated on the side of its key
  * signature while its local key stays within one fifth of it. Each note's centred local key (as
- * {@link centredSideKeys}, ±radius onsets) is read as its enharmonic reading nearest the signature `sigs[i]`, within
- * ±7 accidentals (a tie in distance goes to fewer accidentals, then the flat side). Within
+ * {@link centredSideKeys}, ±radius onsets) is read as its enharmonic reading nearest the signature `sigs[i]` (a tie in
+ * distance goes to fewer accidentals, then the flat side). The neighbourhood is measured on the line of fifths with no
+ * seven-accidental limit: that limit bounds the signatures a key reader may invent, not the keys next to a notated one.
+ * Bach, WTC I/3 (seven sharps): the G♯-major passages (eight sharps, F𝄪) are one fifth from the signature and keep
+ * Bach's sharps; read within ±7 they were A♭ major, eleven fifths away, and both passes wrote A♭, E♭, C. Within
  * {@link SIGNATURE_NEIGHBOURHOOD} fifths of the signature, the side is the signature; farther, or with no signature
  * (null), it is `inferred[i]`, the side read from the notes alone. Chopin, Sonata No. 2/ii (E♭ minor, six flats): the
  * signature settles the F♯/G♭ tie the inferred key cannot, and m114–179 keep Chopin's D♭, C♭, G♭. Beethoven,
@@ -202,7 +205,8 @@ export function anchoredSideKeys(notes: readonly KeyNote[], sigs: readonly (numb
         if (s === null) return inferred[i] ?? null;
         if (!k) return s;
         const x = xOf(k);
-        const cands = (Number.isNaN(x) ? [-6, 6] : [x, x + 12, x - 12]).filter(c => Math.abs(c) <= DEEPEN);
+        // Every reading counts, also past seven accidentals: G♯ major (+8) is one fifth from seven sharps.
+        const cands = Number.isNaN(x) ? [-6, 6] : [x, x + 12, x - 12];
         const near = cands.reduce((a, c) => (Math.abs(c - s) < Math.abs(a - s) || (Math.abs(c - s) === Math.abs(a - s) && Math.abs(c) < Math.abs(a)) ? c : a));
         return Math.abs(near - s) <= SIGNATURE_NEIGHBOURHOOD ? s : inferred[i] ?? null;
     });
