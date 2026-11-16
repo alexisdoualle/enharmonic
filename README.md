@@ -252,11 +252,16 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 |---|--:|--:|--:|--:|
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.62% | 99.69% | 99.53% | 99.61% |
-| + look-ahead | 99.84% | 99.89% | 99.80% | 99.83% |
+| + look-ahead | 99.85% | 99.90% | 99.81% | 99.84% |
 | + two-pass | 99.93% | 99.93% | 99.89% | 99.89% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
+
+Against the published spellers on clean Meredith, grouped by latency (exact % above each bar, coherent %
+below; baselines scored on the same notes with the same scorer):
+
+![Meredith clean: our four modes beside Chew & Chen, Cambouropoulos, PKSpell, ps13, Temperley and music21](docs/meredith-scoreboard.png)
 
 ## Performance
 
