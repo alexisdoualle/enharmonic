@@ -85,8 +85,8 @@ let lastScaleSig = '';
 //     drawn from scale node to target across an accidental layer. An arrow lights while its source sounds
 //     and goes out once the target is struck after it (the resolution happened).
 //   • Z RANGE (− / +): how many accidental layers each side of the naturals the lattice spans (the chromatic
-//     depth, z), symmetric: ±1 by default (♭ · ♮ · ♯), 0 = the naturals' layer only, up to ±3.
-const Z_MIN = 0, Z_MAX = 3, Z_DEFAULT = 1;
+//     depth, z), symmetric: ±2 by default (𝄫 · ♭ · ♮ · ♯ · 𝄪), 0 = the naturals' layer only, up to ±3.
+const Z_MIN = 0, Z_MAX = 3, Z_DEFAULT = 2;
 let showPlanes = false;
 let showGhosts = false;
 let showLeadingTones = false;
@@ -341,7 +341,7 @@ function mountLatticeControls(container: HTMLElement): void {
         inc.disabled = zRange >= Z_MAX;
     };
     const applyZ = () => { scene?.setLayerMin(-zRange); scene?.setLayerMax(zRange); };
-    if (zRange !== Z_DEFAULT) applyZ();
+    applyZ();   // always: the scene's own default is ±1
     paint();
     // Keep orbit/zoom gestures on the canvas from starting when the controls are used.
     for (const ev of ['pointerdown', 'wheel'] as const) box.addEventListener(ev, e => e.stopPropagation());

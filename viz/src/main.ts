@@ -73,11 +73,11 @@ function setChordsVisible(v: boolean) {
     render();
 }
 
-// Piano keyboard strip under the piano roll, above the cards (panels/keyboard.ts): off by default (the desktop layout is already
-// dense; the strip is for the big poster screen), persisted per-browser; `?piano=1` / `?piano=0` overrides.
+// Piano keyboard strip under the piano roll, above the cards (panels/keyboard.ts): on by default, persisted per-browser
+// (an explicit off sticks); `?piano=1` / `?piano=0` overrides.
 const SHOW_KEYBOARD_KEY = 'viz.showKeyboard';
 let keyboard: KeyboardStrip | null = null;
-const readFlag = (key: string) => { try { return localStorage.getItem(key) === '1'; } catch { return false; } };
+const readFlag = (key: string) => { try { return localStorage.getItem(key) !== '0'; } catch { return true; } };
 function setKeyboardOption(key: string, v: boolean) {
     try { localStorage.setItem(key, v ? '1' : '0'); } catch { /* storage blocked */ }
     applyKeyboard();
