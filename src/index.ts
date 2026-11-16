@@ -25,7 +25,7 @@ export { spellTwoPass } from './two-pass.js';
 export type { TwoPassNote, TwoPassOptions } from './two-pass.js';
 
 export type { Pitch, PitchClass, Letter, Accidental } from './pitch.js';
-export { midiOf, pitchClassValue, pitchToString } from './pitch.js';
+export { midiOf, pitchAt, pitchClassValue, pitchToString } from './pitch.js';
 
 export type { Interval, IntervalQuality } from './interval.js';
 export { intervalBetween, intervalLabel } from './interval.js';

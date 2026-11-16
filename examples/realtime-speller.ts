@@ -146,6 +146,9 @@ function isMisspelledThird(a: number, b: number): boolean {
 
 // ── The speller ──────────────────────────────────────────────────────────────
 
+/** Natural pitch class of each letter (for the written octave). */
+const NATURAL_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 } as const;
+
 export class RealtimeSpeller {
     /** One spelling per letter slot, the frame surface. Starts at C major. */
     //                          F   C  G  D  A  E  B
@@ -320,10 +323,12 @@ export class RealtimeSpeller {
     /** The spelling of a sounding note (its committed one), else the frame's spelling of its pitch class,
      *  searching the letters C to B. */
     getSpelling(midi: number): Pitch | null {
-        const octave = Math.floor(midi / 12) - 1;
         const n = this.active.get(midi)
             ?? LETTER_ORDER.map(slot => this.scale[slot]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
-        return n === undefined ? null : { ...spellingOf(n), octave };
+        if (n === undefined) return null;
+        // The octave follows the LETTER: B♯3 and C4 are both MIDI 60, C♭5 and B4 both MIDI 71.
+        const sp = spellingOf(n);
+        return { ...sp, octave: Math.floor((midi - sp.alter - NATURAL_PC[sp.step]) / 12) - 1 };
     }
 
     /** Read-only snapshot of the current 7-letter scale, C to B (introspection). */

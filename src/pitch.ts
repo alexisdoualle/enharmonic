@@ -42,6 +42,13 @@ export function midiOf(p: Pitch): number {
     return midi;
 }
 
+/** The Pitch that spells `midi` as `pc`. The written octave follows the LETTER, not the MIDI number:
+ *  B♯3 and C4 are both MIDI 60, C♭5 and B4 are both MIDI 71 (B𝄪3 = 61, C𝄫5 = 70). Never compute the
+ *  octave as `floor(midi / 12) - 1`, which is wrong whenever the accidental crosses the B–C boundary. */
+export function pitchAt(pc: PitchClass, midi: number): Pitch {
+    return { step: pc.step, alter: pc.alter, octave: Math.floor((midi - pc.alter - LETTER_BASE[pc.step]) / 12) - 1 };
+}
+
 /** 12-tone pitch class (0..11). C = 0. */
 export function pitchClassValue(p: PitchClass | Pitch): number {
     return ((LETTER_BASE[p.step] + p.alter) % 12 + 12) % 12;

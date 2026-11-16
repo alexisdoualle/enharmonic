@@ -13,6 +13,7 @@ await import('./chromatic-lines.test.js');
 await import('./export.test.js');
 await import('./import.test.js');
 await import('./symmetricPlanes.test.js');
+await import('./pitch-invariants.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;

@@ -10,6 +10,7 @@
  * the shipped no-keys presets the benchmark scores.
  */
 import type { Pitch, PitchClass } from '../../src/index.js';
+import { pitchAt } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
 import { outwardPairs } from '../../src/aug6.js';
@@ -192,7 +193,7 @@ export function controlTable(center: number): Map<number, PitchClass> {
 /** Spell a MIDI note with a fixed-LoF control table (context-free). */
 export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitch {
     const sp = table.get(((midi % 12) + 12) % 12)!;
-    return { step: sp.step, alter: sp.alter, octave: Math.floor(midi / 12) - 1 };
+    return pitchAt(sp, midi);
 }
 
 /** How many upcoming notes the look-ahead reads to find a note's resolution: the forward buffer a
@@ -436,10 +437,9 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         const lc = localReader.read(e.t_ms), sc = stableReader.read(e.t_ms);
         const localColl: CollectionRead | null = lc ? { relMajorPc: lc.relMajorPc, name: collectionName(lc.relMajorPc, side), margin: lc.margin } : null;
         const stableColl: CollectionRead | null = sc ? { relMajorPc: sc.relMajorPc, name: collectionName(sc.relMajorPc, side), margin: sc.margin } : null;
-        const octave = Math.floor(e.midi! / 12) - 1;
         snapshots.push({
             onIndex: idx, midi: e.midi!, t: e.t_ms, durMs: 0, committed,
-            expected: exp ? { step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'], octave } : null,
+            expected: exp ? pitchAt({ step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'] }, e.midi!) : null,
             resolvedScale, frame, frameLofTonic, frameMeanTonic, keyCenterLof, frameKeyLof, decision, twoPass,
             localColl, stableColl,
             ...(mode === 'la' ? { la: { resolveDir: dirs.get(i) ?? 0, exactDir: exactDirs.get(i) ?? 0, localKey: keys.get(i) ?? null, degreeKey: degKeys.get(i) ?? null, outward: outward.get(i) ?? null } } : {}),
@@ -447,7 +447,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
         });
         const ni = notes.length;
-        notes.push({ onIndex: idx, midi: e.midi!, onT: e.t_ms, offT: e.t_ms, committed, expected: exp ? { ...exp, octave } : null, tier: 'unread' });
+        notes.push({ onIndex: idx, midi: e.midi!, onT: e.t_ms, offT: e.t_ms, committed, expected: exp ? { ...exp, octave: pitchAt({ step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'] }, e.midi!).octave } : null, tier: 'unread' });
         (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(ni);
     }
 

@@ -16,6 +16,7 @@
  */
 
 import type { Pitch, PitchClass } from './pitch.js';
+import { pitchAt } from './pitch.js';
 import { acc, C_MAJOR, candidates, letter, LETTER_ORDER, lofOf, pitchClass, spellingOf } from './lof.js';
 import { intervalScore } from './scoring.js';
 import type { NoteContext } from './kernel.js';
@@ -114,9 +115,8 @@ export class CoreSpeller {
     /** The spelling of a sounding note (its committed one), else the scale's spelling of its pitch class,
      *  searching the letters C to B. */
     getSpelling(midi: number): Pitch | null {
-        const octave = Math.floor(midi / 12) - 1;
         const n = this.active.get(midi)
             ?? LETTER_ORDER.map(s => this.scale[s]!).find(m => pitchClass(m) === ((midi % 12) + 12) % 12);
-        return n === undefined ? null : { ...spellingOf(n), octave };
+        return n === undefined ? null : pitchAt(spellingOf(n), midi);
     }
 }
