@@ -1,0 +1,12 @@
+{
+  "_comment": "Two engraving slips in m64 of the string-quartet source (The_Art_of_Fugue_Contrapunctus_1_String_Quartet_.musicxml): the raised leading tone / third of the A-major dominant was written Db instead of C#. Both sit over an A-dominant harmony where C# is a consonant major third and Db is a diminished-fourth wolf (rule (a), vertical, asymmetric sonority). b1.25 (Vln1): sounds A2 A4 C#5, arpeggiating A7 (line G5->C#5->F5, 7th->3rd) resolving to i6; b2.75 (Vla): sounds A2 C#3 G4 E5 = a clean A7 (V7) resolving to III/i. Every other midi-73 in mm.63-65 is already C# (m63 b1.0 Vln1, m63 b2.75 Vln2, m65 b1.25 Vln1) — these two are the outliers. Not circular: decided by struck chord + resolution + local key (D minor), speller only surfaced the candidate.",
+  "total_notes_respelled": 2,
+  "rules": [
+    { "from": "Db", "to": "C#", "via": "vertical/leading-tone (third of dominant A7, V of d)", "count": 2 }
+  ],
+  "kept": [],
+  "corrections": [
+    { "measure": 64, "beat": 1.25, "midi": 73, "from": "Db5", "to": "C#5" },
+    { "measure": 64, "beat": 2.75, "midi": 49, "from": "Db3", "to": "C#3" }
+  ]
+}
