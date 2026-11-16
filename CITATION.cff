@@ -10,7 +10,7 @@ authors:
   - family-names: Doualle
     given-names: Alexis
     affiliation: Independent Researcher
-version: 0.2.0
+version: 0.2.1
 doi: 10.5281/zenodo.23023002
 date-released: 2026-11-16
 license: Apache-2.0
