@@ -26,6 +26,7 @@
 import type { PitchClass } from './pitch.js';
 import { resolveStep } from './kernel.js';
 import { outwardPairs } from './aug6.js';
+import { groupOnsets } from './onsets.js';
 import { degreeKeys, localKeys, type LocalKey } from './key.js';
 import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
 import { lofOf, spellingOf } from './lof.js';
@@ -353,8 +354,7 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
  * consecutive strikes [a, b] (indices into the sorted notes), sorted by a. A re-struck pitch is read as one voice.
  */
 function runPairs(N: readonly TwoPassNote[]): [number, number][] {
-    const n = N.length; const onsetIdx: number[] = []; let g = -1, lastT = -Infinity;
-    for (let k = 0; k < n; k++) { if (N[k]!.tOn !== lastT) { g++; lastT = N[k]!.tOn; } onsetIdx.push(g); }
+    const n = N.length, onsetIdx = groupOnsets(N).of;
     const bass = N.map((x, k) => {
         let b = x.midi;
         for (let m = k - 1; m >= Math.max(0, k - 64); m--) if (N[m]!.tOff > x.tOn && N[m]!.midi < b) b = N[m]!.midi;
@@ -378,8 +378,7 @@ function runPairs(N: readonly TwoPassNote[]): [number, number][] {
 function runRepair(N: readonly TwoPassNote[], out: (number | undefined)[]): void {
     const n = N.length;
     const pcOf = (t: number) => ((N[t]!.midi % 12) + 12) % 12;
-    const onsetIdx: number[] = []; let g = -1, lastT = -Infinity;
-    for (let k = 0; k < n; k++) { if (N[k]!.tOn !== lastT) { g++; lastT = N[k]!.tOn; } onsetIdx.push(g); }
+    const onsetIdx = groupOnsets(N).of;
     const byMidi = new Map<number, number[]>();
     N.forEach((x, k) => { (byMidi.get(x.midi) ?? byMidi.set(x.midi, []).get(x.midi)!).push(k); });
     const fixes: [number, number][] = [];
@@ -559,14 +558,15 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     // if no pitch class is spelled differently before and after, and the region is short and holds enough pitch
     // classes, the pass that contradicts the context less replaces the merge when the merge contradicts it more.
     const shortFlip = opts.shortFlip ?? true;
+    const onsetOf = groupOnsets(N).of;
     const shortFlipRepair = (i: number, j: number): void => {
         const before = new Map<number, number>();
         for (let t = i - 1, c = 0; t >= 0 && c < CONTEXT_NOTES; t--) { if (out[t] === undefined) continue; c++; if (!before.has(pcOf(t))) before.set(pcOf(t), out[t]!); }
         const after = new Map<number, number>();
         for (let t = j, c = 0; t < n && c < CONTEXT_NOTES; t++) { if (!agree(t)) continue; c++; if (!after.has(pcOf(t))) after.set(pcOf(t), fwd[t]!); }
         for (const [pc, v] of after) { const b = before.get(pc); if (b !== undefined && b !== v) return; }
-        let onsets = 0; const pcs = new Set<number>();
-        for (let t = i; t < j; t++) { pcs.add(pcOf(t)); if (t === i || N[t]!.tOn !== N[t - 1]!.tOn) onsets++; }
+        const onsets = j > i ? onsetOf[j - 1]! - onsetOf[i]! + 1 : 0, pcs = new Set<number>();
+        for (let t = i; t < j; t++) pcs.add(pcOf(t));
         if (onsets > SHORT_FLIP_MAX_ONSETS || pcs.size < SHORT_FLIP_MIN_PCS) return;
         const conflicts = (sp: (t: number) => number): number => {
             let c = 0;

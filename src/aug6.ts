@@ -39,31 +39,14 @@ export interface OutwardOptions {
     chordMeet?: number;
 }
 
+import { groupOnsets, type Onsets } from './onsets.js';
+
 const pcOf = (m: number) => ((m % 12) + 12) % 12;
 
 /** How many onsets after a note the move finder looks for its first semitone move. */
 const MOVE_ONSETS = 64;
 /** How far (in notes) on either side of a note to look for notes still sounding at its onset. */
 const SOUNDING_NOTES = 64;
-
-/** The notes grouped by onset, in time order. */
-interface Onsets {
-    readonly notes: OutwardNote[][];   // per onset, the notes it strikes
-    readonly pcs: number[];            // per onset, a bitmask of the pitch classes it strikes
-    readonly of: number[];             // per note, its onset
-}
-
-function groupOnsets(notes: readonly OutwardNote[]): Onsets {
-    const on: Onsets = { notes: [], pcs: [], of: [] };
-    notes.forEach((note, i) => {
-        if (i === 0 || note.tOn !== notes[i - 1]!.tOn) { on.notes.push([]); on.pcs.push(0); }
-        const c = on.notes.length - 1;
-        on.notes[c]!.push(note);
-        on.pcs[c] = on.pcs[c]! | (1 << pcOf(note.midi));
-        on.of.push(c);
-    });
-    return on;
-}
 
 /**
  * Each note's FIRST semitone move, read by onset: skip every later onset that strikes the note's pitch
@@ -75,14 +58,18 @@ function groupOnsets(notes: readonly OutwardNote[]): Onsets {
  */
 function firstMoves(notes: readonly OutwardNote[], on: Onsets): { dir: number[]; at: number[] } {
     const dir = notes.map(() => 0), at = notes.map(() => -1);
+    const count = on.start.length - 1;
+    // Per onset, a bitmask of the pitch classes it strikes.
+    const pcs = new Array<number>(count).fill(0);
+    notes.forEach((note, i) => { pcs[on.of[i]!] = pcs[on.of[i]!]! | (1 << pcOf(note.midi)); });
     notes.forEach(({ midi: m }, a) => {
         const c0 = on.of[a]!;
-        for (let c = c0 + 1; c < on.notes.length && c - c0 <= MOVE_ONSETS; c++) {
-            if (on.pcs[c]! & (1 << pcOf(m))) continue;
+        for (let c = c0 + 1; c < count && c - c0 <= MOVE_ONSETS; c++) {
+            if (pcs[c]! & (1 << pcOf(m))) continue;
             // Distance to the nearest note whose pitch class is a semitone above / below m's.
             let above = Infinity, below = Infinity;
-            for (const { midi: o } of on.notes[c]!) {
-                const pd = pcOf(o - m);
+            for (let i = on.start[c]!; i < on.start[c + 1]!; i++) {
+                const o = notes[i]!.midi, pd = pcOf(o - m);
                 if (pd === 1) above = Math.min(above, Math.abs(o - m));
                 if (pd === 11) below = Math.min(below, Math.abs(o - m));
             }
@@ -115,7 +102,12 @@ export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: Outw
     const partner = new Array<number>(n).fill(-1), role = new Array<number>(n).fill(0);
     const on = groupOnsets(notes);
     const moves = firstMoves(notes, on);
-    const strikes = (c: number, midi: number) => on.notes[c]!.some(note => note.midi === midi);
+    const count = on.start.length - 1;
+    const size = (c: number) => on.start[c + 1]! - on.start[c]!;
+    const strikes = (c: number, midi: number) => {
+        for (let i = on.start[c]!; i < on.start[c + 1]!; i++) if (notes[i]!.midi === midi) return true;
+        return false;
+    };
 
     for (let x = 0; x < n; x++) {
         if (moves.dir[x] !== 1) continue;
@@ -130,9 +122,9 @@ export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: Outw
             // Onset c strikes both goals; a unison meet (both goals one pitch) also needs a chord there.
             const unison = chordMeet > 0 && mx + 1 === my - 1;
             const meetsAt = (c: number) =>
-                strikes(c, mx + 1) && strikes(c, my - 1) && !(unison && on.notes[c]!.length < chordMeet);
+                strikes(c, mx + 1) && strikes(c, my - 1) && !(unison && size(c) < chordMeet);
             let met = false;
-            for (let c = cx + 1; c < on.notes.length && c - cx <= look && !met; c++) met = meetsAt(c);
+            for (let c = cx + 1; c < count && c - cx <= look && !met; c++) met = meetsAt(c);
             // They also meet when their first moves, re-strikes skipped, land on one onset (which then
             // strikes both goals by definition).
             if (!met && firstMoveMeet && moves.at[x]! >= 0 && moves.at[x] === moves.at[y]) met = meetsAt(moves.at[x]!);
