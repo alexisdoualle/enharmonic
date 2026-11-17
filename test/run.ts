@@ -16,6 +16,7 @@ await import('./symmetricPlanes.test.js');
 await import('./pitch-invariants.test.js');
 await import('./key-range.test.js');
 await import('./score.test.js');
+await import('./two-pass-passes.test.js');
 
 const { passed, failed, failures } = summarize();
 const total = passed + failed;

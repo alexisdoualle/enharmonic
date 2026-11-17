@@ -16,21 +16,20 @@
  *     CENTRE (an emergent statistic, never a detected key). An augmented sixth whose tones move outward
  *     is the chord's point, not a wolf.
  *
- * Both passes are the shipped engine at its two-pass preset (letter look-ahead plus vertical guard, over
- * the accidental-economy fold). Both read each note's local key (the theory table on ±12 onsets centred on
- * the note, {@link localKeys}) for the leading-tone gate, and the key-degree gate's key (the same table on ±12
- * notes, {@link degreeKeys}). The reconciliation is pure array logic. This is the
- * highest-accuracy tier; see the README for benchmark figures.
+ * Both passes are the look-ahead speller (`LA_PRESET`) with its full context ({@link lookAheadContext}, read in
+ * forward time; the backward pass reads it reversed), a side key read on the onsets centred on each note, and
+ * `keySignature` at each notated key change. Two readings in opposite directions, merged, beat either one: each
+ * pass alone has more wrong notes than the streaming look-ahead, the merge fewer. The reconciliation is pure array
+ * logic. This is the highest-accuracy tier; see the README for benchmark figures.
  */
 
 import type { PitchClass } from './pitch.js';
-import { resolveStep } from './kernel.js';
-import { outwardPairs } from './aug6.js';
 import { groupOnsets } from './onsets.js';
-import { degreeKeys, localKeys, type LocalKey } from './key.js';
-import { SpellingEngine, TP_PASS_PRESET, type Decision } from './engine.js';
+import { SpellingEngine, LA_PRESET, type Decision } from './engine.js';
+import { lookAheadContext } from './look-ahead.js';
+import type { NoteContext } from './kernel.js';
 import { lofOf, spellingOf } from './lof.js';
-import { anchoredSideKeys, centredKeys, CENTRED_SIDE_RADIUS, deepenCentredKeys, type Key } from './key-side.js';
+import { anchoredSideKeys, centredKeys, CENTRED_SIDE_RADIUS, deepenCentredKeys } from './key-side.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -67,16 +66,9 @@ export interface TwoPassOptions {
     /** Group notes starting within this many `t` units of an onset's first note into that onset, in both
      *  passes (the backward pass sees reversed note-offs as its onsets). Default 0 (exact `t`). */
     onsetTolerance?: number;
-    /** Feed both passes the aug6 outward pairs ({@link outwardPairs}), so the engine's `aug6Outward` rule
-     *  spells a converging augmented sixth's rising tone as the ♯4. Default `true`. */
+    /** Feed both passes the aug6 outward pairs (`outwardPairs`, as the look-ahead reads them), so the engine's
+     *  `aug6Outward` rule spells a converging augmented sixth's rising tone as the ♯4. Default `true`. */
     aug6Outward?: boolean;
-    /** The aug6 pairs also meet when the two tones' first moves land on one onset (`outwardPairs`'s
-     *  `firstMoveMeet`: a held or repeated German sixth resolving past the 8-onset window). Default `true`. */
-    aug6FirstMoveMeet?: boolean;
-    /** `outwardPairs`'s `chordMeet` for the passes: a unison meet pairs only if the meeting onset strikes at
-     *  least this many notes. Default 0 (off): the look-ahead tier ships it at 3, but on two-pass its fixes
-     *  were mostly wrong → flipped and it did not confirm on the fresh15 set. */
-    aug6ChordMeet?: number;
     /** NO PASSAGE BOUNDARY INSIDE A REPEATED RUN. Where the passes disagree, the merge may not place its side
      *  change between two strikes of a repeated run (three or more strikes of one pitch, at most 16 onsets
      *  apart, over one bass pitch class) that lies inside the disagreement: the cut moves to the run's start or
@@ -111,31 +103,26 @@ export interface TwoPassOptions {
      *  flatter tone falls one (exact pitch) is not a wolf: the wedge is the chord's point, a resolution onto
      *  one pitch class, not a misspelling. Default `true`. */
     aug6Wedge?: boolean;
-    /** Feed both passes each note's local key, so the engine's `leadingToneGate` keeps a falling leading tone
-     *  of the key (C♯→C in D minor) instead of the look-ahead's letter step. The key is read with the
-     *  `'tonic-triad'` table (a key is its tonic triad inside its seven-note collection; no fitted numbers) on
-     *  ±12 onsets centred on the note ({@link localKeys}); the backward pass reads the same keys. Default
-     *  `true`. */
+    /** Feed both passes each note's local key (`localKeys`, as the look-ahead reads it), so the engine's
+     *  `leadingToneGate` keeps a falling leading tone of the key (C♯→C in D minor) instead of the look-ahead's
+     *  letter step. Default `true`. */
     leadingToneGate?: boolean;
-    /** Feed both passes each note's key-degree key ({@link degreeKeys}: the tonic-triad table on ±12 notes), so
-     *  the engine's `keyDegreeGate` keeps a note's letter on a semitone move into a pitch outside the key.
-     *  Default `true`. */
+    /** Feed both passes each note's key-degree key (`degreeKeys`), so the engine's `keyDegreeGate` keeps a note's
+     *  letter on a semitone move into a pitch outside the key. Default `true`. */
     keyDegreeGate?: boolean;
-    /** KEY → SIDE. A passage is written on the side of its local key's conventional signature, so both passes
-     *  count accidentals from that signature, not from C: each note's key is read offline on ±48 onsets centred
-     *  on it ({@link centredSideKeys}, deepened along the spiral up to seven accidentals), and the passes'
-     *  accidental-economy fold counts from its signature. A key with six or seven accidentals (the F♯/G♭ tie or
-     *  a deepened key) is written either way and cannot choose: the pass counts from C there. Clair de lune
-     *  m44–47 (D♭ major): the key reads A♭ / D♭ major, and the passes keep Debussy's G♭, D♭, E♭, A♭ instead of
-     *  F♯, C♯, D♯, G♯. Counter-case for the six-accidental limit: Chopin Sonata 2/ii (E♭ minor, six flats)
-     *  would come out in D♯ minor if its key chose the side. Default `true`. */
+    /** KEY → SIDE. Both passes get each note's side key read offline on ±48 onsets centred on it
+     *  ({@link centredSideKeys}, deepened along the spiral), in place of the look-ahead's own side key. A key past
+     *  five accidentals gives none and the previous side holds: going round the spiral from A♭ major (−4), C♭ major
+     *  (−7) is nearer than B major (+5), so a sharp-key passage reads as its flat twin (the E-major pages of
+     *  Chopin's Prelude Op. 28 No. 17 as F♭; the Pathétique Adagio goes from 10 wrong / 0 flipped to 66 / 77
+     *  without the limit). Default `true`; off, the passes read no side key. */
     keySide?: boolean;
     /** A KEY KEEPS ITS SIDE ON RETURN (`keySide`'s key reader). A key written on the near side only because its far
      *  reading is past the ±7 deepening limit is a readability respell; when the music returns to the key it came
      *  from, that key keeps its prior side. A parallel, or the parallel of the relative, of the forced key or of the
      *  key just before is never a return, and such a candidate disarms the pending return. Pathétique ii: A♭ minor
      *  (−7) → F♭ major, forced to E major (+4) → A♭ minor at m48, read −7 again instead of G♯ minor (+5), so the
-     *  passes count from C there and m48–52 come back to A♭ and C♭ instead of a late boundary. Counter-case: an
+     *  passes read no side key there and m48–52 come back to A♭ and C♭ instead of a late boundary. Counter-case: an
      *  over-deepened prior key (Troschel *Walec oryginalny*: D♭ already read as C♯ at +7, then A♭ folded back) is
      *  restored on the far side. Default `true`; inert when `keySide` is off. */
     keyReturn?: boolean;
@@ -150,14 +137,16 @@ export interface TwoPassOptions {
      *  m18, C♯ rising to D against G♭–B♭) is respelt D♭. Default `true`. */
     struckTriadThird?: boolean;
     /** Each input note's NOTATED key signature, in the caller's order: signed sharps − flats (0 = none, −6 = six
-     *  flats; the relative major's tonic on the line of fifths), null where unknown. Optional; read by
-     *  `keySignatureAnchor`. Must have one entry per note. */
+     *  flats; the relative major's tonic on the line of fifths), null where unknown. Optional. Each pass calls
+     *  `keySignature` where it changes (in its own direction), and `keySignatureAnchor` reads it. Must have one
+     *  entry per note. */
     keySignatures?: readonly (number | null)[];
     /** THE SIGNATURE ANCHORS THE SIDE (`keySide`, with `keySignatures`). A passage is notated on the side of its key
      *  signature while its local key stays within one fifth of it (on the line of fifths, past seven accidentals
-     *  too: G♯ major under seven sharps): there the passes count accidentals from the notated signature; farther,
-     *  they count from the inferred key, as without signatures
-     *  ({@link anchoredSideKeys}). Chopin Sonata 2/ii (E♭ minor, six flats): the signature settles the F♯/G♭ tie
+     *  too: G♯ major under seven sharps): there the passes' side key is the notated signature; farther, it is the
+     *  inferred key, as without signatures ({@link anchoredSideKeys}). Without it a centred key read across a
+     *  join between pieces overrides the notation (WTC I No. 18, G♯ minor after No. 17 in A♭ major, came out in A♭
+     *  minor). Chopin Sonata 2/ii (E♭ minor, six flats): the signature settles the F♯/G♭ tie
      *  the inferred key cannot, and m114–179 keep Chopin's D♭, C♭, G♭ instead of C♯, B, F♯. Counter-case
      *  guarded: *Pathétique* ii m42–49 (E major under four flats) is four fifths away and keeps the inferred
      *  sharps. Default `true`; inert without `keySignatures` or when `keySide` is off. */
@@ -204,20 +193,6 @@ export interface TwoPassTrace {
 // ── Direction helpers ─────────────────────────────────────────────────────────
 // Spellings below are line-of-fifths positions (see lof.ts); {step, alter} only at the output.
 
-/** Nearest-semitone-resolution direction for each note, scanning up to `horizon` following onsets. */
-function resolveDirs(notes: readonly TwoPassNote[], horizon = 16): number[] {
-    const d = new Array<number>(notes.length).fill(0);
-    for (let a = 0; a < notes.length; a++) {
-        let seen = 0;
-        for (let b = a + 1; b < notes.length && seen < horizon; b++) {
-            seen++;
-            d[a] = resolveStep(notes[a]!.midi, notes[b]!.midi);
-            if (d[a] !== 0) break;
-        }
-    }
-    return d;
-}
-
 /** EXACT-midi up/down resolution (not octave-agnostic), the discriminating signal honor-resolution wants:
  *  a confirmed exact-midi UP-resolver is a sharp leading tone. */
 function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[] {
@@ -233,18 +208,13 @@ function resolveDirsExact(notes: readonly TwoPassNote[], horizon = 16): number[]
     return d;
 }
 
-/** Aug6 outward context per note, in a pass's note order: the partner's midi (undefined: none) and role. */
-interface Outward { partner: (number | undefined)[]; role: number[] }
-
-/** The leading-tone gate's key table and window in the two-pass tier. */
-const TP_KEY_TABLE = 'tonic-triad', TP_KEY_RADIUS = 12;
 /** `triangleFreeContext`: notes read on each side of a disagreement run for the context spellings. */
 const CONTEXT_NOTES = 32;
 /** `shortFlip`: the longest region (in onsets) that counts as short — the scorer's flip window is ±16 onsets, so a
  *  respell shorter than 32 onsets is never a section; and the fewest pitch classes it must hold — with one or two
  *  (a held or repeated note) the rule becomes a memory rule on held notes and loses. */
 const SHORT_FLIP_MAX_ONSETS = 32, SHORT_FLIP_MIN_PCS = 3;
-/** `keySide`: the most accidentals a key signature may have and still choose the side. */
+/** `keySide`: the most accidentals a centred key may have and still give the side. */
 const KEY_SIDE_MAX_ACCIDENTALS = 5;
 /** `struckTriadThird`: notes read on each side for the co-sounding members, the merged centre, and onsets scanned
  *  for an appoggiatura's resolution. */
@@ -300,19 +270,6 @@ function struckTriadRepairs(N: readonly TwoPassNote[], out: readonly (number | u
     return fix;
 }
 
-/** `keySide`: each note's signature for the passes (0 = count from C), null before any key is read. */
-function sideSignatures(keys: readonly (Key | null)[], keyReturn: boolean): (number | null)[] {
-    return deepenCentredKeys(keys, keyReturn).map(x => x === null ? null : Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? 0 : x);
-}
-
-/** `keySide`: the per-note signatures for the passes (sorted order). With `keySignatureAnchor` and notated
- *  signatures, the notated signature where the local key is within one fifth of it, else the inferred one. */
-function passSignatures(notes: readonly TwoPassNote[], opts: TwoPassOptions, notated?: readonly (number | null)[]): (number | null)[] {
-    const keys = centredKeys(notes, CENTRED_SIDE_RADIUS);   // read once, for the inferred and the anchored sides
-    const inferred = sideSignatures(keys, opts.keyReturn ?? true);
-    return notated && (opts.keySignatureAnchor ?? true) ? anchoredSideKeys(notes, notated, inferred, CENTRED_SIDE_RADIUS, keys) : inferred;
-}
-
 /** `keySignatures` in sorted order (undefined when not given). */
 function notatedSignatures(sorted: { permute<T>(xs: readonly T[]): T[] }, n: number, opts: TwoPassOptions): (number | null)[] | undefined {
     const ks = opts.keySignatures;
@@ -321,26 +278,25 @@ function notatedSignatures(sorted: { permute<T>(xs: readonly T[]): T[] }, n: num
     return sorted.permute(ks);
 }
 
-/** Drive one engine pass over notes in the given order; return one spelling (line-of-fifths position) per
- *  note (same order). Notes must be pre-sorted (onset asc, bass-first). Look-ahead uses `dirs` when supplied.
- *  With `frames`, also record the engine state right after each note-on (read-only, no effect on spellings). */
-function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: number[] | null, onsetTolerance = 0, frames?: TwoPassFrame[], outward?: Outward, keys?: (LocalKey | null)[], degKeys?: (LocalKey | null)[], signatures?: (number | null)[]): number[] {
-    const s = new SpellingEngine(onsetTolerance ? { ...TP_PASS_PRESET, onsetTolerance } : TP_PASS_PRESET);
+/** Drive one look-ahead pass over notes in the given order; return one spelling (line-of-fifths position) per
+ *  note (same order). Notes must be pre-sorted (onset asc, bass-first). `ctx` is each note's context, `keyed` each
+ *  note's notated signature: the pass calls `keySignature` where it changes, in pass order. With `frames`, also
+ *  record the engine state right after each note-on (read-only, no effect on spellings). */
+function drivePass(notes: readonly TwoPassNote[], ctx: readonly NoteContext[], onsetTolerance = 0, frames?: TwoPassFrame[], keyed?: readonly (number | null)[]): number[] {
+    const s = new SpellingEngine(onsetTolerance ? { ...LA_PRESET, onsetTolerance } : LA_PRESET);
     // Event stream: releases before strikes at equal t; strikes bass-first.
     const evs: { t: number; on: boolean; i: number }[] = [];
     notes.forEach((n, i) => { evs.push({ t: n.tOn, on: true, i }); evs.push({ t: n.tOff, on: false, i }); });
     evs.sort((a, b) => a.t - b.t || Number(a.on) - Number(b.on) || notes[a.i]!.midi - notes[b.i]!.midi);
     const out: number[] = new Array(notes.length);
     const pend = new Map<number, number[]>();   // midi → FIFO of note indices awaiting read-back at note-off
+    let key: number | null = null;
     for (const e of evs) {
         const midi = notes[e.i]!.midi;
         if (e.on) {
-            const sig = signatures?.[e.i];
-            if (sig !== undefined && sig !== null) s.setSignature(sig);
-            s.noteOn(midi, {
-                t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0,
-                outwardPartner: outward?.partner[e.i], outwardRole: outward?.role[e.i] ?? 0, localKey: keys?.[e.i], degreeKey: degKeys?.[e.i],
-            });
+            const k = keyed?.[e.i] ?? null;
+            if (k !== null && k !== key) { s.keySignature(k); key = k; }
+            s.noteOn(midi, { ...ctx[e.i], t: e.t });
             (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
             if (frames) frames[e.i] = { surface: s.getResolvedScale(), foldCentre: s.getFoldCentre(), decision: s.decision() };
         }
@@ -349,6 +305,31 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
         else { const q = pend.get(midi); if (q?.length) { out[q.shift()!] = lofOf(s.getSpelling(midi)!); } s.noteOff(midi, e.t); }
     }
     return out;
+}
+
+/** `keySide`: each note's side key for both passes (sorted order). The key read on the onsets centred on the note
+ *  ({@link centredKeys}), deepened along the spiral forward and backward in time. Where the two readings differ, a key
+ *  on the piece's opening tonic takes the reading nearer the opening side (the tonic keeps its name: Pathétique ii's
+ *  A♭ minor, Chopin Op. 28/15's return to D♭), any other key the reading with fewer accidentals (Op. 109's B-major
+ *  section, not C♭); equal, none. Past ±5 accidentals, none (the previous side holds). With `keySignatureAnchor` and
+ *  notated signatures, a note under a signature keeps the forward reading and is anchored to the signature where
+ *  its local key is within one fifth of it ({@link anchoredSideKeys}): the notation decides. */
+function passSideKeys(notes: readonly TwoPassNote[], opts: TwoPassOptions, notated?: readonly (number | null)[]): (number | null)[] {
+    const keys = centredKeys(notes, CENTRED_SIDE_RADIUS), keyReturn = opts.keyReturn ?? true;
+    const fwd = deepenCentredKeys(keys, keyReturn), bwd = deepenCentredKeys(keys.slice().reverse(), keyReturn).reverse();
+    const known = (x: number | null | undefined): x is number => x !== null && x !== undefined && !Number.isNaN(x);
+    const h = fwd.findIndex(known);
+    const home = h >= 0 ? { x: fwd[h]!, tonic: keys[h]!.tonic } : null;
+    const side = fwd.map((f, i) => {
+        const b = bwd[i];
+        let x: number | null = f;
+        if (!(notated && notated[i] !== null) && known(f) && known(b) && f !== b) {
+            if (home && keys[i]!.tonic === home.tonic) x = Math.abs(f - home.x) <= Math.abs(b - home.x) ? f : b;
+            else x = Math.abs(f) < Math.abs(b) ? f : Math.abs(b) < Math.abs(f) ? b : null;
+        } else if (!known(f) && known(b) && !(notated && notated[i] !== null)) x = b;
+        return x === null || Number.isNaN(x) || Math.abs(x) > KEY_SIDE_MAX_ACCIDENTALS ? null : x;
+    });
+    return notated && (opts.keySignatureAnchor ?? true) ? anchoredSideKeys(notes, notated, side, CENTRED_SIDE_RADIUS, keys) : side;
 }
 
 /**
@@ -482,30 +463,29 @@ function twoPassCore(sortedNotes: readonly TwoPassNote[], opts: TwoPassOptions, 
     const n = N.length;
     if (n === 0) return { spellings: [], forward: [], backward: [], agrees: [], firstStable: 0, lastStable: -1 };
 
-    const dirsF = resolveDirs(N);
-    const exactF = resolveDirsExact(N);
     const fFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
     const bFrames: TwoPassFrame[] | undefined = traceFrames ? new Array(n) : undefined;
-    let outF: Outward | undefined;
-    if (opts.aug6Outward ?? true) {
-        const op = outwardPairs(N, undefined, { firstMoveMeet: opts.aug6FirstMoveMeet ?? true, chordMeet: opts.aug6ChordMeet ?? 0 });
-        outF = { partner: op.partner.map(y => (y >= 0 ? N[y]!.midi : undefined)), role: op.role };
-    }
-    // The local keys are read in forward time on onsets centred on each note; the backward pass reads them too.
-    const keysF = (opts.leadingToneGate ?? true) ? localKeys(N, { table: TP_KEY_TABLE, radius: TP_KEY_RADIUS }) : undefined;
-    const degF = (opts.keyDegreeGate ?? true) ? degreeKeys(N) : undefined;
-    const sigF = (opts.keySide ?? true) ? passSignatures(N, opts, notated) : undefined;
-    const fwd = drivePass(N, dirsF, exactF, opts.onsetTolerance ?? 0, fFrames, outF, keysF, degF, sigF);
+    // Both passes read the look-ahead context in forward time (a resolution is what follows); the backward pass reads
+    // it reversed. The side key is read centred on each note instead of the look-ahead's own.
+    const exactF = resolveDirsExact(N);   // the merge's aug6 wedge
+    const side = (opts.keySide ?? true) ? passSideKeys(N, opts, notated) : null;
+    const aug6 = opts.aug6Outward ?? true, ltGate = opts.leadingToneGate ?? true, degGate = opts.keyDegreeGate ?? true;
+    const ctxF: NoteContext[] = lookAheadContext(N).map(({ sideKey, outwardPartner, outwardRole, localKey, degreeKey, ...c }, i) => ({
+        ...c,
+        ...(aug6 && outwardPartner !== undefined ? { outwardPartner, outwardRole } : {}),
+        ...(ltGate ? { localKey } : {}),
+        ...(degGate ? { degreeKey } : {}),
+        ...(side ? { sideKey: side[i]! } : {}),
+    }));
+    const fwd = drivePass(N, ctxF, opts.onsetTolerance ?? 0, fFrames, notated);
     // Backward: TIME-REVERSE the stream so the engine genuinely processes latest-first. Flip each note's
     // [tOn,tOff] about the piece end T, and reverse the note order so it stays pre-sorted (onset asc).
     const T = Math.max(...N.map(x => x.tOff));
     const bNotes: TwoPassNote[] = N.map(x => ({ midi: x.midi, tOn: T - x.tOff, tOff: T - x.tOn })).reverse();
-    // Backward look-ahead uses the note's FORWARD resolveDir: processing in reverse, the resolution target
-    // is already committed. bNotes[k] = original n-1-k.
-    const bDirs = backwardLA === 'off' ? null : dirsF.slice().reverse();
-    // The aug6 pairs are found in forward time (the resolution is what follows); the backward pass reads them too.
-    const outB: Outward | undefined = outF && { partner: outF.partner.slice().reverse(), role: outF.role.slice().reverse() };
-    const bOut = drivePass(bNotes, backwardLA !== 'off' ? bDirs : null, backwardLA !== 'off' ? exactF.slice().reverse() : null, opts.onsetTolerance ?? 0, bFrames, outB, keysF?.slice().reverse(), degF?.slice().reverse(), sigF?.slice().reverse());
+    // Backward look-ahead uses the note's FORWARD resolution: processing in reverse, the resolution target is
+    // already committed. bNotes[k] = original n-1-k.
+    const ctxB = ctxF.slice().reverse().map(c => (backwardLA === 'off' ? { ...c, resolveDir: 0, resolveExact: 0 } : c));
+    const bOut = drivePass(bNotes, ctxB, opts.onsetTolerance ?? 0, bFrames, notated?.slice().reverse());
     const bwd: number[] = new Array(n);
     for (let k = 0; k < n; k++) bwd[n - 1 - k] = bOut[k]!;
     if (bFrames) bFrames.reverse();

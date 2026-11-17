@@ -43,7 +43,7 @@ const spelled = spellTwoPass([
 |---|---|---|
 | `new Speller()` | real-time | Recency guard + spiral fold + diatonic-anchor leash |
 | `new Speller({ lookAhead: true })` | near-real-time | + letter-aware look-ahead (looks until the note resolves) + vertical guard + aug6 outward rule + leading-tone and key-degree gates + key → side + dominant tendency tones |
-| `spellTwoPass(notes)` | offline | Forward + backward, reconciled at modulation boundaries, never inside a repeated run, never by a triangle-free sonority (aug6 rule and both key gates in both passes) |
+| `spellTwoPass(notes)` | offline | The look-ahead speller run forward and backward, reconciled at modulation boundaries, never inside a repeated run, never by a triangle-free sonority |
 
 Frameless and key-signature-free: in real time the side a passage settles on is a statistic of the notes
 committed so far, never a detected key. (In look-ahead, a local key read from the notes around each note names
@@ -98,9 +98,10 @@ apart that move outward onto one pitch class (A♭–C–E♭–F♯ → G) make
 against A♭, not G♭. `outwardPairs(notes)` finds the pairs from `{ midi, tOn, tOff }` notes sorted by onset;
 the tones meet when one of the next 8 onsets strikes both goals, or when their first moves (re-strikes skipped)
 land on one onset, so a German sixth repeated across a bar still pairs (`{ firstMoveMeet: false }` turns that
-off; in `spellTwoPass`, `aug6FirstMoveMeet: false`). When both goals are one pitch (F♯ and A♭ onto one G), the
-meeting onset must strike a chord of at least 3 notes (`{ chordMeet: 3 }`, the default; 0 turns it off): two lone
-voices crossing on a note are passing. `spellTwoPass` keeps this off unless `aug6ChordMeet` is set. Pass each note's partner midi and role (+1 rising, −1 falling) when it has one. The engine applies the rule
+off). When both goals are one pitch (F♯ and A♭ onto one G), the meeting onset must strike a chord of at least 3
+notes (`{ chordMeet: 3 }`, the default; 0 turns it off): two lone voices crossing on a note are passing.
+`spellTwoPass` reads the pairs as the look-ahead does. Pass each note's partner midi and role (+1 rising, −1
+falling) when it has one. The engine applies the rule
 only when the meeting pitch is in the key and the rising tone is not, so a dominant seventh whose diatonic
 seventh rises chromatically (D→D♯ in E7) keeps its spelling. In look-ahead, a pair whose falling tone the rule
 would write as a double flat of a pitch the frame names natural is a passing voice, and neither tone takes the
@@ -161,39 +162,38 @@ run give it (32 notes each way; the rule abstains if the two sides disagree). WT
 dyads and triangle-free three-note sets get Bach's sharps from the sharp context, where the backward pass wrote
 C, G♭, B♭, A♭. Option `triangleFreeContext`, default on.
 
-Two-pass reads the side from an offline local key: a passage is written on the side of its local key's
-conventional signature, so both passes count accidentals from that signature, not from C. `centredSideKeys(notes)`
-reads each note's key on the 48 onsets on each side of it (the `sideKeys` table and deepening, no confirmation
-step) and returns the relative major's tonic on the line of fifths. A key with six or seven accidentals (the
-F♯/G♭ tie, or a key deepened past five) is written either way and does not choose: the passes count from C there.
-Debussy, *Clair de lune* m44–47 (D♭ major): the passes keep Debussy's G♭, D♭, E♭, A♭ where they wrote F♯, C♯, D♯,
-G♯. Without the six-accidental limit Chopin's Sonata No. 2/ii (E♭ minor, six flats) would come out in D♯ minor.
-Option `keySide`, default on.
+Both two-pass passes take their side key from an offline local key, in place of the look-ahead's streaming one.
+`centredSideKeys(notes)` reads each note's key on the 48 onsets on each side of it (the `sideKeys` table and
+deepening, no confirmation step) and returns the relative major's tonic on the line of fifths. A key past five
+accidentals gives no side key and the previous side holds: going round the spiral from A♭ major, C♭ major is
+nearer than B major, so a sharp-key passage would read as its flat twin (the *Pathétique* ii goes from 10 wrong
+notes to 66 without the limit). Without signatures the key is deepened both forward and backward in time; where the
+two readings differ, a key on the piece's opening tonic takes the reading nearer the opening side (Chopin Op. 28/15
+returns to D♭ major, not C♯ major) and any other key the reading with fewer accidentals (the B-major section of
+Beethoven's Op. 109, not C♭ major). Option `keySide`, default on.
 
 The key reader deepens each new key along the spiral up to seven accidentals. A key written on the near side only
 because its far reading is past that limit is a readability respell, so when the music returns to the key it came
 from, that key keeps its prior side. A parallel, or the parallel of the relative, of the forced key or of the key
 just before is never a return, and such a candidate disarms the pending return. Beethoven, *Pathétique* ii: A♭
-minor (−7), then F♭ major (forced to E major, +4), then A♭ minor again at m47, read −7 instead of G♯ minor (+5), so
-m48–52 come back to A♭ and C♭. The counter-case is a prior key that was itself over-deepened (D♭ already read as C♯
+minor (−7), then F♭ major (forced to E major, +4), then A♭ minor again at m47, read −7 instead of G♯ minor (+5): past
+five accidentals it gives no side key, so the passes do not carry E major's sharps into m48–52. The counter-case is a prior key that was itself over-deepened (D♭ already read as C♯
 at +7): the return restores the over-rotation. Option `keyReturn`, default on (`centredSideKeys(notes, radius,
 keyReturn)`).
 
 A composer respells a passage for a section, never for a few beats. Where the passes disagree over a region of at
 most 32 onsets holding at least three pitch classes, and the merge spells it against the notes just before and just
 after it (32 notes each way, which agree with each other), the region takes, whole, the pass the surroundings use.
-Handel, Op. 2 No. 9/iv m71–76: the merge wrote A♭ minor and D♭ minor (B𝄫, E𝄫) inside Handel's sharps; the rule
-gives back his G♯ minor and C♯ minor (F𝄪, B♯, E♯). The cost is a composer's own short respell, which is undone too
-(Chopin's *Barcarolle* m23–24). Option `shortFlip`, default on.
+Chopin Op. 28/4 m14–15: the merge left D♯, E♯, G♯, D♯ where the notes before and after spell those pitch classes
+flat; the rule gives Chopin's E♭, F, A♭, E♭. The cost is a composer's own short respell, which is undone too.
+Option `shortFlip`, default on.
 
 After the merge, two-pass lets a struck triad spell its third member: where the three pitch classes of a major or
 minor triad are attacked together and two members are spelled coherently with each other, a member a comma off the
 triad (a diminished fourth or augmented second inside it) takes the spelling that completes it, but only toward the
 local centre of the merged spellings (the median of the 16 notes on each side), and not when it is a third that
-moves a semitone onto the other third of the same root (an appoggiatura). Mozart K. 459/iii (F minor), A♭–C–F
-struck together: the merge wrote G♯, the rule writes Mozart's A♭. A chromatic line tone inside a struck triad is
-the counter-case: Joplin's C♯ rising to D against G♭–B♭ (*Chrysanthemum* m18) is respelt D♭. Option
-`struckTriadThird`, default on.
+moves a semitone onto the other third of the same root (an appoggiatura). With look-ahead passes it rarely acts
+(it changes no note on the curated fixtures). Option `struckTriadThird`, default on.
 
 ### Optional key hint (experimental)
 
@@ -241,11 +241,12 @@ const spelled = spellTwoPass(notes, { keySignatures: notes.map(() => -6) });   /
 ```
 
 Each entry is signed sharps − flats (0 = none), in the order of `notes`. A passage is notated on the side of its
-key signature while its local key stays within one fifth of it: there the passes count accidentals from the
-signature; farther, the side comes from the inferred key as without signatures. The fifth is counted on the line of
-fifths, past seven accidentals too: Bach's WTC I/3 (seven sharps) keeps G♯ major with F𝄪, not A♭ major. Chopin, Sonata No. 2/ii (six
-flats): the signature settles the F♯/G♭ tie, so m114–179 keep Chopin's D♭, C♭, G♭. *Pathétique* ii m42–49 (E
-major under four flats) is left to the inferred key. `keySignatureAnchor: false` ignores the signatures.
+key signature while its local key stays within one fifth of it: there the signature is the passes' side key, and
+each pass calls `keySignature` where it changes, in its own direction; farther, the side comes from the inferred key
+as without signatures. The fifth is counted on the line of
+fifths, past seven accidentals too: Bach's WTC I/3 (seven sharps) keeps G♯ major with F𝄪, not A♭ major. A key read
+across the join between two pieces does not override the notation: WTC I No. 18 (G♯ minor) after No. 17 (A♭ major)
+stays in G♯ minor. *Pathétique* ii m42–49 (E major under four flats) is left to the inferred key. `keySignatureAnchor: false` ignores the signatures.
 
 ## Status
 
@@ -262,7 +263,7 @@ counts a contextually coherent enharmonic flip (the other, equally-correct side 
 | [Core](examples/core-speller.ts) (four principles) | 99.37% | 99.46% | 99.28% | 99.46% |
 | Real-time | 99.62% | 99.69% | 99.53% | 99.61% |
 | + look-ahead | 99.85% | 99.90% | 99.81% | 99.84% |
-| + two-pass | 99.93% | 99.93% | 99.89% | 99.89% |
+| + two-pass | 99.94% | 99.94% | 99.90% | 99.91% |
 
 The gap between coherent and exact is the *side*: a whole passage settled on the other side of the
 comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an incoherent error.
@@ -279,13 +280,13 @@ time only (driver and speller; parsing and scoring excluded):
 
 | mode | clean | notes/s (clean) | noisy | notes/s (noisy) |
 |---|--:|--:|--:|--:|
-| core | 0.14 s | 1,400,000 | 0.14 s | 1,400,000 |
-| real-time | 0.92 s | 213,000 | 0.75 s | 261,000 |
-| look-ahead | 1.21 s | 162,000 | 1.03 s | 190,000 |
-| two-pass | 2.08 s | 94,000 | 2.08 s | 94,000 |
+| core | 0.12 s | 1,633,000 | 0.12 s | 1,633,000 |
+| real-time | 1.28 s | 153,000 | 0.97 s | 202,000 |
+| look-ahead | 1.85 s | 106,000 | 2.19 s | 89,000 |
+| two-pass | 3.55 s | 55,000 | 3.65 s | 54,000 |
 
-Look-ahead and two-pass include finding the aug6 outward pairs (`outwardPairs`) and the local keys
-(`localKeys`, `degreeKeys`). Timings vary by CPU and
+Look-ahead and two-pass include reading the look-ahead context (`lookAheadContext`); two-pass runs the
+look-ahead speller twice. Timings vary by CPU and
 machine load; reproduce with `npm run meredith -- --time` (add `--noisy` for the
 noisy set).
 

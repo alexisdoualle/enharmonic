@@ -1,6 +1,6 @@
 /**
  * SpellingEngine: the shipped speller. One engine; the latency modes are presets over it
- * ({@link RT_PRESET}, {@link LA_PRESET}, {@link TP_PASS_PRESET}). The engine detects no key; the look-ahead
+ * ({@link RT_PRESET}, {@link LA_PRESET}; two-pass runs LA_PRESET both ways). The engine detects no key; the look-ahead
  * caller may pass local keys (key.ts), used only by the leading-tone and key-degree gates.
  *
  * Two principles do the base work:
@@ -186,7 +186,7 @@ export interface EngineOptions {
      *  the 7 slots ARE that collection, so a chromatic is a raised/lowered degree of a slot, never drift.
      *  Replaces the mean AND the committed anchor with one moving diatonic frame. No functional/mode logic.
      *  This flag picks between the two side-substrates described on the SpellingEngine class doc: 'diatonic'
-     *  for the streaming tiers, 'mean' for the offline two-pass. */
+     *  for every shipped tier; 'mean' is no longer used by a preset. */
     frameMode?: 'mean' | 'diatonic';
     /** 'diatonic' frame: recency half-life (onsets) of the raw-pc coverage window. Default 64. */
     frameHalfLife?: number;
@@ -360,24 +360,6 @@ export const LA_PRESET: EngineOptions = {
     minorLeadingTone: true,
 };
 
-/** TWO-PASS per-direction pass ({@link spellTwoPass}): the look-ahead tier's mechanisms but over the
- *  accidental-ECONOMY fold (the two-pass's offline forward/backward reconciliation is the better SIDE
- *  fixer, and the laggier economy fold keeps the pass disagreement the reconciliation needs). */
-export const TP_PASS_PRESET: EngineOptions = {
-    recencyGuard: 2, guardWindow: 7,
-    fold: 'economy', foldWindow: 24, foldMargin: 7, foldMaxChroma: 0, foldDebounce: 8,
-    // lookAheadWeight stays 2 here (not stronger): a stronger per-pass look-ahead makes both passes commit a
-    // side harder, shrinking the forward/backward disagreement the reconciliation needs, which nets worse.
-    // Same reason the passes use the economy fold, not the clamp: the two-pass's own reconciliation is the
-    // better side fixer.
-    lookAhead: true, lookAheadWeight: 2,
-    doubleAccPenalty: 2, verticalWeight: 1, collisionRepair: true, guardRaiseLine: true,
-    aug6Outward: true, leadingToneGate: true, keyDegreeGate: true, heldLetterTarget: true,
-    // Two-pass keeps the mean/economy fold: its forward+backward reconciliation is the side-fixer here, and
-    // it is tuned to that fold. The diatonic frame commits a side too hard and breaks the reconciliation, so
-    // the streaming tiers use the diatonic frame and the offline tier keeps its own mechanism.
-};
-
 // ── Decision trace (introspection only) ────────────────────────────────────────
 
 /** One candidate's scoring breakdown for a note (introspection / visualiser only). The argmax is
@@ -416,17 +398,15 @@ export interface Decision {
  *   [foldCenter ± foldRadius]. noteOn RETURNS at the diatonic commit, so maybeFold, repairCollision,
  *   updateCollection and the leash anchor are never reached here.
  *
- *   'mean' (the offline per-pass tier, TP_PASS_PRESET / spellTwoPass). The 7 slots DRIFT: a commit
+ *   'mean' (formerly the two-pass passes; no preset uses it now). The 7 slots DRIFT: a commit
  *   overwrites its letter's slot, and the side is corrected AFTER the fact by maybeFold (fold the frame
  *   one comma back once its 7-slot MEAN line-of-fifths drifts past the deadzone, by range clamp or
  *   accidental economy), with updateCollection and diatonicAnchor feeding the continuous leash.
  *
- * Both exist because the two tiers want different substrates. The two-pass forward/backward
- * reconciliation is tuned to the drifting mean fold and needs the per-pass disagreement it produces; the
- * stable diatonic frame commits a side too hard and breaks that reconciliation. The streaming tiers went
- * the other way: the diatonic frame beats the mean across modulations. If the diatonic frame is ever made
- * to reconcile in two pass, the whole 'mean' path (maybeFold, updateCollection, diatonicAnchor,
- * repairCollision, spellNearest, and their options) can be deleted; see maybeFold's TODO.
+ * The two-pass passes used 'mean' until 2026-11: the diatonic frame now reconciles in two pass (the look-ahead
+ * speller run both ways, with a centred side key, has fewer wrong notes than the mean passes on every held-out
+ * set). The 'mean' path (maybeFold, updateCollection, diatonicAnchor, repairCollision, spellNearest, and their
+ * options) remains only for the viz's A/B toggle and can be deleted; see maybeFold's TODO.
  */
 export class SpellingEngine {
     private readonly recencyGuard: number;

@@ -9,7 +9,7 @@ import { assert, assertEq, suite, test } from './framework.js';
 import { Speller, degreeKeys, dominantChords, localKeys, outwardPairs, resolutionDirs, resolveStep, sideKeys, centredSideKeys, spellTwoPass, type Pitch, type PitchClass } from '../src/index.js';
 import { isKeyDegree, isWideLeadingTone } from '../src/key.js';
 import { spellTwoPassTraced } from '../src/two-pass.js';
-import { SpellingEngine, LA_PRESET, RT_PRESET, TP_PASS_PRESET } from '../src/engine.js';
+import { SpellingEngine, LA_PRESET, RT_PRESET } from '../src/engine.js';
 import { anchoredSideKeys } from '../src/key-side.js';
 import { FIXTURES, loadEvents, drive as driveSpellings, onNotes } from './eval/fixtures.js';
 
@@ -204,13 +204,12 @@ suite('aug6 outward convergence', () => {
         assertEq(spellTwoPass(notes, { struckTriadThird: false }).length, notes.length);
     });
 
-    test('spellTwoPass struckTriadThird: a struck triad spells its third member', () => {
-        // Clair de lune m36:1, D♭–F–A♭ struck together (D♭ doubled in the bass): the merge wrote E♯ for Debussy's F
-        // (E♯–A♭, a diminished fourth inside the triad); the rule completes the triad.
+    test('spellTwoPass: a struck triad keeps its third (Clair de lune m36:1)', () => {
+        // D♭–F–A♭ struck together (D♭ doubled in the bass): Debussy's F, not E♯ (E♯–A♭, a diminished fourth inside
+        // the triad). The mean-frame passes wrote E♯ and needed struckTriadThird; the look-ahead passes write F.
         const notes = onNotes(loadEvents('debussy_clair_de_lune'));
         assertEq([notes[831]!.midi, notes[831]!.tOn], [77, 78750]);
         assertEq(tok({ ...spellTwoPass(notes)[831]!, octave: 5 }), 'F');
-        assertEq(tok({ ...spellTwoPass(notes, { struckTriadThird: false })[831]!, octave: 5 }), 'E#');
     });
 
     test('centredSideKeys reads the offline side key on centred onsets', () => {
@@ -234,16 +233,14 @@ suite('aug6 outward convergence', () => {
     });
 
     test('spellTwoPass keySignatures: a six-flat signature settles the F♯/G♭ tie flat', () => {
-        // E♭ minor / G♭ major (i iv V i III v III). The inferred key has six accidentals and cannot choose, so the
-        // passes count from C and come out in D♯ minor; the notated six flats (or six sharps) choose the side.
+        // E♭ minor / G♭ major (i iv V i III v III). The inferred key has six accidentals and cannot choose; the
+        // notated six flats (or six sharps) choose the side.
         const chords = [[51, 58, 63, 66], [56, 59, 63, 68], [58, 62, 65, 70], [51, 58, 63, 66], [54, 61, 66, 70], [49, 56, 61, 65], [54, 58, 61, 66]];
         const notes = chords.flatMap((c, k) => c.map(m => ({ midi: m, tOn: k * 500, tOff: k * 500 + 500 })));
         const spell = (o: object) => spellTwoPass(notes, o).map(p => tok({ ...p!, octave: 4 })).join(' ');
         const flat = 'Eb Bb Eb Gb Ab Cb Eb Ab Bb D F Bb Eb Bb Eb Gb Gb Db Gb Bb Db Ab Db F Gb Bb Db Gb';
         assertEq(spell({ keySignatures: notes.map(() => -6) }), flat);
-        assert(spell({}).startsWith('D# A# D# F#'), 'without a signature the tie counts from C (sharp)');
         assert(spell({ keySignatures: notes.map(() => 6) }).endsWith('F# A# C# F#'), 'six sharps keep the sharp side throughout');
-        assertEq(spell({ keySignatures: notes.map(() => -6), keySignatureAnchor: false }), spell({}));
     });
 
     test('spellTwoPass keySignatures: a passage far from its signature keeps the inferred side', () => {
@@ -269,43 +266,21 @@ suite('aug6 outward convergence', () => {
         assertEq(spell({ keySignatures: notes.map(() => -7) }), spell({}));
     });
 
-    test('spellTwoPass keySignatures: none, all unknown, or anchor off is identical to before', () => {
+    test('spellTwoPass keySignatures: none or all unknown is identical to keyless', () => {
         const notes = onNotes(loadEvents('debussy_clair_de_lune'));
         const before = JSON.stringify(spellTwoPass(notes));
         assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => null) })), before);
-        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => -5), keySignatureAnchor: false })), before);
-        assertEq(JSON.stringify(spellTwoPass(notes, { keySignatures: notes.map(() => -5), keySide: false })), JSON.stringify(spellTwoPass(notes, { keySide: false })));
         let threw = false; try { spellTwoPass(notes, { keySignatures: [0] }); } catch { threw = true; }
         assert(threw, 'a keySignatures array of the wrong length throws');
     });
 
     test('spellTwoPass shortFlip: a short off-side region inside agreeing surroundings takes their side', () => {
-        // Handel Op. 2/9 iv, notes around m71–76 (Meredith; onset.duration in tatums of 125 ms, then midi). E major → G♯ minor →
-        // C♯ minor, all sharp in Handel. The merge took the flat pass for about 30 onsets inside sharp context
-        // (A♭ minor, D♭ minor, B𝄫, E𝄫); the rule gives the region back to the sharp pass, Handel's spelling.
-        const notes = ('0.4.76 4.8.49 4.4.73 4.2.76 6.2.73 8.2.68 8.8.80 10.2.73 12.8.61 12.2.76 14.2.73 16.2.68 16.8.76 18.2.73 ' +
-            '20.8.61 20.2.76 22.2.73 24.2.68 24.4.73 26.2.73 28.8.60 28.72.68 28.24.75 28.24.78 32.8.78 36.8.60 40.8.75 ' +
-            '44.8.60 48.4.68 52.8.61 52.24.73 52.24.76 56.8.80 60.8.49 64.8.76 68.8.49 72.4.73 76.8.56 76.24.72 76.4.75 ' +
-            '76.24.80 80.4.72 84.8.56 84.16.68 92.8.56 100.8.53 100.48.65 100.24.73 100.24.80 104.8.83 108.8.53 112.8.80 ' +
-            '116.8.53 120.8.73 124.8.53 124.24.73 124.24.83 128.8.80 132.8.53 136.8.77 140.8.53 144.8.73 148.8.54 ' +
-            '148.24.66 148.24.73 148.24.81 152.4.69 156.8.54 156.16.66 164.8.54 172.8.55 172.48.67 172.24.75 172.24.82 ' +
-            '176.8.85 180.8.55 184.8.82 188.8.55 192.8.75 196.8.55 196.24.75 196.24.85 200.8.82 204.8.55 208.8.79 ' +
-            '212.8.55 216.8.75 220.8.56 220.24.68 220.24.75 220.24.83 224.4.71 228.8.56 228.16.68 236.8.56 244.8.48 ' +
-            '244.24.66 244.24.75 244.24.81 248.8.81 252.8.48 256.8.78 260.8.48 264.8.75 268.8.48 268.24.68 268.24.75 ' +
-            '268.24.78 272.8.80 276.8.48 280.8.75 284.8.48 288.4.68 292.8.49 292.24.68 292.24.73 292.24.76 292.4.80 ' +
-            '296.4.76 300.8.49 300.16.73 308.8.49 316.8.53 316.24.59 316.24.68 316.24.74 320.8.74 324.8.53 328.8.71 ' +
-            '332.8.53 336.8.68 340.8.53 340.24.61 340.24.68 340.24.73 344.8.73 348.8.53 352.8.68 356.8.53 360.4.61 ' +
-            '364.8.54 364.24.61 364.24.66 364.24.69 364.4.73 368.4.69 372.8.54 372.16.66 380.8.54 388.8.46 388.24.58 ' +
-            '388.24.66 388.24.73 388.4.76 392.8.66 396.8.46 400.8.73 404.8.46 408.4.76 412.8.47 412.24.59 412.24.66 ' +
-            '412.24.75 420.8.47 428.8.47').split(' ').map(s => s.split('.').map(Number))
-            .map(([on, dur, midi]) => ({ midi: midi!, tOn: on! * 125, tOff: (on! + dur!) * 125 }));
-        const spell = (o: object) => spellTwoPass(notes, o).map(p => tok({ ...p!, octave: 4 }));
-        const on = spell({ runRepair: false }), off = spell({ shortFlip: false, runRepair: false });   // shortFlip alone
-        const changed = on.flatMap((s, k) => s === off[k] ? [] : [k]);
-        assertEq([changed.length, changed[0], changed[changed.length - 1]], [47, 70, 129]);
-        assertEq([off[86], off[95], off[98], off[116], off[122]], ['Eb', 'C', 'Bbb', 'Fb', 'F']);
-        assertEq([on[86], on[95], on[98], on[116], on[122]], ['D#', 'B#', 'A', 'E', 'E#']);
-        assertEq([off[70], on[70]], ['G', 'F##']);
+        // Chopin Op. 28/4 m14–15: the merge left D♯, E♯, G♯, D♯ for four notes whose surroundings, before and after,
+        // spell those pitch classes flat; the rule gives them Chopin's E♭, F, A♭, E♭.
+        const notes = onNotes(loadEvents('chopin_prelude_op28_no4'));
+        const spell = (o: object) => spellTwoPass(notes, o).slice(357, 361).map(p => tok({ ...p!, octave: 4 })).join(' ');
+        assertEq(spell({ shortFlip: false }), 'D# E# G# D#');
+        assertEq(spell({}), 'Eb F Ab Eb');
     });
 });
 
@@ -622,9 +597,6 @@ suite('minor collection holds its leading tone (minorLeadingTone, real time and 
     test('look-ahead without the rule: G♭', () => {
         assertEq(last3(eng(new SpellingEngine({ ...LA_PRESET, minorLeadingTone: false }))), 'G Gb G');
     });
-    test('two-pass does not apply the rule', () => {
-        assertEq(TP_PASS_PRESET.minorLeadingTone, undefined);
-    });
 });
 
 suite('struck triad weighs 2 in real time (verticalOwnTriad)', () => {
@@ -666,7 +638,6 @@ suite('struck triad weighs 2 in real time (verticalOwnTriad)', () => {
     });
     test('real time only: look-ahead and two-pass keep their guard', () => {
         assertEq(LA_PRESET.verticalOwnTriad, undefined);
-        assertEq(TP_PASS_PRESET.verticalOwnTriad, undefined);
     });
 });
 
