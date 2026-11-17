@@ -27,7 +27,7 @@ export interface OutwardPairs {
 /** Options for {@link outwardPairs}. */
 export interface OutwardOptions {
     /** MEETING BY FIRST MOVES. The two tones of an augmented sixth also meet when their first moves (re-strikes
-     *  skipped, {@link firstExactMoves}) land on one onset, however far away: a German sixth repeated across many
+     *  skipped, {@link firstMoves}) land on one onset, however far away: a German sixth repeated across many
      *  onsets (Haydn Sym. 99/ii) resolves past the look window, but both tones still move at once. Default
      *  `true`. */
     firstMoveMeet?: boolean;
@@ -41,64 +41,65 @@ export interface OutwardOptions {
 
 const pcOf = (m: number) => ((m % 12) + 12) % 12;
 
-/** How many onsets after a note the onset finder looks for its first semitone move. */
+/** How many onsets after a note the move finder looks for its first semitone move. */
 const MOVE_ONSETS = 64;
 /** How far (in notes) on either side of a note to look for notes still sounding at its onset. */
 const SOUNDING_NOTES = 64;
 
+/** The notes grouped by onset, in time order. */
+interface Onsets {
+    readonly notes: OutwardNote[][];   // per onset, the notes it strikes
+    readonly pcs: number[];            // per onset, a bitmask of the pitch classes it strikes
+    readonly of: number[];             // per note, its onset
+}
+
+function groupOnsets(notes: readonly OutwardNote[]): Onsets {
+    const on: Onsets = { notes: [], pcs: [], of: [] };
+    notes.forEach((note, i) => {
+        if (i === 0 || note.tOn !== notes[i - 1]!.tOn) { on.notes.push([]); on.pcs.push(0); }
+        const c = on.notes.length - 1;
+        on.notes[c]!.push(note);
+        on.pcs[c] = on.pcs[c]! | (1 << pcOf(note.midi));
+        on.of.push(c);
+    });
+    return on;
+}
+
 /**
- * Each note's FIRST semitone move at the exact pitch, read by onset: skip every later onset that strikes
- * the note's pitch class again (a repeated or re-voiced chord is not a move), then take the first onset
- * holding a note a semitone away in any octave. +1 if that onset has the semitone above at the exact pitch
- * (and not the one below), −1 for the one below, 0 otherwise. Note-offs are never read, so the finder
- * survives performance timing. Notes must be sorted by onset; co-struck notes share an exact `tOn`.
- * `at` receives, per note, the index of the first note of the onset its move lands on (−1: no move).
+ * Each note's FIRST semitone move, read by onset: skip every later onset that strikes the note's pitch
+ * class again (a repeated or re-voiced chord is not a move), then take the first onset whose nearest
+ * semitone neighbour (nearest in register, any octave) lies on one side only. `dir` is +1 if that onset
+ * strikes the semitone above at the exact pitch (and not the one below), −1 for the one below, 0 otherwise;
+ * `at` is the onset the move lands on (−1: no move). Note-offs are never read, so the finder survives
+ * performance timing.
  */
-function firstExactMoves(notes: readonly OutwardNote[], at: number[]): number[] {
-    const n = notes.length;
-    const exact = new Array<number>(n).fill(0);
-    const clusterOf = new Array<number>(n);
-    const cStart: number[] = [];
-    let lastT = NaN;
-    for (let i = 0; i < n; i++) {
-        if (cStart.length === 0 || notes[i]!.tOn !== lastT) { cStart.push(i); lastT = notes[i]!.tOn; }
-        clusterOf[i] = cStart.length - 1;
-    }
-    const C = cStart.length;
-    const cEnd = (c: number) => (c + 1 < C ? cStart[c + 1]! : n);
-    const struck = new Array<number>(C).fill(0);
-    for (let c = 0; c < C; c++) for (let i = cStart[c]!; i < cEnd(c); i++) struck[c]! |= 1 << pcOf(notes[i]!.midi);
-    for (let a = 0; a < n; a++) {
-        const m = notes[a]!.midi, c0 = clusterOf[a]!, bit = 1 << pcOf(m);
-        for (let g = c0 + 1; g < C && g - c0 <= MOVE_ONSETS; g++) {
-            if (struck[g]! & bit) continue;
-            // The nearest semitone neighbour in register decides the direction; equidistant neighbours above
-            // and below conflict and say nothing.
-            let best = Infinity, bd = 0, conflict = false, up = false, dn = false;
-            for (let i = cStart[g]!; i < cEnd(g); i++) {
-                const o = notes[i]!.midi, pd = pcOf(o - m);
-                if (pd !== 1 && pd !== 11) continue;
-                const d = pd === 1 ? 1 : -1, dist = Math.abs(o - m);
-                if (o === m + 1) up = true;
-                if (o === m - 1) dn = true;
-                if (dist < best) { best = dist; bd = d; conflict = false; }
-                else if (dist === best && d !== bd) conflict = true;
+function firstMoves(notes: readonly OutwardNote[], on: Onsets): { dir: number[]; at: number[] } {
+    const dir = notes.map(() => 0), at = notes.map(() => -1);
+    notes.forEach(({ midi: m }, a) => {
+        const c0 = on.of[a]!;
+        for (let c = c0 + 1; c < on.notes.length && c - c0 <= MOVE_ONSETS; c++) {
+            if (on.pcs[c]! & (1 << pcOf(m))) continue;
+            // Distance to the nearest note whose pitch class is a semitone above / below m's.
+            let above = Infinity, below = Infinity;
+            for (const { midi: o } of on.notes[c]!) {
+                const pd = pcOf(o - m);
+                if (pd === 1) above = Math.min(above, Math.abs(o - m));
+                if (pd === 11) below = Math.min(below, Math.abs(o - m));
             }
-            const x = up && !dn ? 1 : dn && !up ? -1 : 0;
-            if ((conflict ? 0 : bd) === 0 && x === 0) continue;
-            exact[a] = x;
-            at[a] = cStart[g]!;
-            break;
+            if (above === below) continue;   // no neighbour, or one each side at the same distance
+            dir[a] = above === 1 ? 1 : below === 1 ? -1 : 0;
+            at[a] = c;
+            return;
         }
-    }
-    return exact;
+    });
+    return { dir, at };
 }
 
 /**
  * Outward-convergence pairs. Note x and a note y still sounding at x's onset form a pair when:
  *   - x is ten semitones above y by pitch class (an augmented sixth or a minor seventh by pitch);
  *   - the major third above y sounds too (the chord's third: C in A♭–C–E♭–F♯);
- *   - each tone's first move ({@link firstExactMoves}) is outward: x up a semitone, y down a semitone;
+ *   - each tone's first move ({@link firstMoves}) is outward: x up a semitone, y down a semitone;
  *   - one onset among the next `look` onsets after x's strikes both x+1 and y−1 at the exact pitch, so the
  *     two tones meet on one pitch class at once; or (`firstMoveMeet`) both first moves land on one onset.
  * x gets role +1 (rising) and y role −1 (falling); a note keeps its first pair. Whether the convergence is
@@ -112,34 +113,29 @@ export function outwardPairs(notes: readonly OutwardNote[], look = 8, opts: Outw
     const chordMeet = opts.chordMeet ?? 3;
     const n = notes.length;
     const partner = new Array<number>(n).fill(-1), role = new Array<number>(n).fill(0);
-    const moveAt = new Array<number>(n).fill(-1);
-    const moves = firstExactMoves(notes, moveAt);
-    /** How many notes the onset starting at note index h strikes. */
-    const struck = (h: number): number => { let c = 0; for (let j = h; j < n && notes[j]!.tOn === notes[h]!.tOn; j++) c++; return c; };
+    const on = groupOnsets(notes);
+    const moves = firstMoves(notes, on);
+    const strikes = (c: number, midi: number) => on.notes[c]!.some(note => note.midi === midi);
+
     for (let x = 0; x < n; x++) {
-        const t = notes[x]!.tOn;
+        if (moves.dir[x] !== 1) continue;
+        const mx = notes[x]!.midi, t = notes[x]!.tOn, cx = on.of[x]!;
         const sounding: number[] = [];
         for (let k = Math.max(0, x - SOUNDING_NOTES); k < Math.min(n, x + SOUNDING_NOTES); k++)
             if (notes[k]!.tOn <= t && notes[k]!.tOff > t) sounding.push(k);
         for (const y of sounding) {
-            if (y === x || pcOf(notes[x]!.midi - notes[y]!.midi) !== 10) continue;
-            if (moves[x] !== 1 || moves[y] !== -1) continue;
-            if (!sounding.some(k => pcOf(notes[k]!.midi - notes[y]!.midi) === 4)) continue;
-            let g = x; while (g < n && notes[g]!.tOn === t) g++;
-            // A unison meet (both goals one pitch) needs a chord at the meeting onset (`chordMeet`).
-            const unison = chordMeet > 0 && notes[x]!.midi + 1 === notes[y]!.midi - 1;
+            const my = notes[y]!.midi;
+            if (y === x || pcOf(mx - my) !== 10 || moves.dir[y] !== -1) continue;
+            if (!sounding.some(k => pcOf(notes[k]!.midi - my) === 4)) continue;
+            // Onset c strikes both goals; a unison meet (both goals one pitch) also needs a chord there.
+            const unison = chordMeet > 0 && mx + 1 === my - 1;
+            const meetsAt = (c: number) =>
+                strikes(c, mx + 1) && strikes(c, my - 1) && !(unison && on.notes[c]!.length < chordMeet);
             let met = false;
-            for (let seen = 0; g < n && seen < look; seen++) {
-                const tg = notes[g]!.tOn, g0 = g; let up = false, dn = false;
-                while (g < n && notes[g]!.tOn === tg) {
-                    if (notes[g]!.midi === notes[x]!.midi + 1) up = true;
-                    if (notes[g]!.midi === notes[y]!.midi - 1) dn = true;
-                    g++;
-                }
-                if (up && dn && !(unison && struck(g0) < chordMeet)) { met = true; break; }
-            }
-            // "The two tones meet when their first moves, re-strikes skipped, land on one onset."
-            if (!met && firstMoveMeet && moveAt[x]! >= 0 && moveAt[x] === moveAt[y] && !(unison && struck(moveAt[x]!) < chordMeet)) met = true;
+            for (let c = cx + 1; c < on.notes.length && c - cx <= look && !met; c++) met = meetsAt(c);
+            // They also meet when their first moves, re-strikes skipped, land on one onset (which then
+            // strikes both goals by definition).
+            if (!met && firstMoveMeet && moves.at[x]! >= 0 && moves.at[x] === moves.at[y]) met = meetsAt(moves.at[x]!);
             if (!met) continue;
             if (partner[x]! < 0) { partner[x] = y; role[x] = 1; }
             if (partner[y]! < 0) { partner[y] = x; role[y] = -1; }
