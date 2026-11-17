@@ -14,7 +14,7 @@ npm install enharmonic
 ## Quickstart
 
 ```ts
-import { Speller, spellTwoPass } from 'enharmonic';
+import { Speller, spellTwoPass, lookAheadContext } from 'enharmonic';
 
 // Real-time (zero look-ahead)
 const s = new Speller();
@@ -24,9 +24,11 @@ s.noteOn(67, { t: 0 });
 console.log(s.getSpelling(64)); // { step: 'E', alter: 0, octave: 4 }
 s.noteOff(60, { t: 500 }); s.noteOff(64, { t: 500 }); s.noteOff(67, { t: 500 });
 
-// Near-real-time: feed resolveDir (and resolveExact) from the notes ahead (resolutionDirs reads them)
+// Near-real-time: each note's context is read from the notes around it
+const notes = [{ midi: 61, tOn: 0, tOff: 500 }, { midi: 62, tOn: 500, tOff: 1000 }];
+const ctx = lookAheadContext(notes);
 const nrt = new Speller({ lookAhead: true });
-nrt.noteOn(61, { t: 0, resolveDir: 1, resolveExact: 1 }); // resolves up to 62 → prefer C♯ over D♭
+notes.forEach((n, i) => nrt.noteOn(n.midi, { ...ctx[i], t: n.tOn })); // 61 resolves up to 62 → C♯, not D♭
 
 // Offline ceiling (whole piece in hand)
 const spelled = spellTwoPass([
@@ -69,6 +71,10 @@ Pass `t` to `noteOff` too. A chromatic note that ends within 80 ms of its onset 
 shape how later notes are spelled; without `t` every note counts.
 
 ### Look-ahead context
+
+`lookAheadContext(notes)` reads every field below for `{ midi, tOn, tOff }` notes sorted by onset, one
+`NoteContext` per note; pass each to `noteOn` with its `t`. The functions it calls are exported too, for a
+caller who wants only some of the context.
 
 `resolveDir` is the first semitone step from the note to an upcoming note in any octave (+1 up, −1 down,
 0 none); `resolveExact` is the same at the exact pitch, the note's own line. `resolveStep` and

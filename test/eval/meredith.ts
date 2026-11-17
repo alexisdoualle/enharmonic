@@ -23,7 +23,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { Speller, spellTwoPass, outwardPairs, localKeys, degreeKeys, sideKeys, dominantChords, resolutionDirs, type Pitch } from '../../src/index.js';
+import { Speller, spellTwoPass, lookAheadContext, type Pitch } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import type { StreamingSpeller } from './fixtures.js';
 import { scoreTiers } from './score.js';
@@ -89,26 +89,12 @@ function predict(mode: Mode, notes: Note[]): (Pitch | null)[] {
     }
     const s: StreamingSpeller = mode.startsWith('core') ? core(mode)
         : new Speller({ lookAhead: mode === 'la' });
-    const rd = mode === 'la' ? resolutionDirs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
-    const dirs = rd ? rd.dir : null, exact = rd ? rd.exact : null;
-    const pairs = mode === 'la' ? outwardPairs(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
-    const keys = mode === 'la' ? localKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
-    const degKeys = mode === 'la' ? degreeKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
-    const sides = mode === 'la' ? sideKeys(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS }))) : null;
-    const doms = mode === 'la' ? dominantChords(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
+    const ctx = mode === 'la' ? lookAheadContext(notes.map(n => ({ midi: n.midi, tOn: n.onset * TATUM_MS, tOff: (n.onset + n.dur) * TATUM_MS }))) : null;
     const pred: (Pitch | null)[] = new Array(notes.length).fill(null);
     const pend = new Map<number, number[]>();
     for (const e of events(notes)) {
         if (e.on) {
-            const y = pairs ? pairs.partner[e.i]! : -1;
-            s.noteOn(e.midi, {
-                t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0,
-                ...(y >= 0 ? { outwardPartner: notes[y]!.midi, outwardRole: pairs!.role[e.i]! } : {}),
-                localKey: keys ? keys[e.i] : null,
-                degreeKey: degKeys ? degKeys[e.i] : null,
-                ...(sides ? { sideKey: sides[e.i]! } : {}),
-                dominant: doms ? doms[e.i] : null,
-            });
+            s.noteOn(e.midi, { ...ctx?.[e.i], t: e.t });
             (pend.get(e.midi) ?? pend.set(e.midi, []).get(e.midi)!).push(e.i);
         } else {
             const q = pend.get(e.midi);
