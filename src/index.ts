@@ -17,6 +17,8 @@ export { localKeys, degreeKeys } from './key.js';
 export { sideKeys, centredSideKeys, CENTRED_SIDE_RADIUS } from './key-side.js';
 export { dominantChords, DOMINANT_REACH } from './dominant.js';
 export { resolutionDirs, RESOLUTION_REACH } from './resolution.js';
+export { lookAheadContext } from './look-ahead.js';
+export type { LookAheadNote } from './look-ahead.js';
 export type { ResolutionNote, ResolutionReach } from './resolution.js';
 export type { DominantChord, DominantNote, DominantOptions } from './dominant.js';
 export type { LocalKey, KeyNote, KeyTable, LocalKeyOptions } from './key.js';

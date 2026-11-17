@@ -32,6 +32,7 @@ import { acc, C_MAJOR, candidates, COMMA, letter, letterAt, LETTER_ORDER, lofOf,
 import { intervalScore } from './scoring.js';
 import { isKeyDegree, isLeadingTone, isWideLeadingTone, type LocalKey } from './key.js';
 import type { DominantChord } from './dominant.js';
+import type { NoteContext } from './kernel.js';
 import { SIGNATURE_NEIGHBOURHOOD } from './key-side.js';
 
 // Every spelling below is a line-of-fifths position n (see lof.ts), and a scale is 7 of them indexed
@@ -582,12 +583,15 @@ export class SpellingEngine {
 
     /**
      * Commit a spelling for `midi`: the candidate whose combined score (interval fit plus every enabled
-     * mechanism's delta) is highest; then run the fold check. `t`, when given, groups co-struck notes
-     * (same `t`) into one onset; omit it to treat every call as its own onset. `resolveDir` (+1/−1/0)
-     * feeds the look-ahead when enabled; `outwardPartner`/`outwardRole` feed the aug6 outward rule,
-     * `localKey` the leading-tone gate, `degreeKey` the key-degree gate and `dominant` the tendency-tone rule.
+     * mechanism's delta) is highest; then run the fold check. `ctx.t`, when given, groups co-struck notes
+     * (same `t`) into one onset; omit it to treat every call as its own onset. The rest of `ctx` is the
+     * look-ahead context ({@link NoteContext}): `sideKey` is applied first (as {@link sideKey}), `resolveDir`
+     * feeds the look-ahead when enabled, `outwardPartner`/`outwardRole` the aug6 outward rule, `localKey` the
+     * leading-tone gate, `degreeKey` the key-degree gate and `dominant` the tendency-tone rule.
      */
-    noteOn(midi: number, t?: number, resolveDir = 0, resolveExact = 0, outwardPartner?: number, outwardRole = 0, localKey?: LocalKey | null, degreeKey?: LocalKey | null, dominant?: DominantChord | null): void {
+    noteOn(midi: number, ctx: NoteContext = {}): void {
+        const { t, resolveDir = 0, resolveExact = 0, outwardPartner, outwardRole = 0, localKey, degreeKey, dominant } = ctx;
+        if (ctx.sideKey !== undefined) this.sideKey(ctx.sideKey);
         // Advance the onset (and flush the previous onset's raw pcs into the fold window) at each new `t`.
         const newOnset = t === undefined || (this.onsetTolerance > 0
             // NaN lastT: new onset. A repeated pitch arriving LATER than its first strike is a re-strike (a unison

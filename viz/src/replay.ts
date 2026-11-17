@@ -13,11 +13,9 @@ import type { Pitch, PitchClass } from '../../src/index.js';
 import { pitchAt } from '../../src/index.js';
 import { CoreSpeller } from '../../src/core.js';
 import { spellTwoPassTraced, type TwoPassTrace, type TwoPassNoteTrace } from '../../src/two-pass.js';
-import { outwardPairs } from '../../src/aug6.js';
-import { degreeKeys, localKeys, type LocalKey } from '../../src/key.js';
-import { sideKeys } from '../../src/key-side.js';
-import { dominantChords, type DominantChord } from '../../src/dominant.js';
-import { resolutionDirs } from '../../src/resolution.js';
+import type { LocalKey } from '../../src/key.js';
+import { lookAheadContext } from '../../src/look-ahead.js';
+import type { NoteContext } from '../../src/kernel.js';
 import { SpellingEngine, RT_PRESET, LA_PRESET } from '../../src/engine.js';
 import type { DecisionTrace } from './decision.js';
 import { classifyOnsets } from '../../test/eval/score.js';
@@ -200,39 +198,32 @@ export function controlSpell(midi: number, table: Map<number, PitchClass>): Pitc
  *  near-real-time caller holds. */
 export const LA_HORIZON = 16;
 
-/** {@link resolutionDirs} (the look-ahead's shipped resolution reader: the 16-note buffer, then the note's own
- *  voice until it resolves), `dir` and `exact`, each keyed by event index. */
-function onsetResolutions(events: RawEvent[]): { dir: Map<number, number>; exact: Map<number, number> } {
-    const at: number[] = [], notes: { midi: number; tOn: number }[] = [];
-    events.forEach((e, i) => { if (e.type === 'on') { at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms }); } });
-    const r = resolutionDirs(notes, { window: LA_HORIZON });
-    const dir = new Map<number, number>(), exact = new Map<number, number>();
-    at.forEach((i, j) => { dir.set(i, r.dir[j]!); exact.set(i, r.exact[j]!); });
-    return { dir, exact };
-}
-
-/** Each on-event's aug6 outward partner (its midi) and role, keyed by event index: the look-ahead context a
- *  near-real-time caller feeds alongside the resolution directions. */
-function onsetOutward(events: RawEvent[]): Map<number, { partner: number; role: number }> {
+/** The on-events as notes (release time from the matching off-event), and each note's event index. */
+function onNotes(events: RawEvent[]): { notes: { midi: number; tOn: number; tOff: number }[]; at: number[] } {
     const notes: { midi: number; tOn: number; tOff: number }[] = [], at: number[] = [];
     const open = new Map<number, number[]>();
     events.forEach((e, i) => {
-        if (e.type === 'on') { open.set(e.midi!, [...(open.get(e.midi!) ?? []), notes.length]); at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms }); }
+        if (e.type === 'on') { (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(notes.length); at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms }); }
         else if (e.type === 'off') { const q = open.get(e.midi!); if (q?.length) notes[q.shift()!]!.tOff = e.t_ms; }
     });
-    const op = outwardPairs(notes), out = new Map<number, { partner: number; role: number }>();
-    op.partner.forEach((y, k) => { if (y >= 0) out.set(at[k]!, { partner: notes[y]!.midi, role: op.role[k]! }); });
+    return { notes, at };
+}
+
+/** Each on-event's look-ahead context ({@link lookAheadContext}, read with the LA_HORIZON buffer), keyed by
+ *  event index. */
+function onsetContexts(events: RawEvent[]): Map<number, NoteContext> {
+    const { notes, at } = onNotes(events);
+    const out = new Map<number, NoteContext>();
+    lookAheadContext(notes, { window: LA_HORIZON }).forEach((c, j) => out.set(at[j]!, c));
     return out;
 }
 
-/** Each on-event's local key (default the tonic-triad table on ±12 onsets centred on it; `degreeKeys` for the
- *  key-degree gate), keyed by event index: the gates' context, fed alongside the resolution directions. */
-function onsetKeys(events: RawEvent[], read: (notes: { midi: number; tOn: number }[]) => (LocalKey | null)[] = localKeys): Map<number, LocalKey | null> {
-    const notes: { midi: number; tOn: number }[] = [], at: number[] = [];
-    events.forEach((e, i) => { if (e.type === 'on') { at.push(i); notes.push({ midi: e.midi!, tOn: e.t_ms }); } });
-    const out = new Map<number, LocalKey | null>();
-    read(notes).forEach((k, j) => out.set(at[j]!, k));
-    return out;
+/** The part of a note's look-ahead context the panels show. */
+function laTrace(c: NoteContext | undefined): LaContext {
+    return {
+        resolveDir: c?.resolveDir ?? 0, exactDir: c?.resolveExact ?? 0, localKey: c?.localKey ?? null, degreeKey: c?.degreeKey ?? null,
+        outward: c?.outwardPartner !== undefined && c.outwardRole ? { partner: c.outwardPartner, role: c.outwardRole } : null,
+    };
 }
 
 /** Build a replay for one fixture in the given latency mode. `spiral` overrides the streaming
@@ -251,16 +242,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
     let tpOut: (Pitch | null)[] | null = null;
     let tpTrace: TwoPassTrace | null = null;
     if (mode === 'tp') {
-        const notes: { midi: number; tOn: number; tOff: number }[] = [];
-        const open = new Map<number, number[]>();
-        for (const e of events) {
-            if (e.type === 'on') {
-                const i = notes.length; notes.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms });
-                (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(i);
-            } else if (e.type === 'off') {
-                const q = open.get(e.midi!); if (q && q.length) notes[q.shift()!]!.tOff = e.t_ms;
-            }
-        }
+        const { notes } = onNotes(events);
         // The shipped offline resolver (forward + time-reversed backward, wolf-cost reconciled).
         // TODO: re-wire editorial side overrides. `sideOverrides` (the toolbar ♯/♭/auto markers) is
         // accepted but NOT consumed here or in the streaming path below: the engine port dropped the
@@ -296,28 +278,8 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             ...(spiral.onsetTolerance ? { onsetTolerance: spiral.onsetTolerance } : {}),
         })
         : null;
-    // Look-ahead resolution directions (only the look-ahead reads them).
-    const { dir: dirs, exact: exactDirs } = mode === 'la' ? onsetResolutions(events) : { dir: new Map<number, number>(), exact: new Map<number, number>() };
-    const outward = mode === 'la' ? onsetOutward(events) : new Map<number, { partner: number; role: number }>();
-    const keys = mode === 'la' ? onsetKeys(events) : new Map<number, LocalKey | null>();
-    const degKeys = mode === 'la' ? onsetKeys(events, degreeKeys) : new Map<number, LocalKey | null>();
-    // Key → side (look-ahead): each on-event's side key, keyed by event index, applied before its note-on.
-    const sides = new Map<number, number | null>();
-    if (mode === 'la') {
-        const at: number[] = [], kn: { midi: number; tOn: number }[] = [];
-        events.forEach((e, i) => { if (e.type === 'on') { at.push(i); kn.push({ midi: e.midi!, tOn: e.t_ms }); } });
-        sideKeys(kn).forEach((x, j) => sides.set(at[j]!, x));
-    }
-    // A dominant names its tendency tones (look-ahead): each on-event's dominant, keyed by event index.
-    const doms = new Map<number, DominantChord | null>();
-    if (mode === 'la') {
-        const at: number[] = [], dn: { midi: number; tOn: number; tOff: number }[] = [], open = new Map<number, number[]>();
-        events.forEach((e, i) => {
-            if (e.type === 'on') { at.push(i); (open.get(e.midi!) ?? open.set(e.midi!, []).get(e.midi!)!).push(dn.length); dn.push({ midi: e.midi!, tOn: e.t_ms, tOff: e.t_ms }); }
-            else if (e.type === 'off') { const q = open.get(e.midi!); if (q?.length) dn[q.shift()!]!.tOff = e.t_ms; }
-        });
-        dominantChords(dn).forEach((x, j) => doms.set(at[j]!, x));
-    }
+    // The look-ahead context of each on-event (only the look-ahead reads it).
+    const contexts = mode === 'la' ? onsetContexts(events) : new Map<number, NoteContext>();
     const sounding = new Map<number, Pitch>();   // midi → its committed spelling, while ringing
     const soundingOnT = new Map<number, number>(); // midi → onset time of the ringing note (display-only)
     const soundingN = new Map<number, number>();   // midi → note-ons still ringing; the pitch leaves `sounding` only at 0
@@ -399,9 +361,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
         } else {
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
-            const ow = outward.get(i);
-            if (mode === 'la') engine!.sideKey(sides.get(i) ?? null);
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i), degKeys.get(i), doms.get(i));
+            engine!.noteOn(e.midi!, { ...contexts.get(i), t: e.t_ms });
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
             // ringing notes so the lattice shows the engine's current spellings, not their first ones.
@@ -442,7 +402,7 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             expected: exp ? pitchAt({ step: exp.step as Pitch['step'], alter: exp.alter as Pitch['alter'] }, e.midi!) : null,
             resolvedScale, frame, frameLofTonic, frameMeanTonic, keyCenterLof, frameKeyLof, decision, twoPass,
             localColl, stableColl,
-            ...(mode === 'la' ? { la: { resolveDir: dirs.get(i) ?? 0, exactDir: exactDirs.get(i) ?? 0, localKey: keys.get(i) ?? null, degreeKey: degKeys.get(i) ?? null, outward: outward.get(i) ?? null } } : {}),
+            ...(mode === 'la' ? { la: laTrace(contexts.get(i)) } : {}),
             sounding: [...sounding.entries()].map(([midi, pitch]) => ({ midi, pitch, onT: soundingOnT.get(midi)! })).sort((a, b) => a.midi - b.midi),
             tier: 'unread',   // placeholder; the run-coherence gate assigns tiers in the post-pass below
         });

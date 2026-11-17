@@ -58,7 +58,7 @@ evs.sort((a, b) => a.t - b.t || Number(a.on) - Number(b.on) || mid[a.i]! - mid[b
 for (const e of evs) {
     const m = mid[e.i]!;
     if (e.on) {
-        engine.noteOn(m, e.t, dirs[e.i]!);
+        engine.noteOn(m, { t: e.t, resolveDir: dirs[e.i]! });
         const scale = engine.getResolvedScale();
         centre[e.i] = scale.reduce((s, p) => s + lofOf(p), 0) / scale.length;
         (pend.get(m) ?? pend.set(m, []).get(m)!).push(e.i);

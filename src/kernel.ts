@@ -20,17 +20,17 @@ export interface NoteContext {
     /** Augmented-sixth context: the midi of a sounding tone ten semitones away that, with this note, moves
      *  outward to one pitch class (see `outwardPairs`, which fills this and {@link outwardRole}). Look-ahead
      *  mode only; omit it to switch the aug6 rule off. */
-    readonly outwardPartner?: number;
+    readonly outwardPartner?: number | undefined;
     /** This note's role in that pair: +1 the rising upper tone (the ♯4), −1 the falling lower tone. */
     readonly outwardRole?: number;
     /** The local key around the note (see `localKeys`, which reads it on onsets centred on the note): a
      *  falling note that is one of its leading tones keeps the key's name instead of the look-ahead's letter
      *  step. Look-ahead mode only; omit it to switch the leading-tone gate off. */
-    readonly localKey?: LocalKey | null;
+    readonly localKey?: LocalKey | null | undefined;
     /** The key-degree gate's local key (see `degreeKeys`: the tonic-triad table on ±12 notes centred on the
      *  note): a semitone resolution into a pitch outside it keeps the note's letter instead of the look-ahead's
      *  letter step. Look-ahead mode only; omit it to switch the key-degree gate off. */
-    readonly degreeKey?: LocalKey | null;
+    readonly degreeKey?: LocalKey | null | undefined;
     /** Key → side: the conventional side of the local key, as its relative major's tonic on the line of fifths
      *  (see `sideKeys`; NaN = the F♯/G♭ tie, resolved to the side nearer the current surface). The speller
      *  re-centres its fold on it (as `setKey`) whenever it changes; on the very first note it also seeds the
@@ -40,7 +40,7 @@ export interface NoteContext {
      *  tones (see `dominantChords`). If the note is its third or seventh, it takes the spelling that makes it
      *  that tone (E7 → A: G♯, not A♭), over every score but the aug6 outward rule. Look-ahead mode; omit it to
      *  switch the rule off. */
-    readonly dominant?: import('./dominant.js').DominantChord | null;
+    readonly dominant?: import('./dominant.js').DominantChord | null | undefined;
 }
 
 /**

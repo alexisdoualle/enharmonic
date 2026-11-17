@@ -21,6 +21,7 @@
  * its current surface.
  */
 import { prefixCounts, windowCounts, type KeyNote } from './key.js';
+import { groupOnsets } from './onsets.js';
 
 const DIATONIC = [0, 2, 4, 5, 7, 9, 11], HARMONIC_MINOR = [0, 2, 3, 5, 7, 8, 11];
 /** The primary-triads table, centred and with its squared norm, for major and minor. */
@@ -66,18 +67,13 @@ const xOf = (k: Key): number => PC_TO_X[(k.tonic + (k.minor ? 3 : 0)) % 12]!;
 /** Look-ahead window: onsets behind, notes ahead; confirmation span; deepening limit. */
 const BEHIND_ONSETS = 96, AHEAD_NOTES = 16, CONFIRM_NOTES = 16, DEEPEN = 7;
 
-/** Pitch-class histograms over note ranges (prefix sums), and each note's onset (first note, exclusive end). */
+/** Pitch-class histograms over note ranges (prefix sums), and the notes grouped by onset. */
 function scan(notes: readonly KeyNote[]) {
     const n = notes.length;
     const pc = notes.map(x => ((x.midi % 12) + 12) % 12);
     const pre = prefixCounts(n, k => notes[k]!.midi);
     const hist = (a: number, b: number): number[] => windowCounts(pre, Math.max(0, a), Math.min(n, b));
-    const onsetOf: number[] = [], first: number[] = [], end: number[] = [];
-    for (let i = 0; i < n; i++) {
-        if (i === 0 || notes[i]!.tOn !== notes[i - 1]!.tOn) { first.push(i); end.push(i); }
-        end[end.length - 1] = i + 1; onsetOf.push(first.length - 1);
-    }
-    return { n, pc, hist, onsetOf, first, end };
+    return { n, pc, hist, on: groupOnsets(notes) };
 }
 
 /**
@@ -127,12 +123,12 @@ function deepen(keys: readonly (Key | null)[], keyReturn = false): (number | nul
  * Pass it as `NoteContext.sideKey`.
  */
 export function sideKeys(notes: readonly KeyNote[]): (number | null)[] {
-    const { n, pc, hist, onsetOf, first, end } = scan(notes);
+    const { n, pc, hist, on } = scan(notes);
     // KEY on the last 96 onsets, the note's own onset, and the next 16 notes.
     const read: (Key | null)[] = new Array(n);
     for (let i = 0; i < n; i++) {
-        const o = onsetOf[i]!;
-        read[i] = bestKey(hist(first[Math.max(0, o - BEHIND_ONSETS)]!, Math.max(end[o]!, Math.min(n, i + AHEAD_NOTES + 1))));
+        const o = on.of[i]!;
+        read[i] = bestKey(hist(on.start[Math.max(0, o - BEHIND_ONSETS)]!, Math.max(on.start[o + 1]!, Math.min(n, i + AHEAD_NOTES + 1))));
     }
     // CONFIRMATION: move to a new side only when the next 16 notes favour the new key's own notes.
     const keys: (Key | null)[] = []; let cur: Key | null = null;
@@ -175,12 +171,12 @@ export function deepenCentredKeys(keys: readonly (Key | null)[], keyReturn = tru
 /** Each note's key read on the onsets centred on it (±radius), before deepening. The notes of one onset share
  *  their window, so the key is read once per onset. */
 export function centredKeys(notes: readonly KeyNote[], radius: number): (Key | null)[] {
-    const { n, hist, onsetOf, first, end } = scan(notes);
-    const last = first.length - 1;
+    const { n, hist, on } = scan(notes);
+    const last = on.start.length - 2;
     const keys: (Key | null)[] = new Array(n);
     for (let i = 0; i < n; i++) {
-        const o = onsetOf[i]!;
-        keys[i] = i > 0 && onsetOf[i - 1] === o ? keys[i - 1]! : bestKey(hist(first[Math.max(0, o - radius)]!, end[Math.min(last, o + radius)]!));
+        const o = on.of[i]!;
+        keys[i] = i > 0 && on.of[i - 1] === o ? keys[i - 1]! : bestKey(hist(on.start[Math.max(0, o - radius)]!, on.start[Math.min(last, o + radius) + 1]!));
     }
     return keys;
 }

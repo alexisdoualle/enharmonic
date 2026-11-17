@@ -17,6 +17,7 @@
  */
 
 import { resolveExactStep, resolveStep } from './kernel.js';
+import { groupOnsets, type Onsets } from './onsets.js';
 
 /** A note as {@link resolutionDirs} reads it, in onset order (onset ascending, bass first within a chord). */
 export interface ResolutionNote { readonly midi: number; readonly tOn: number }
@@ -43,6 +44,7 @@ export function resolutionDirs(notes: readonly ResolutionNote[], reach: Resoluti
     const { mode, window, max } = { ...RESOLUTION_REACH, ...reach };
     const n = notes.length;
     const dir = new Array<number>(n).fill(0), exact = new Array<number>(n).fill(0);
+    const on = mode === 'own-voice' ? groupOnsets(notes) : null;
     for (let a = 0; a < n; a++) {
         const m = notes[a]!.midi;
         for (let b = a + 1; b < n && b - a <= window; b++) {
@@ -51,7 +53,7 @@ export function resolutionDirs(notes: readonly ResolutionNote[], reach: Resoluti
             if (dir[a] !== 0 && exact[a] !== 0) break;
         }
         if (mode === 'own-voice' && dir[a] === 0) {
-            dir[a] = ownVoiceStep(notes, a, max);
+            dir[a] = ownVoiceStep(notes, on!, a, max);
             if (exact[a] === 0) exact[a] = dir[a]!;
         }
     }
@@ -60,19 +62,16 @@ export function resolutionDirs(notes: readonly ResolutionNote[], reach: Resoluti
 
 /** The note's own voice, onset by onset after its own: the first onset that does not re-strike the note and strikes
  *  a semitone above or below it (same octave) gives the direction (both at once: 0); 0 if none within `max` notes. */
-function ownVoiceStep(notes: readonly ResolutionNote[], a: number, max: number): number {
-    const A = notes[a]!, n = notes.length;
-    let b = a + 1;
-    while (b < n && notes[b]!.tOn === A.tOn) b++;          // struck with it: not its resolution
-    while (b < n && b - a <= max) {
-        const t0 = notes[b]!.tOn;
-        let e = b, re = false, up = false, down = false;
-        for (; e < n && notes[e]!.tOn === t0; e++) {
-            const d = notes[e]!.midi - A.midi;
+function ownVoiceStep(notes: readonly ResolutionNote[], on: Onsets, a: number, max: number): number {
+    const m = notes[a]!.midi;
+    // Onsets after the note's own (notes struck with it are not its resolution), while they start within `max` notes.
+    for (let c = on.of[a]! + 1; c < on.start.length - 1 && on.start[c]! - a <= max; c++) {
+        let re = false, up = false, down = false;
+        for (let i = on.start[c]!; i < on.start[c + 1]!; i++) {
+            const d = notes[i]!.midi - m;
             if (d === 0) re = true; else if (d === 1) up = true; else if (d === -1) down = true;
         }
         if (!re && (up || down)) return up && down ? 0 : up ? 1 : -1;
-        b = e;
     }
     return 0;
 }

@@ -77,8 +77,7 @@ export class Speller {
     }
 
     noteOn(midi: number, ctx: NoteContext = {}): void {
-        if (ctx.sideKey !== undefined) this.engine.sideKey(ctx.sideKey);
-        this.engine.noteOn(midi, ctx.t, ctx.resolveDir ?? 0, ctx.resolveExact ?? 0, ctx.outwardPartner, ctx.outwardRole ?? 0, ctx.localKey, ctx.degreeKey, ctx.dominant);
+        this.engine.noteOn(midi, ctx);
     }
 
     noteOff(midi: number, ctx: { t?: number } = {}): void {
