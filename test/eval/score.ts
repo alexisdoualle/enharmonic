@@ -16,12 +16,15 @@
  *   wrong    : offset BREAKS the consensus. This INCLUDES an offset-0 straggler stranded inside a
  *              flipped passage (a natural that failed to flip with its neighbours, an incoherent
  *              MIX, not a clean flip), as well as a lone off-side note inside an unflipped passage.
+ *              Two exceptions at the composer's own seams: a MOVED SEAM (a short vertical section on his
+ *              other side, placed a beat or two from his respelling) is flipped, and an offset-0 note at
+ *              a flip's EDGE (not inside it) is correct. See the two passes at the end of `classifyOnsets`.
  *   unread   : no read-back (pred null). Should be 0 for a healthy speller.
  *
  * Two properties are essential and were both missing from an earlier lenient version of this file
  * (which under-reported `wrong`, most visibly on the frameless Core over heavily-flipped movements):
- *   1. Matching the composer (offset 0) is NOT a per-note pass: an offset-0 note that breaks a
- *      flipped consensus is `wrong`.
+ *   1. Matching the composer (offset 0) is NOT a per-note pass: an offset-0 note left behind inside a
+ *      flipped passage is `wrong`.
  *   2. The consensus window is measured in ONSETS (co-struck notes share one onset), not raw note
  *      indices: otherwise a wide window collapses to a few chords on polyphonic music.
  *
@@ -153,7 +156,7 @@ export function classifyOnsets(
         for (let o = oi + 1; o < nOnsets && segOff[o] === undefined && fits(o, a); o++) segOff[o] = a;
     }
 
-    return pred.map((_p, i) => {
+    const tiers: Tier[] = pred.map((_p, i) => {
         const e = expected[i];
         if (e == null) return 'correct';            // unscored onset, neutral
         if (pred[i] == null) return 'unread';        // no read-back
@@ -165,6 +168,64 @@ export function classifyOnsets(
         if (off !== consensus) return 'wrong';
         return consensus === 0 ? 'correct' : 'flipped';
     });
+
+    // Both passes below read the composer's spellings and our offsets only, so every speller is scored alike.
+    const shiftedAt = (o: number) => byOnset[o]!.some(j => expected[j] != null && offsets[j] != null && offsets[j] !== 0);
+
+    // A MOVED SEAM is a flip. Where the composer changes side, a short run placed a beat or two from his own
+    // respelling is his other side, not a wrong note: the consensus window straddles his seam and outvotes it. The run
+    // is a vertical section (every note struck in its onsets sits at one offset a), spans three or more pitch classes
+    // (a lone note or two is never a flip: flipping is about context), is one clean move (going outward from each edge,
+    // notes may stay at a, but once back at 0 no shifted note appears within `radius` onsets), and ends just before a
+    // composer seam of direction a (we switched early) or starts on one of direction -a (late). A composer seam is a
+    // note whose pitch class he spelled a comma away at its previous use within `radius` onsets.
+    const seamDir = new Map<number, number>();
+    const lastUse = new Map<number, { o: number; v: number }>();
+    for (let o = 0; o < nOnsets; o++) for (const j of byOnset[o]!) {
+        const e = expected[j]; if (!e) continue;
+        const pc = pcOf(e), v = fifths(e.step, e.alter), p = lastUse.get(pc);
+        if (p && p.o !== o && o - p.o <= radius && Math.abs(v - p.v) === 12) seamDir.set(o, Math.sign(v - p.v));
+        lastUse.set(pc, { o, v });
+    }
+    for (let o = 0; o < nOnsets; o++) {
+        const first = byOnset[o]!.find(j => tiers[j] === 'wrong' && offsets[j] != null && offsets[j] !== 0);
+        if (first === undefined) continue;
+        const a = offsets[first]!;
+        const atA = (q: number) => q >= 0 && q < nOnsets && byOnset[q]!.length > 0 && byOnset[q]!.every(j => expected[j] != null && offsets[j] === a);
+        if (!atA(o)) continue;
+        let s0 = o, t0 = o;
+        while (atA(s0 - 1)) s0--;
+        while (atA(t0 + 1)) t0++;
+        const next = t0;
+        const pcs = new Set<number>();
+        for (let q = s0; q <= t0; q++) for (const j of byOnset[q]!) pcs.add(pcOf(expected[j]!));
+        const clean = (from: number, step: number): boolean => {
+            let back = false;
+            for (let q = from; q >= 0 && q < nOnsets && Math.abs(q - from) < radius; q += step) for (const j of byOnset[q]!) {
+                if (expected[j] == null) continue;
+                const v = offsets[j];
+                if (v === 0) back = true; else if (v !== a || back) return false;
+            }
+            return true;
+        };
+        const early = seamDir.get(t0 + 1), late = seamDir.get(s0);
+        if (pcs.size >= 3 && clean(s0 - 1, -1) && clean(t0 + 1, 1) && (early === a || late === -a))
+            for (let q = s0; q <= t0; q++) for (const j of byOnset[q]!) if (tiers[j] === 'wrong') tiers[j] = 'flipped';
+        o = next;
+    }
+
+    // EDGE: a note at the composer's spelling is wrong only if left behind inside a flip: its own onset holds a shifted
+    // note (D♯–G–A♯), or shifted notes lie within `radius` onsets on both sides. At a flip's edge it belongs to the
+    // unshifted passage it continues (Chopin Op. 28/15 m27: two A♭ before his respelling at m28).
+    for (let o = 0; o < nOnsets; o++) {
+        const zs = byOnset[o]!.filter(j => tiers[j] === 'wrong' && offsets[j] === 0);
+        if (!zs.length || shiftedAt(o)) continue;
+        let before = false, after = false;
+        for (let q = o - 1; q >= Math.max(0, o - radius) && !before; q--) before = shiftedAt(q);
+        for (let q = o + 1; q <= Math.min(nOnsets - 1, o + radius) && !after; q++) after = shiftedAt(q);
+        if (!(before && after)) for (const j of zs) tiers[j] = 'correct';
+    }
+    return tiers;
 }
 
 export function scoreTiers(
