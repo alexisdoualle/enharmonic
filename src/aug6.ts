@@ -35,7 +35,7 @@ export interface OutwardOptions {
      *  closing onto a unison), the pair counts only if the meeting onset strikes at least this many notes. Two
      *  lone voices crossing on one note are passing, not an augmented sixth: in C minor, A♭ and F♯ landing on
      *  a struck G chord are an aug6; the same two tones meeting on a bare G are not. 0 turns it off. Default 3
-     *  (the look-ahead tier); `spellTwoPass` passes 0 unless `aug6ChordMeet` is set. */
+     *  (the look-ahead tier and both two-pass passes). */
     chordMeet?: number;
 }
 
