@@ -35,6 +35,7 @@ const COLUMNS = [
     { src: ['ours', 'rt'], latency: 'causal', ours: true, label: ['real-time', '(guard + fold + leash)'] },
     { src: ['base', 'chew_chen'], latency: 'causal', label: ['Chew & Chen', '(spiral array)'] },
     { src: ['ours', 'la'], latency: 'bounded', ours: true, label: ['real-time +LA', '(letter look-ahead)'] },
+    { src: ['base', 'cambouropoulos'], latency: 'bounded', label: ['Cambouropoulos', '(2003, windowed)'] },
     { src: ['ours', 'tp'], latency: 'offline', ours: true, label: ['+2-pass', '(offline, batch)'] },
     { src: ['base', 'pkspell'], latency: 'offline', label: ['PKSpell', "(ISMIR'21 neural)"] },
     { src: ['base', 'ps13'], latency: 'offline', label: ['ps13', '(Meredith)'] },
