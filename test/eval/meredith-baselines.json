@@ -1,5 +1,5 @@
 {
-  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from an external source. These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here. Regenerate only if the corpus or a baseline tool changes. cambouropoulos (2003, cam-03-a) and longuet_higgins (lhpitchspell1) added 2026-10-03 from enharmonic-lab test/parity/results/meredith_baselines{,_noisy}.json (Meredith's Lisp via SBCL); in that same lab run the five earlier baselines reproduce this file exactly. Both consume only the pitch sequence in (onset, pitch) order, so the lab's tatum scale does not affect them. Flipped/wrong rescored 2026-10-13 with prod test/eval/score.ts (segment flip scorer, 6cf8956) from the lab's stored predictions; the tools were not rerun.",
+  "_provenance": "Third-party baseline tiers on Meredith 8x25000, aggregated from an external source. These are frozen scores of external tools (ps13, PKSpell neural, Chew&Chen spiral-array, Temperley/Melisma, fixed-LoF=music21) that cannot run in this zero-dep repo. Snapshotted so the scoreboard figure is reproducible here. Regenerate only if the corpus or a baseline tool changes. cambouropoulos (2003, cam-03-a) and longuet_higgins (lhpitchspell1) added 2026-10-03 from enharmonic-lab test/parity/results/meredith_baselines{,_noisy}.json (Meredith's Lisp via SBCL); in that same lab run the five earlier baselines reproduce this file exactly. Both consume only the pitch sequence in (onset, pitch) order, so the lab's tatum scale does not affect them. Flipped/wrong rescored 2026-10-13 with prod test/eval/score.ts (segment flip scorer, 6cf8956) from the lab's stored predictions; the tools were not rerun. 2026-11-18: chew_chen and temperley refreshed from their current predictions (enharmonic-lab test/parity/meredith-baselines, scored by test/eval/rescore-baselines.ts with this repo's scorer); the earlier snapshot of those two was stale (it matched older lab runs).",
   "corpus": "meredith-8x25000",
   "variants": {
     "clean": {
@@ -11,9 +11,9 @@
         "total": 195972
       },
       "chew_chen": {
-        "correct": 193692,
-        "flipped": 36,
-        "wrong": 2244,
+        "correct": 194006,
+        "flipped": 284,
+        "wrong": 1682,
         "committed": 195972,
         "total": 195972
       },
@@ -46,10 +46,10 @@
         "total": 195972
       },
       "temperley": {
-        "correct": 161508,
-        "flipped": 11686,
-        "wrong": 695,
-        "committed": 173889,
+        "correct": 185685,
+        "flipped": 9360,
+        "wrong": 580,
+        "committed": 195625,
         "total": 195972
       }
     },
@@ -62,9 +62,9 @@
         "total": 195972
       },
       "chew_chen": {
-        "correct": 186969,
-        "flipped": 7128,
-        "wrong": 1875,
+        "correct": 193739,
+        "flipped": 446,
+        "wrong": 1787,
         "committed": 195972,
         "total": 195972
       },
@@ -97,10 +97,10 @@
         "total": 195972
       },
       "temperley": {
-        "correct": 10434,
-        "flipped": 1865,
-        "wrong": 409,
-        "committed": 12708,
+        "correct": 176659,
+        "flipped": 16241,
+        "wrong": 633,
+        "committed": 193533,
         "total": 195972
       }
     }
