@@ -1,0 +1,41 @@
+name: Publish to npm
+
+# Publishes the package when a GitHub release is published, through npm Trusted Publishing:
+# no token is stored; npm checks that the run comes from this workflow in this repository.
+# Only accounts with write access can publish a release or run this by hand.
+# Can also be started by hand for an existing tag (Actions → Publish to npm → Run workflow).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish, e.g. v0.2.2'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write   # lets npm verify this run (Trusted Publishing) and sign the provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@^11.5.1   # Trusted Publishing needs npm 11.5.1 or later
+      - name: Tag must match package.json version
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$VERSION" ]; then echo "tag $TAG != package.json $VERSION"; exit 1; fi
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --ignore-scripts --provenance --access public
