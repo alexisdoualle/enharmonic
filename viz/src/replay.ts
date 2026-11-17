@@ -400,8 +400,10 @@ export function buildReplay(mode: Mode, events: RawEvent[], expected: Expected[]
             // rt / la: the shipped streaming engine.
             const before = engine!.getResolvedScale();
             const ow = outward.get(i);
-            if (mode === 'la') engine!.sideKey(sides.get(i) ?? null);
-            engine!.noteOn(e.midi!, e.t_ms, mode === 'la' ? (dirs.get(i) ?? 0) : 0, mode === 'la' ? (exactDirs.get(i) ?? 0) : 0, ow?.partner, ow?.role ?? 0, keys.get(i), degKeys.get(i), doms.get(i));
+            engine!.noteOn(e.midi!, {
+                t: e.t_ms, outwardPartner: ow?.partner, outwardRole: ow?.role ?? 0, localKey: keys.get(i), degreeKey: degKeys.get(i), dominant: doms.get(i),
+                ...(mode === 'la' ? { sideKey: sides.get(i) ?? null, resolveDir: dirs.get(i) ?? 0, resolveExact: exactDirs.get(i) ?? 0 } : {}),
+            });
             committed = engine!.getSpelling(e.midi!);
             // The onset buffer (onsetRevise) may have re-spelled earlier notes of this chord: refresh the
             // ringing notes so the lattice shows the engine's current spellings, not their first ones.

@@ -317,9 +317,9 @@ suite('leading-tone gate', () => {
         const e = new SpellingEngine({ ...LA_PRESET, leadingToneGate: gate });
         chords.forEach((c, k) => {
             if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
-            for (const m of c) e.noteOn(m, k * 500);
+            for (const m of c) e.noteOn(m, { t: k * 500 });
         });
-        e.noteOn(midi, chords.length * 500, ctx.resolveDir, 0, undefined, 0, ctx.key);
+        e.noteOn(midi, { t: chords.length * 500, resolveDir: ctx.resolveDir, localKey: ctx.key });
         return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
     };
 
@@ -366,9 +366,9 @@ suite('key-degree gate', () => {
         const e = new SpellingEngine({ ...LA_PRESET, keyDegreeGate: gate });
         chords.forEach((c, k) => {
             if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
-            for (const m of c) e.noteOn(m, k * 500);
+            for (const m of c) e.noteOn(m, { t: k * 500 });
         });
-        e.noteOn(midi, chords.length * 500, resolveDir, 0, undefined, 0, null, key);
+        e.noteOn(midi, { t: chords.length * 500, resolveDir, localKey: null, degreeKey: key });
         return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
     };
     // C major, then D major: the surface spells F♯, so F rising to F♯ has a letter-step target.
@@ -401,9 +401,9 @@ suite('held-letter target', () => {
         const e = new SpellingEngine({ ...LA_PRESET, heldLetterTarget: held });
         chords.forEach((c, k) => {
             if (k) for (const m of chords[k - 1]!) e.noteOff(m, k * 500);
-            for (const m of c) e.noteOn(m, k * 500);
+            for (const m of c) e.noteOn(m, { t: k * 500 });
         });
-        e.noteOn(66, chords.length * 500, 1, 1, undefined, 0, key);
+        e.noteOn(66, { t: chords.length * 500, resolveDir: 1, resolveExact: 1, localKey: key });
         return e.decision()!.candidates.map(c => `${tok({ ...c.c, octave: 4 })}${c.laDelta}`).sort().join(' ');
     };
     // C major, then E♭–G♭–B♭–D♭ over it: the G slot holds G♭, so F♯ rising to G finds no G in the surface.
@@ -553,7 +553,7 @@ suite('key signature (keyTonic / setKey)', () => {
         const fold = (sig: number, sides: number[]): number => {
             const e = new SpellingEngine(LA_PRESET);
             e.keySignature(sig);
-            sides.forEach((x, k) => { e.sideKey(x); e.noteOn(60, k * 500); e.noteOff(60, k * 500 + 250); });
+            sides.forEach((x, k) => { e.sideKey(x); e.noteOn(60, { t: k * 500 }); e.noteOff(60, k * 500 + 250); });
             return (e as unknown as { foldCenter: number }).foldCenter - 2;
         };
         assertEq(fold(-5, [-5, 7]), -5, 'C♯ major (+7) under D♭ major: D♭ major');
@@ -587,7 +587,7 @@ suite('seven-accidental twin (real-time frameTwin)', () => {
     });
     test('without the rule the frame keeps C♯ major by continuity', () => {
         const e = new SpellingEngine({ ...RT_PRESET, frameTwin: false });
-        assertEq(lastCadence({ noteOn: (m, c) => e.noteOn(m, c.t), noteOff: (m, c) => e.noteOff(m, c.t), getSpelling: m => e.getSpelling(m) }),
+        assertEq(lastCadence({ noteOn: (m, c) => e.noteOn(m, { t: c.t }), noteOff: (m, c) => e.noteOff(m, c.t), getSpelling: m => e.getSpelling(m) }),
             'C# E# G# | F# A# C# | G# B# D# | C# E# G#');
     });
     test('real-time with a key supplied (E major): the rule is off', () => {
@@ -607,7 +607,7 @@ suite('minor collection holds its leading tone (minorLeadingTone, real time and 
         const out = seq.map(m => { s.noteOn(m, t); const n = tok(s.getSpelling(m)); t += 500; s.noteOff(m, t); return n; });
         return out.slice(-3).join(' ');
     };
-    const eng = (e: SpellingEngine) => ({ noteOn: (m: number, t: number) => e.noteOn(m, t), noteOff: (m: number, t: number) => e.noteOff(m, t), getSpelling: (m: number) => e.getSpelling(m) });
+    const eng = (e: SpellingEngine) => ({ noteOn: (m: number, t: number) => e.noteOn(m, { t }), noteOff: (m: number, t: number) => e.noteOff(m, t), getSpelling: (m: number) => e.getSpelling(m) });
     test('real-time: C minor G–F♯–G', () => {
         const sp = new Speller();
         assertEq(last3({ noteOn: (m, t) => sp.noteOn(m, { t }), noteOff: (m, t) => sp.noteOff(m, { t }), getSpelling: m => sp.getSpelling(m) }), 'G F# G');
@@ -635,7 +635,7 @@ suite('struck triad weighs 2 in real time (verticalOwnTriad)', () => {
     const read = (opts: typeof RT_PRESET, ev: Ev[], from: number): string => {
         const e = new SpellingEngine(opts); const out: string[] = [];
         for (const [t, on, m] of [...ev].sort((a, b) => a[0] - b[0] || Number(a[1]) - Number(b[1]))) {
-            if (on) e.noteOn(m, t); else { out.push(tok(e.getSpelling(m))); e.noteOff(m, t); }
+            if (on) e.noteOn(m, { t }); else { out.push(tok(e.getSpelling(m))); e.noteOff(m, t); }
         }
         return out.slice(from).join(' ');
     };

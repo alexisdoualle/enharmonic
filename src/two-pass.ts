@@ -337,7 +337,10 @@ function drivePass(notes: readonly TwoPassNote[], dirs: number[] | null, exact: 
         if (e.on) {
             const sig = signatures?.[e.i];
             if (sig !== undefined && sig !== null) s.setSignature(sig);
-            s.noteOn(midi, e.t, dirs ? dirs[e.i]! : 0, exact ? exact[e.i]! : 0, outward?.partner[e.i], outward?.role[e.i] ?? 0, keys?.[e.i], degKeys?.[e.i]);
+            s.noteOn(midi, {
+                t: e.t, resolveDir: dirs ? dirs[e.i]! : 0, resolveExact: exact ? exact[e.i]! : 0,
+                outwardPartner: outward?.partner[e.i], outwardRole: outward?.role[e.i] ?? 0, localKey: keys?.[e.i], degreeKey: degKeys?.[e.i],
+            });
             (pend.get(midi) ?? pend.set(midi, []).get(midi)!).push(e.i);
             if (frames) frames[e.i] = { surface: s.getResolvedScale(), foldCentre: s.getFoldCentre(), decision: s.decision() };
         }
