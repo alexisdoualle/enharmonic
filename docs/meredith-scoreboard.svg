@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="900" viewBox="0 0 1700 900" font-family="'DejaVu Sans','Bitstream Vera Sans','Verdana',sans-serif">
+<rect width="1700" height="900" fill="#ffffff"/>
+<rect x="86.0" y="134" width="475.2" height="634" fill="#2f6f3b" fill-opacity="0.06"/>
+<text x="323.6" y="88.0" text-anchor="middle" font-size="11.1" font-weight="normal" font-style="italic" fill="#2f6f3b">CAUSAL: 0 look-ahead (strict real-time)</text>
+<line x1="561.2" y1="134" x2="561.2" y2="768" stroke="#444" stroke-width="1.4" stroke-opacity="0.7" stroke-dasharray="6 4"/>
+<rect x="561.2" y="134" width="316.8" height="634" fill="#b8860b" fill-opacity="0.06"/>
+<text x="719.6" y="88.0" text-anchor="middle" font-size="11.1" font-weight="normal" font-style="italic" fill="#b8860b">BOUNDED look-ahead (≈16-note buffer)</text>
+<line x1="878.0" y1="134" x2="878.0" y2="768" stroke="#444" stroke-width="1.4" stroke-opacity="0.7" stroke-dasharray="6 4"/>
+<rect x="878.0" y="134" width="633.6" height="634" fill="#5a3f8f" fill-opacity="0.06"/>
+<text x="1194.8" y="88.0" text-anchor="middle" font-size="11.1" font-weight="normal" font-style="italic" fill="#5a3f8f">OFFLINE: whole-piece look-ahead</text>
+<line x1="1511.6" y1="134" x2="1511.6" y2="768" stroke="#444" stroke-width="1.4" stroke-opacity="0.7" stroke-dasharray="6 4"/>
+<rect x="1511.6" y="134" width="158.4" height="634" fill="#6b6b6b" fill-opacity="0.06"/>
+<text x="1590.8" y="88.0" text-anchor="middle" font-size="11.1" font-weight="normal" font-style="italic" fill="#6b6b6b">CONTROL</text>
+<line x1="86" y1="768.0" x2="1670" y2="768.0" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="772.0" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">90</text>
+<line x1="86" y1="641.2" x2="1670" y2="641.2" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="645.2" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">92</text>
+<line x1="86" y1="514.4" x2="1670" y2="514.4" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="518.4" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">94</text>
+<line x1="86" y1="387.6" x2="1670" y2="387.6" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="391.6" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">96</text>
+<line x1="86" y1="260.8" x2="1670" y2="260.8" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="264.8" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">98</text>
+<line x1="86" y1="134.0" x2="1670" y2="134.0" stroke="#000" stroke-opacity="0.14" stroke-width="1"/>
+<text x="75.0" y="138.0" text-anchor="end" font-size="11.8" font-weight="normal" fill="#333">100</text>
+<line x1="86" y1="134" x2="86" y2="768" stroke="#333" stroke-width="1"/>
+<line x1="86" y1="764.2" x2="86" y2="755.3" stroke="#000" stroke-width="1.4"/>
+<line x1="80.0" y1="763.6" x2="92.0" y2="759.8" stroke="#000" stroke-width="1.4"/>
+<line x1="80.0" y1="759.8" x2="92.0" y2="756.0" stroke="#000" stroke-width="1.4"/>
+<text transform="translate(26 451.0) rotate(-90)" text-anchor="middle" font-size="13.2" fill="#222">Share of committed notes (%); y-axis starts at 90%</text>
+<rect x="124.0" y="174.0" width="82.4" height="594.0" fill="#2f6f3b"/>
+<rect x="124.0" y="168.0" width="82.4" height="6.0" fill="#bd7a1a"/>
+<rect x="124.0" y="134.0" width="82.4" height="34.0" fill="#8c2f2c"/>
+<text x="165.2" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.37 exact</text>
+<text x="165.2" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.46 coherent · 0.54 wrong</text>
+<rect x="93.9" y="790.0" width="142.6" height="52" rx="3" fill="none" stroke="#1f5fb0" stroke-width="1.1"/>
+<text x="165.2" y="806.0" text-anchor="middle" font-size="11.1" font-weight="bold" fill="#111">CoreSpeller</text>
+<text x="165.2" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(~100 lines)</text>
+<text x="165.2" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="282.4" y="158.0" width="82.4" height="610.0" fill="#2f6f3b"/>
+<rect x="282.4" y="153.4" width="82.4" height="4.5" fill="#bd7a1a"/>
+<rect x="282.4" y="134.0" width="82.4" height="19.4" fill="#8c2f2c"/>
+<text x="323.6" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.62 exact</text>
+<text x="323.6" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.69 coherent · 0.31 wrong</text>
+<rect x="252.3" y="790.0" width="142.6" height="52" rx="3" fill="none" stroke="#1f5fb0" stroke-width="1.1"/>
+<text x="323.6" y="806.0" text-anchor="middle" font-size="11.1" font-weight="bold" fill="#111">real-time</text>
+<text x="323.6" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(guard + fold + leash)</text>
+<text x="323.6" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="440.8" y="197.6" width="82.4" height="570.4" fill="#2f6f3b"/>
+<rect x="440.8" y="188.4" width="82.4" height="9.2" fill="#bd7a1a"/>
+<rect x="440.8" y="134.0" width="82.4" height="54.4" fill="#8c2f2c"/>
+<text x="482.0" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.00 exact</text>
+<text x="482.0" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.14 coherent · 0.86 wrong</text>
+<text x="482.0" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">Chew &amp; Chen</text>
+<text x="482.0" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(spiral array)</text>
+<text x="482.0" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="599.2" y="143.6" width="82.4" height="624.4" fill="#2f6f3b"/>
+<rect x="599.2" y="140.3" width="82.4" height="3.3" fill="#bd7a1a"/>
+<rect x="599.2" y="134.0" width="82.4" height="6.3" fill="#8c2f2c"/>
+<text x="640.4" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.85 exact</text>
+<text x="640.4" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.90 coherent · 0.10 wrong</text>
+<rect x="569.1" y="790.0" width="142.6" height="52" rx="3" fill="none" stroke="#1f5fb0" stroke-width="1.1"/>
+<text x="640.4" y="806.0" text-anchor="middle" font-size="11.1" font-weight="bold" fill="#111">real-time +LA</text>
+<text x="640.4" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(letter look-ahead)</text>
+<text x="640.4" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="757.6" y="206.7" width="82.4" height="561.3" fill="#2f6f3b"/>
+<rect x="757.6" y="191.6" width="82.4" height="15.1" fill="#bd7a1a"/>
+<rect x="757.6" y="134.0" width="82.4" height="57.6" fill="#8c2f2c"/>
+<text x="798.8" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">98.85 exact</text>
+<text x="798.8" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.09 coherent · 0.91 wrong</text>
+<text x="798.8" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">Cambouropoulos</text>
+<text x="798.8" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(2003, windowed)</text>
+<text x="798.8" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="916.0" y="137.9" width="82.4" height="630.1" fill="#2f6f3b"/>
+<rect x="916.0" y="134.0" width="82.4" height="3.9" fill="#8c2f2c"/>
+<text x="957.2" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.94 exact</text>
+<text x="957.2" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.94 coherent · 0.06 wrong</text>
+<rect x="885.9" y="790.0" width="142.6" height="52" rx="3" fill="none" stroke="#1f5fb0" stroke-width="1.1"/>
+<text x="957.2" y="806.0" text-anchor="middle" font-size="11.1" font-weight="bold" fill="#111">+2-pass</text>
+<text x="957.2" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(offline, batch)</text>
+<text x="957.2" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="1074.4" y="144.8" width="82.4" height="623.2" fill="#2f6f3b"/>
+<rect x="1074.4" y="134.0" width="82.4" height="10.8" fill="#8c2f2c"/>
+<text x="1115.6" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.83 exact</text>
+<text x="1115.6" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.83 coherent · 0.17 wrong</text>
+<text x="1115.6" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">PKSpell</text>
+<text x="1115.6" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(ISMIR'21 neural)</text>
+<text x="1115.6" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="1232.8" y="179.4" width="82.4" height="588.6" fill="#2f6f3b"/>
+<rect x="1232.8" y="159.1" width="82.4" height="20.3" fill="#bd7a1a"/>
+<rect x="1232.8" y="134.0" width="82.4" height="25.1" fill="#8c2f2c"/>
+<text x="1274.0" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">99.28 exact</text>
+<text x="1274.0" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.60 coherent · 0.40 wrong</text>
+<text x="1274.0" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">ps13</text>
+<text x="1274.0" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(Meredith)</text>
+<text x="1274.0" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="1391.2" y="456.1" width="82.4" height="311.9" fill="#2f6f3b"/>
+<rect x="1391.2" y="152.8" width="82.4" height="303.3" fill="#bd7a1a"/>
+<rect x="1391.2" y="134.0" width="82.4" height="18.8" fill="#8c2f2c"/>
+<text x="1432.4" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">94.92 exact</text>
+<text x="1432.4" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">99.70 coherent · 0.30 wrong</text>
+<text x="1432.4" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">Temperley</text>
+<text x="1432.4" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(Melisma 2003)</text>
+<text x="1432.4" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<rect x="1549.6" y="417.5" width="82.4" height="350.5" fill="#2f6f3b"/>
+<rect x="1549.6" y="410.1" width="82.4" height="7.3" fill="#bd7a1a"/>
+<rect x="1549.6" y="134.0" width="82.4" height="276.1" fill="#8c2f2c"/>
+<text x="1590.8" y="110.0" text-anchor="middle" font-size="11.8" font-weight="bold" fill="#2f6f3b">95.53 exact</text>
+<text x="1590.8" y="125.0" text-anchor="middle" font-size="10.0" font-weight="normal" fill="#444">95.64 coherent · 4.36 wrong</text>
+<text x="1590.8" y="806.0" text-anchor="middle" font-size="11.1" font-weight="normal" fill="#111">fixed LoF window</text>
+<text x="1590.8" y="820.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#444">(E♭–G♯ = music21 default)</text>
+<text x="1590.8" y="834.0" text-anchor="middle" font-size="10.4" font-weight="normal" fill="#666">cov 100%</text>
+<line x1="86" y1="177.7" x2="1670" y2="177.7" stroke="#222" stroke-width="1.3" stroke-dasharray="1.5 3"/>
+<text x="1666.0" y="172.7" text-anchor="end" font-size="11.1" font-weight="normal" font-style="italic" fill="#222">ps13 published (Meredith 2006): 99.31% exact</text>
+<text x="850.0" y="34.0" text-anchor="middle" font-size="16.7" font-weight="bold" fill="#111">Meredith 8×25000 corpus (clean): this repo's spellers vs published baselines, split three ways</text>
+<text x="850.0" y="58.0" text-anchor="middle" font-size="15.3" font-weight="normal" fill="#222">(above each bar: exact = correct only; coherent = correct + flipped)</text>
+<rect x="90.0" y="672.0" width="320" height="80" rx="3" fill="#ffffff" fill-opacity="0.95" stroke="#cccccc" stroke-width="1"/>
+<rect x="98" y="677.0" width="15" height="15" fill="#2f6f3b"/>
+<text x="120.0" y="689.0" text-anchor="start" font-size="12.5" font-weight="normal" fill="#222">correct (exact composer spelling)</text>
+<rect x="98" y="699.0" width="15" height="15" fill="#bd7a1a"/>
+<text x="120.0" y="711.0" text-anchor="start" font-size="12.5" font-weight="normal" fill="#222">flipped (coherent enharmonic side)</text>
+<rect x="98" y="721.0" width="15" height="15" fill="#8c2f2c"/>
+<text x="120.0" y="733.0" text-anchor="start" font-size="12.5" font-weight="normal" fill="#222">wrong (genuine spelling error)</text>
+</svg>

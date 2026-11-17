@@ -271,7 +271,9 @@ comma (D♭–F–A♭ for C♯–E♯–G♯), a coherent transposition, not an
 Against the published spellers on clean Meredith, grouped by latency (exact % above each bar, coherent %
 below; baselines scored on the same notes with the same scorer):
 
-![Meredith clean: our four modes beside Chew & Chen, Cambouropoulos, PKSpell, ps13, Temperley and music21](docs/meredith-scoreboard.png)
+![Meredith clean: our four modes beside Chew & Chen, Cambouropoulos, PKSpell, ps13, Temperley and a fixed line-of-fifths window (music21's default)](docs/meredith-scoreboard.svg)
+
+The figure is written by `npm run scoreboard`.
 
 ## Performance
 

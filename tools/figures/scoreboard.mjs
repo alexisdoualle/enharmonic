@@ -7,12 +7,12 @@
  * test/eval/meredith-baselines.json (frozen external-tool scores; see its _provenance).
  *
  * The numbers are produced by the code that ships here, scored live. Everything lands in gitignored
- * results/: copy a chosen figure out to a committed path (e.g. docs/assets/) to use it publicly.
+ * results/, except the clean figure, which is also written to docs/meredith-scoreboard.svg (the README's).
  *
  *   npm run scoreboard          # clean + noisy (whichever corpora are fetched)
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, existsSync, writeFileSync, readFileSync, copyFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -33,6 +33,7 @@ for (const variant of ['clean', 'noisy']) {
     console.log(`\n=== scoring ${variant} ===`);
     run('npx', ['tsx', 'test/eval/meredith.ts', ...(variant === 'noisy' ? ['--noisy'] : []), '--json', jsonOut]);
     run('node', ['tools/figures/three-tier.mjs', jsonOut, variant, join(FIG, `scoreboard_meredith_${variant}.svg`)]);
+    if (variant === 'clean') copyFileSync(join(FIG, 'scoreboard_meredith_clean.svg'), join(REPO, 'docs', 'meredith-scoreboard.svg'));
     done.push(variant);
 }
 if (!done.length) { console.error('\n✗ no corpora fetched; nothing to score.'); process.exit(1); }
@@ -40,7 +41,7 @@ if (!done.length) { console.error('\n✗ no corpora fetched; nothing to score.')
 // --- write results/RESULTS.md --------------------------------------------------------------
 const baseSnap = JSON.parse(readFileSync(join(REPO, 'test', 'eval', 'meredith-baselines.json'), 'utf8'));
 const MODES = [['core', 'Core (~100 lines)', 'real-time'], ['rt', 'real-time speller', 'real-time'], ['la', 'real-time + look-ahead', 'near-real-time'], ['tp', 'two-pass speller', 'offline']];
-const BASE = [['chew_chen', 'Chew & Chen (spiral array)', 'causal'], ['pkspell', 'PKSpell (ISMIR’21 neural)', 'offline'], ['ps13', 'ps13 (Meredith)', 'offline'], ['temperley', 'Temperley (Melisma 2003)', 'offline'], ['fixed_lof', 'fixed LoF window (= music21 default)', 'control']];
+const BASE = [['chew_chen', 'Chew & Chen (spiral array)', 'causal'], ['cambouropoulos', 'Cambouropoulos (2003, windowed)', 'near-real-time'], ['pkspell', 'PKSpell (ISMIR’21 neural)', 'offline'], ['ps13', 'ps13 (Meredith)', 'offline'], ['temperley', 'Temperley (Melisma 2003)', 'offline'], ['fixed_lof', 'fixed LoF window (= music21 default)', 'control']];
 const pct = (num, den) => (100 * num / den).toFixed(2);
 const ex = t => pct(t.correct, t.committed), co = t => pct(t.correct + t.flipped, t.committed), wr = t => pct(t.wrong, t.committed);
 
