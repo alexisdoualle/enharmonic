@@ -29,7 +29,7 @@ import { SpellingEngine, LA_PRESET, type Decision } from './engine.js';
 import { lookAheadContext } from './look-ahead.js';
 import type { NoteContext } from './kernel.js';
 import { lofOf, spellingOf } from './lof.js';
-import { anchoredSideKeys, centredKeys, CENTRED_SIDE_RADIUS, deepenCentredKeys } from './key-side.js';
+import { anchoredSideKeys, centredKeys, CENTRED_SIDE_RADIUS, deepenCentredKeys, sectionStarts } from './key-side.js';
 
 export interface TwoPassNote {
     readonly midi: number;
@@ -151,6 +151,11 @@ export interface TwoPassOptions {
      *  guarded: *Pathétique* ii m42–49 (E major under four flats) is four fifths away and keeps the inferred
      *  sharps. Default `true`; inert without `keySignatures` or when `keySide` is off. */
     keySignatureAnchor?: boolean;
+    /** THE SIDE KEY IS READ WITHIN A SECTION. A section ends at a silence ({@link sectionStarts}: 2 s, or 0.5 s where
+     *  the key moves three fifths or more), and the onsets each side key reads stay inside the note's section. Haydn
+     *  Sym. 100/iv: the repeated F and A♭ before a silence read the sharp key after it and were written E♯, G♯. Chopin's
+     *  waltzes played one after another: the last chords of one read the key of the next. Default `true`. */
+    sectionBreaks?: boolean;
     /** A SHORT RESPELLED SECTION TAKES THE SURROUNDING SIDE. A composer respells a passage for a section, never for a
      *  few beats: in the merge, a disagreement region of at most {@link SHORT_FLIP_MAX_ONSETS} onsets and at least
      *  {@link SHORT_FLIP_MIN_PCS} pitch classes, whose merged spelling contradicts the spelling of the same pitch
@@ -315,7 +320,7 @@ function drivePass(notes: readonly TwoPassNote[], ctx: readonly NoteContext[], o
  *  notated signatures, a note under a signature keeps the forward reading and is anchored to the signature where
  *  its local key is within one fifth of it ({@link anchoredSideKeys}): the notation decides. */
 function passSideKeys(notes: readonly TwoPassNote[], opts: TwoPassOptions, notated?: readonly (number | null)[]): (number | null)[] {
-    const keys = centredKeys(notes, CENTRED_SIDE_RADIUS), keyReturn = opts.keyReturn ?? true;
+    const keys = centredKeys(notes, CENTRED_SIDE_RADIUS, (opts.sectionBreaks ?? true) ? sectionStarts(notes) : []), keyReturn = opts.keyReturn ?? true;
     const fwd = deepenCentredKeys(keys, keyReturn), bwd = deepenCentredKeys(keys.slice().reverse(), keyReturn).reverse();
     const known = (x: number | null | undefined): x is number => x !== null && x !== undefined && !Number.isNaN(x);
     const h = fwd.findIndex(known);

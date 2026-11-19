@@ -169,16 +169,53 @@ export function deepenCentredKeys(keys: readonly (Key | null)[], keyReturn = tru
 }
 
 /** Each note's key read on the onsets centred on it (±radius), before deepening. The notes of one onset share
- *  their window, so the key is read once per onset. */
-export function centredKeys(notes: readonly KeyNote[], radius: number): (Key | null)[] {
+ *  their window, so the key is read once per onset. `starts` (note indices, each starting a section, as
+ *  {@link sectionStarts}) bound the window: it reads only the onsets of the note's own section. */
+export function centredKeys(notes: readonly KeyNote[], radius: number, starts: readonly number[] = []): (Key | null)[] {
     const { n, hist, on } = scan(notes);
     const last = on.start.length - 2;
     const keys: (Key | null)[] = new Array(n);
+    const cuts = starts.map(c => on.of[c]!);
+    let c = 0;
     for (let i = 0; i < n; i++) {
         const o = on.of[i]!;
-        keys[i] = i > 0 && on.of[i - 1] === o ? keys[i - 1]! : bestKey(hist(on.start[Math.max(0, o - radius)]!, on.start[Math.min(last, o + radius) + 1]!));
+        if (i > 0 && on.of[i - 1] === o) { keys[i] = keys[i - 1]!; continue; }
+        while (c < cuts.length && cuts[c]! <= o) c++;
+        const lo = Math.max(0, o - radius, c > 0 ? cuts[c - 1]! : 0);
+        const hi = Math.min(last, o + radius, c < cuts.length ? cuts[c]! - 1 : last);
+        keys[i] = bestKey(hist(on.start[lo]!, on.start[hi + 1]!));
     }
     return keys;
+}
+
+/** {@link sectionStarts}: a silence this long (ms) ends a section. */
+export const SECTION_SILENCE_MS = 2000;
+/** {@link sectionStarts}: a silence this long (ms) ends a section where the key moves {@link SECTION_KEY_JUMP} fifths. */
+export const SECTION_SHORT_SILENCE_MS = 500;
+/** {@link sectionStarts}: fifths between the collections read before and after a short silence. */
+export const SECTION_KEY_JUMP = 3;
+
+/**
+ * SECTION BREAKS. A section ends at a silence of {@link SECTION_SILENCE_MS} ms, or of
+ * {@link SECTION_SHORT_SILENCE_MS} ms where the collection read on the `radius` onsets before it and the one read on
+ * the `radius` onsets after it lie {@link SECTION_KEY_JUMP} or more fifths apart. Returns the note index starting each
+ * new section, in order. Notes sorted by onset; a silence is measured from the latest release so far.
+ */
+export function sectionStarts(notes: readonly (KeyNote & { readonly tOff: number })[], radius = CENTRED_SIDE_RADIUS): number[] {
+    const { hist, on } = scan(notes);
+    const m = on.start.length - 1, starts: number[] = [];
+    const pc = (k: Key | null) => (k ? (k.tonic + (k.minor ? 3 : 0)) % 12 : 0);
+    let end = -Infinity;
+    for (let o = 1; o < m; o++) {
+        for (let i = on.start[o - 1]!; i < on.start[o]!; i++) end = Math.max(end, notes[i]!.tOff);
+        const gap = notes[on.start[o]!]!.tOn - end;
+        if (gap < SECTION_SHORT_SILENCE_MS) continue;
+        const before = bestKey(hist(on.start[Math.max(0, o - radius)]!, on.start[o]!));
+        const after = bestKey(hist(on.start[o]!, on.start[Math.min(m, o + radius)]!));
+        const d = (((pc(after) - pc(before)) * 7) % 12 + 12) % 12;
+        if (gap >= SECTION_SILENCE_MS || Math.min(d, 12 - d) >= SECTION_KEY_JUMP) starts.push(on.start[o]!);
+    }
+    return starts;
 }
 
 /** {@link anchoredSideKeys}: the most fifths a local key may lie from the notated signature and still be in its
