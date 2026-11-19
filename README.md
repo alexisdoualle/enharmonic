@@ -138,16 +138,15 @@ E7 → Am7: the G♯ is E7's third, even when it falls to G and the look-ahead w
 m4). The root and fifth are not renamed: the root is read from the spellings of the sounding root and fifth
 (else from the frame), and the rule abstains when the name would lie more than the leash deadzone (8 fifths)
 from the collection centre. It overrides every score except the aug6 outward rule. `dominantChords(notes)` reads
-it from `{ midi, tOn, tOff }` notes; pass it as `dominant`. Two-pass does not use it.
+it from `{ midi, tOn, tOff }` notes; pass it as `dominant`. Two-pass gets it through the look-ahead speller it runs both ways.
 
-The reach, `dominantChords(notes, { reach: 16, unit: 'onsets' })` (the default), is a theory parameter: how far
-ahead the chord a fifth below may lie. It counts onsets, not notes, so it can look past the look-ahead's
-16-note buffer. Measured from each named third or seventh to the first note of the chord that triggers it
-(reach 16 onsets): median 5 notes, 95th percentile 30, maximum 146 on our 60-piece corpus (13% beyond 16
-notes); median 5, 95th percentile 33, maximum 106 on Meredith clean (17% beyond 16); median 4, 95th
-percentile 19, maximum 37 on Meredith noisy (8% beyond 16). From the dominant's onset the trigger is a median
-of 2 onsets ahead (95th percentile 8–11). A live caller who wants the rule exactly must buffer that far, or
-pass a smaller reach.
+The search for the next chord with a different root has no limit by default: that chord decides, however far
+(a 16-onset cap cost 12 wrong notes on the held-out pool and saved none). A live caller can bound it with
+`dominantChords(notes, { reach: N, unit: 'onsets' })`. Measured from each named third or seventh to the first
+note of the chord that triggers it (reach 16 onsets): median 5 notes, 95th percentile 30, maximum 146 on our
+60-piece corpus (13% beyond 16 notes); median 5, 95th percentile 33, maximum 106 on Meredith clean (17% beyond
+16); median 4, 95th percentile 19, maximum 37 on Meredith noisy (8% beyond 16). From the dominant's onset the
+trigger is a median of 2 onsets ahead (95th percentile 8–11).
 
 With `localKey`, the look-ahead also finds a rising leading tone's target when the note's own other spelling
 holds the target's letter: F♯ rising to G while the G slot holds G♭ is still G's leading tone (the look-ahead votes F♯) when
