@@ -43,8 +43,6 @@ import { groupOnsets, type Onsets } from './onsets.js';
 
 const pcOf = (m: number) => ((m % 12) + 12) % 12;
 
-/** How many onsets after a note the move finder looks for its first semitone move. */
-const MOVE_ONSETS = 64;
 /** How far (in notes) on either side of a note to look for notes still sounding at its onset. */
 const SOUNDING_NOTES = 64;
 
@@ -54,7 +52,8 @@ const SOUNDING_NOTES = 64;
  * semitone neighbour (nearest in register, any octave) lies on one side only. `dir` is +1 if that onset
  * strikes the semitone above at the exact pitch (and not the one below), −1 for the one below, 0 otherwise;
  * `at` is the onset the move lands on (−1: no move). Note-offs are never read, so the finder survives
- * performance timing.
+ * performance timing. The search has no cap: it stops at the first move, however far (a 64-onset cap never
+ * bound on the corpus, Meredith or the held-out pool; findings `search-caps`).
  */
 function firstMoves(notes: readonly OutwardNote[], on: Onsets): { dir: number[]; at: number[] } {
     const dir = notes.map(() => 0), at = notes.map(() => -1);
@@ -64,7 +63,7 @@ function firstMoves(notes: readonly OutwardNote[], on: Onsets): { dir: number[];
     notes.forEach((note, i) => { pcs[on.of[i]!] = pcs[on.of[i]!]! | (1 << pcOf(note.midi)); });
     notes.forEach(({ midi: m }, a) => {
         const c0 = on.of[a]!;
-        for (let c = c0 + 1; c < count && c - c0 <= MOVE_ONSETS; c++) {
+        for (let c = c0 + 1; c < count; c++) {
             if (pcs[c]! & (1 << pcOf(m))) continue;
             // Distance to the nearest note whose pitch class is a semitone above / below m's.
             let above = Infinity, below = Infinity;
