@@ -11,9 +11,9 @@
  * {@link dominantChords} reads it from the notes alone (the pitch classes that SOUND at each note's onset, and the
  * chords that follow), like `degreeKeys`; the engine applies it (see `NoteContext.dominant`).
  *
- * REACH is a theory parameter, not a latency budget: how far ahead the chord a fifth below may lie and still make
- * the sounding chord its dominant. It is counted in ONSETS, so a dense texture does not shorten it, and it may
- * therefore look past the look-ahead's 16-note buffer (see the README for the measured distances).
+ * The search stops at the next chord with a different root, however far: that chord decides. It has no cap by
+ * default (a 16-onset cap cost 12 wrong notes on the held-out pool and saved none; findings `search-caps`). A live
+ * caller may pass a smaller `reach`, counted in ONSETS (see the README for the measured distances).
  */
 
 /** A note as {@link dominantChords} reads it. */
@@ -27,13 +27,13 @@ export interface DominantChord { readonly root: number; readonly offs: ReadonlyM
  *  own (a chord is one onset, however many notes it has). Only 'onsets' exists now; the shape leaves room for a
  *  time unit or an "until resolved" mode later. */
 export interface DominantOptions {
-    /** Onsets after the dominant's onset scanned for the next chord with a different root. Default 16. */
+    /** Onsets after the dominant's onset scanned for the next chord with a different root. Default: no limit. */
     readonly reach?: number;
     readonly unit?: 'onsets';
 }
 
-/** The default reach: 16 onsets. */
-export const DOMINANT_REACH: Required<DominantOptions> = { reach: 16, unit: 'onsets' };
+/** The default reach: no limit (the search stops at the next chord with a different root). */
+export const DOMINANT_REACH: Required<DominantOptions> = { reach: Infinity, unit: 'onsets' };
 
 type Tone = [semis: number, fifths: number];
 const TEMPLATES: Record<string, Tone[]> = {
@@ -97,7 +97,7 @@ export function dominantChords(notes: readonly DominantNote[], opts: DominantOpt
     const atOnset: (DominantChord | null)[] = times.map((_, j) => {
         const c = chordAt(j, 3);
         if (!c || (c.name !== 'maj' && c.name !== 'dom7')) return null;
-        // The next chord with a different root within `reach` onsets decides: a fifth below makes c its dominant.
+        // The next chord with a different root (within `reach` onsets) decides: a fifth below makes c its dominant.
         for (let j2 = j + 1; j2 < times.length && j2 - j <= reach; j2++) {
             const c2 = chordAt(j2, 2);
             if (!c2 || c2.name === 'aug' || c2.name === 'dim7' || c2.root === c.root) continue;
