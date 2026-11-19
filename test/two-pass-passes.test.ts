@@ -14,6 +14,7 @@
  */
 import { suite, test, assert, assertEq } from './framework.js';
 import { spellTwoPass, type Pitch } from '../src/index.js';
+import { sectionStarts } from '../src/key-side.js';
 import { loadEvents, loadExpected, onNotes, onsetKeys } from './eval/fixtures.js';
 import { scoreTiers } from './eval/score.js';
 
@@ -29,5 +30,21 @@ suite('two-pass side keys', () => {
         const r = flips('chopin_prelude_op28_no15'), o = flips('beethoven_op109');
         assert(r <= 67, `Op. 28/15 flipped ${r} > 67`);
         assert(o <= 40, `Op. 109 flipped ${o} > 40`);
+    });
+    // Section breaks: a silence of 2 s, or of 0.5 s where the key read on each side moves three fifths or more.
+    test('section breaks: a long silence, or a short one where the key moves', () => {
+        const piece = (gap: number, second: readonly number[][]) => {
+            const notes: { midi: number; tOn: number; tOff: number }[] = []; let t = 0;
+            const play = (cs: readonly number[][]) => { for (let r = 0; r < 8; r++) for (const c of cs) { for (const m of c) notes.push({ midi: m, tOn: t, tOff: t + 400 }); t += 400; } };
+            play(cMajor);
+            t += gap;
+            play(second);
+            return notes;
+        };
+        const cMajor = [[60, 64, 67], [65, 69, 72], [67, 71, 74], [60, 64, 67]], eMajor = [[64, 68, 71], [69, 73, 76], [71, 75, 78], [64, 68, 71]];
+        assertEq(sectionStarts(piece(2000, cMajor)), [96], 'silence of 2 s, same key');
+        assertEq(sectionStarts(piece(1000, cMajor)), [], 'silence of 1 s, same key');
+        assertEq(sectionStarts(piece(1000, eMajor)), [96], 'silence of 1 s, C to E major (four fifths)');
+        assertEq(sectionStarts(piece(400, eMajor)), [], 'silence under 0.5 s');
     });
 });
